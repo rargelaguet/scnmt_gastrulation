@@ -1,0 +1,303 @@
+---
+title: "Gastrulation: preprocessing and quality control on expression data"
+output:
+  BiocStyle::html_document: 
+    fig_width: 15
+    fig_height: 8
+---
+
+```{r echo=FALSE, include=FALSE}
+library(SingleCellExperiment)
+library(data.table)
+library(purrr)
+library(scater)
+library(scran)
+library(ggplot2)
+source("/Users/ricard/NMT-seq_ESC/Rutils/stats_utils.R")
+```
+
+```{r define_opts, echo=FALSE, include=FALSE}
+
+## Options ##
+opts <- list()
+
+# Stringent thresholds
+# opts$coverage_threshold <- 2e5    # Minimum library size (coverage)
+# opts$features_threshold <- 1000   # Minimum number of expressed features
+# opts$top50_threshold <- 0.75      # Maximum fraction of reads accounting for the top 50 features
+
+# Lenient thresholds
+opts$coverage_threshold <- 1e5    # Minimum library size (coverage)
+opts$features_threshold <- 500   # Minimum number of expressed features
+opts$top50_threshold <- 0.75      # Maximum fraction of reads accounting for the top 50 features
+
+opts$MT_threshold <- 0.25         # Maximum fraction of reads mapping to mithocondrial genes
+
+## I/O ##
+io <- list()
+io$in.gene_metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
+io$in.sample_metadata <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
+io$in.raw_counts <- "/Users/ricard/data/gastrulation/rna/counts/counts.txt.gz"
+io$out.file <- "/Users/ricard/data/gastrulation/rna/parsed/SingleCellExperiment.rds"
+io$out.sample_metadata <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
+```
+
+
+```{r load_data, echo=FALSE}
+# counts <- read.table(sprintf("%s",io$in.raw_counts), header=T) 
+counts <- fread(cmd=sprintf("zcat < %s",io$in.raw_counts)) %>% matrix.please
+```
+
+
+```{r load_sample_metadata, echo=FALSE}
+sample_metadata = fread(io$in.sample_metadata, header=T, stringsAsFactors = F) %>% 
+  setkey(id_rna)
+```
+
+<!-- Rename sample names in counts -->
+```{r}
+colnames(counts) <- sample_metadata[colnames(counts),id_rna]
+counts <- counts[,sample_metadata$id_rna]
+```
+
+```{r load_feature_metadata, echo=FALSE}
+feature_metadata <- read.csv("/Users/ricard/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt", sep="\t", stringsAsFactors=FALSE, quote="", header=T)
+
+# Define mithocondrial genes
+mt <- feature_metadata$symbol[feature_metadata$chr == "chrMT"]
+
+# remove duplicated genes (THIS SHOULD BE DONE WHEN CREATING THE ANNOTATION)
+feature_metadata <- feature_metadata[!duplicated(feature_metadata$symbol),] %>%
+  tibble::remove_rownames() %>% tibble::column_to_rownames("ens_id")
+```
+
+<!-- Parse data -->
+```{r parse_data}
+
+# Filter genes
+# genes <- feature_metadata[feature_metadata$symbol %in% rownames(counts),"symbol"]
+# feature_metadata <- feature_metadata[feature_metadata$symbol %in% genes,] %>% tibble::rownames_to_column("ens_id") %>% tibble::column_to_rownames("symbol")
+# counts <- counts[rownames(feature_metadata),]
+
+genes <- rownames(feature_metadata[rownames(feature_metadata) %in% rownames(counts),])
+feature_metadata <- feature_metadata[genes,]
+counts <- counts[rownames(feature_metadata),]
+
+# Filter samples
+# sample_metadata <- sample_metadata[sample_metadata$sample %in% colnames(counts),]
+# counts <- counts[,colnames(counts) %in% sample_metadata$sample]
+```
+
+<!-- Create SCEset object -->
+```{r echo=FALSE}
+
+# Create featureData
+# fdata <- feature_metadata[rownames(counts),] %>% new(Class = "AnnotatedDataFrame")
+fdata <- feature_metadata[rownames(counts),] %>% GRanges()
+
+# Create phenoData
+stopifnot(all(sample_metadata$id_rna==colnames(counts)))
+# pdata <- sample_metadata %>% as.data.frame %>% tibble::remove_rownames() %>% tibble::column_to_rownames("sample") %>% .[colnames(counts),] %>% new(Class = "AnnotatedDataFrame")
+pdata <- sample_metadata %>% as.data.frame %>% tibble::remove_rownames() %>% tibble::column_to_rownames("id_rna") %>% .[colnames(counts),]
+
+# create SCEset object
+# stopifnot(colnames(sce) == rownames(pdata))
+# stopifnot(rownames(sce) == rownames(fdata))
+# sce = newSCESet(countData = counts, phenoData = pdata, featureData = fdata)
+sce <- SingleCellExperiment(assays = list(counts = as.matrix(counts)), rowData=fdata, colData=pdata)
+
+# Calculate quality metrics
+sce = calculateQCMetrics(sce, feature_controls=list(Mt=rownames(sce) %in% mt))
+```
+
+```{r}
+sce$gene_strand <- sce$strand
+sce$strand <- NULL
+```
+
+```{r filter_samples, echo=FALSE, include=TRUE}
+# Library size
+libsize.drop <- sce$total_counts < opts$coverage_threshold
+libsize.drop_dt <- data.table(
+  sample=colnames(sce), 
+  size=sce$total_counts, 
+  color=c("black","red")[as.numeric(libsize.drop)+1]
+) %>% setkey(size) %>% .[,col:=size] %>% .[,sample:=factor(sample,levels=sample)]
+
+p1 <- ggplot(libsize.drop_dt, aes(x=sample, y=size)) +
+  geom_bar(stat='identity', position="dodge", fill="#3CB54E") +
+  geom_hline(yintercept=opts$coverage_threshold, colour="black", linetype="dashed") +
+  scale_fill_gradient(low="red", high="green") +
+  labs(y="Library size") +
+  barplot_theme() +
+  theme(
+    legend.position = "none",
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size=rel(1.8)),
+    # axis.text.x = element_text(colour="black", color=foo$color, angle=90, size=10, vjust=0.5, hjust=1.0)
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+print(p1)
+
+# pdf(file="/Users/ricard/NMT-seq/rebuttal/2i_vs_serum/QC/out/rna_library_size.pdf", width=10, height=7)
+# print(p1)
+# dev.off()
+
+# Number of expressed genes
+feature.drop <- sce$total_features_by_counts < opts$features_threshold
+feature.drop_dt <- data.table(
+  sample = colnames(sce), 
+  features = sce$total_features_by_counts, 
+  color = c("black","red")[as.numeric(feature.drop)+1]
+  ) %>% setkey(features) %>% .[,col:=features] %>% .[,sample:=factor(sample,levels=sample)]
+
+p2 <- ggplot(feature.drop_dt, aes(x=sample, y=features)) +
+  geom_bar(stat='identity', position="dodge", fill="#3CB54E") +
+  geom_hline(yintercept=opts$features_threshold, colour="black", linetype="dashed") +
+  # scale_fill_gradient(low="red", high="green") +
+  labs(y="Total number of expressed genes") +
+  barplot_theme() +
+  theme(
+    legend.position = "none",
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size=rel(1.8)),
+    # axis.text.x = element_text(colour="black", color=foo$color, angle=90, size=10, vjust=0.5, hjust=1.0)
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+print(p2)
+
+# pdf(file="/Users/ricard/NMT-seq/rebuttal/2i_vs_serum/QC/out/rna_nfeatures.pdf", width=10, height=7)
+# print(p2)
+# dev.off()
+
+# Proportion of reads accounting for the top 50 features
+top50.drop <- sce$pct_counts_in_top_50_features > opts$top50_threshold*100
+top50.drop_dt <- data.table(
+  sample=colnames(sce), 
+  pct=sce$pct_counts_in_top_50_features
+  ) %>% setkey(pct) %>% .[,col:=pct] %>% .[,sample:=factor(sample,levels=sample)]
+
+p3 <- barPlot(top50.drop_dt, ylabel="Fraction of reads accounting for the top 50 features") +
+  geom_hline(yintercept=opts$top50_threshold*100, colour="blue", linetype="dashed") +
+  # scale_fill_gradient(low="green", high="red") +
+  theme_barplot_pub() +
+  theme(
+    legend.position = "none",
+    # axis.text.x = element_text(colour="black", color=foo$color, angle=90, size=10, vjust=0.5, hjust=1.0)
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+print(p3)
+
+# Samples with large proportion of mithocondrial genes
+# mt.drop <- sce$pct_counts_Mt > opts$MT_threshold*100
+# foo <- data.table(
+#   sample=colnames(sce),
+#   mt=sce$pct_counts_Mt,
+#   color=c("black","red")[as.numeric(mt.drop)+1]
+# ) %>% setkey(mt) %>% .[,col:=mt] %>% .[,sample:=factor(sample,levels=sample)]
+# p4 <- ggplot(foo, aes(x=sample, y=mt, fill=col)) +
+#   geom_bar(stat='identity', position="dodge") +
+#   geom_hline(yintercept=opts$MT_threshold*100, colour="blue", linetype="dashed") +
+#   scale_fill_gradient(low="green", high="red") +
+#   labs(y="Fraction of reads mapping to mithocondrial genes") +
+#   barplot_theme() +
+#   theme(
+#     legend.position = "none",
+#     # axis.text.x = element_text(colour="black", color=foo$color, angle=90, size=10, vjust=0.5, hjust=1.0)
+#     axis.text.x = element_blank(),
+#     axis.ticks.x = element_blank()
+#   )
+# print(p4)
+
+# Triples and Multiples
+# number.drop <- sce$number %in% c("triple","multiple")
+```
+
+```{r}
+# p12 <- cowplot::plot_grid(p1, p2, ncol=1, nrow=2)
+# pdf(file="/Users/ricard/gastrulation/qc_expr.pdf", width = 8, height = 5)
+# print(p12)
+# dev.off()
+
+# p34 <- cowplot::plot_grid(p3, p4, ncol=2, nrow=1)
+# pdf(file="/Users/ricard/data/gastrulation_NMT/qc_expr2.pdf", width = 15, height = 7)
+# print(p34)
+# dev.off()
+```
+
+```{r, echo=FALSE, include=TRUE}
+# Remove cells that do not pass QC
+# drop.samples <- colnames(sce)[( libsize.drop | feature.drop | mt.drop | top50.drop | number.drop )]
+drop.samples <- colnames(sce)[( libsize.drop | feature.drop | top50.drop )]
+
+# Exclude particular cells
+# drop.samples["lane6504_AGGCAGAA_AAGGAGTA_Plate11_E03_L001_R1_val_1_GRCm38_ERCC_hisat2"] == F
+
+# Update sample metadata
+sample_metadata[,pass_rnaQC:=ifelse(id_rna%in%drop.samples,FALSE,TRUE)]
+
+# Save updated metadata
+# fwrite(sample_metadata,io$out.sample_metadata, sep="\t", col.names=T, row.names=F, na="NA", quote=F)
+
+# Re-calculate QC statistics
+sce <- sce[,!colnames(sce) %in% drop.samples]
+sce <- calculateQCMetrics(sce)
+```
+
+# Normalisation and log transformation
+Transcript counts are now normalised based on size factors using the convolution approach from the scran package.
+Lowly expressed genes are removed before normalisation but they are included afterwards, since they are interesting for some analysis.
+```{r normalisation, echo=FALSE, warnings=FALSE, include=TRUE}
+
+# Remove cells with very low coverage
+sce_filt <- sce
+# sce_filt <- sce[,sce$total_features_endogenous > 1000]
+
+# Temporarily remove the lowly expressed genes
+# sce$gene_strand <- sce$strand
+# sce$strand <- NULL
+# rowData(sce)$strand <- NULL
+# rowData(sce)$gene_strand <- NULL
+sce_filt <- sce_filt[!(rowMeans(counts(sce)) <= 1 | rowData(sce)$pct_dropout_by_counts > 90),]
+
+# Compute size factors without the lowly expressed genes
+# sf = computeSumFactors(counts(sce_filt), sizes=c(10,20,30,40), positive=TRUE)
+sf = computeSumFactors(sce_filt, positive=TRUE, sf.out=T)
+
+# qplot(sf, sce_filt$total_counts, log="xy", ylab="Library size (mapped reads)", xlab="Size factor")
+ggplot(data.frame(sf=log(sf), counts=log(sce_filt$total_counts))) +
+  geom_point(aes(x=sf,y=counts)) +
+  labs(y="Library size (log)", x="Size factor (log)") +
+  theme_bw() +
+  theme(
+    axis.title = element_text(colour="black", size=15),
+    axis.text = element_text(colour="black", size=12)
+  )
+
+# Normalise and log transform with the lowly expressed genes
+sizeFactors(sce) <- sf; sce$sizeFactor <- sf
+sizeFactors(sce_filt) <- sf; sce_filt$sizeFactor <- sf
+sce <- normalize(sce, exprs_values="counts")
+sce_filt <- normalize(sce_filt, exprs_values="counts")
+
+# Update quality metrics
+sce = calculateQCMetrics(sce)
+```
+
+<!-- Mean vs variance plot -->
+```{r echo=TRUE, include=TRUE}
+foo <- data.frame(sd=apply(exprs(sce),1,sd), mean=apply(exprs(sce),1,mean))
+ggplot(foo, aes(x=mean, y=sd)) +
+  geom_point() +
+  stat_smooth() +
+  scale_color_manual(values=c("black","red")) +
+  xlab('Mean') + ylab('Standard deviation')
+```
+
+<!-- Save SCESet object -->
+```{r save, echo=FALSE, include=FALSE}
+saveRDS(sce,io$out.file)
+```

@@ -1,0 +1,179 @@
+---
+title: "Gastrulation: MOFA applied to E7.5 stage"
+output: 
+  BiocStyle::html_document: 
+    fig_width: 10
+    fig_height: 8
+---
+
+
+```{r}
+library(MOFA)
+# devtools::load_all("/Users/ricard/mofa")
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(scater)
+library(reticulate)
+library(RColorBrewer)
+```
+
+```{r}
+source("/Users/ricard/gastrulation/metaccrna/mofa/E7.5/load_settings.R")
+```
+
+<!-- Load pretrained model -->
+```{r}
+model <- loadModel(paste0(io$outdir,"/hdf5/model_1.hdf5"))
+# model <- loadModel("/Users/ricard/data/gastrulation_norsync_stuff/metaccrna/mofa/E7.5/hdf5/E7.5_1.hdf5")
+```
+
+<!-- Load sample metadata -->
+```{r}
+sample_metadata <- fread(io$sample.metadata) %>%
+  .[,c("sample","id_rna","id_met","id_acc","stage","lineage10x","lineage10x_2","plate")]
+
+sample_metadata_filt <- sample_metadata %>% 
+  setkey(sample) %>% .[MOFA::sampleNames(model)]
+```
+
+<!-- Rename views -->
+```{r}
+opts$views_names <- c(
+  "met_H3K27ac_distal_E7.5_Ect_intersect12"="Ectoderm Enhancers (met)",
+  "met_H3K27ac_distal_E7.5_Mes_intersect12"="Mesoderm Enhancers (met)",
+  "met_H3K27ac_distal_E7.5_End_intersect12"="Endoderm Enhancers (met)",
+  "acc_H3K27ac_distal_E7.5_Ect_intersect12"="Ectoderm Enhancers (acc)",
+  "acc_H3K27ac_distal_E7.5_Mes_intersect12"="Mesoderm Enhancers (acc)",
+  "acc_H3K27ac_distal_E7.5_End_intersect12"="Endoderm Enhancers (acc)",
+  "met_prom_2000_2000"="Promoters (met)",
+  "acc_prom_2000_2000"="Promoters (acc)",
+  "rna" = "RNA expression"
+)
+
+viewNames(model) <- stringr::str_replace_all(viewNames(model), opts$views_names)
+```
+
+
+<!-- Subset factors -->
+Select Factors that are active in the RNA
+```{r}
+r2 <- calculateVarianceExplained(model)$R2PerFactor
+factors <- r2[,"RNA expression"]>0.006
+model <- subsetFactors(model, which(factors))
+factorNames(model) <- paste("Factor",1:getDimensions(model)[["K"]], sep="")
+```
+
+<!-- Calculate variance explained -->
+```{r} 
+# plotVarianceExplained(model, cluster=F)
+
+fvar_mk <- calculateVarianceExplained(model)$R2PerFactor
+fvar_mk[fvar_mk<0.001] <- 0
+fvar_mk[fvar_mk>0.05] <- 0.05
+
+# convert matrix to data frame for ggplot2  
+fvar_mk_df <- reshape2::melt(fvar_mk, varnames=c("factor","view"))
+fvar_mk_df$factor <- factor(fvar_mk_df$factor)
+
+# Grid plot with the variance explained per factor and view
+p <- ggplot(fvar_mk_df, aes_string(x="view",y="factor")) + 
+  geom_tile(aes_string(fill="value"), color="black") +
+  guides(fill=guide_colorbar("R2")) +
+  scale_fill_gradientn(colors=c("gray97","darkblue"), guide="colorbar") +
+  ylab("Latent factor") +
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(size=11, angle=60, hjust=1, vjust=1, color="black"),
+    axis.text.y = element_text(size=12, color="black"),
+    axis.title.y = element_text(size=15),
+    axis.line = element_blank(),
+    axis.ticks =  element_blank(),
+    panel.background = element_blank()
+  )
+print(p)
+
+# pdf(paste0(io$outdir,"/pdf/varianceExplained.pdf"), useDingbats = F, onefile = F, width=12, height=5)
+# p
+# dev.off()
+```
+
+
+
+<!-- Rotate factors -->
+```{r}
+# model@Expectations$Z[,"Factor 2"] <- -model@Expectations$Z[,"Factor 2"]
+```
+
+<!-- Scatterplot of Factors -->
+```{r}
+p <- plotFactorScatter(model, 
+  factors=c(1,2), 
+  color_by=sample_metadata_filt$lineage10x_2,
+  dot_size = 1.5
+)
+p <- p + scale_color_manual(values=opts$colors)
+print(p)
+
+pdf(paste0(io$outdir,"/pdf/scatterplot_F1vsF2_v2.pdf"), useDingbats = F, onefile = F, width=6, height=4)
+print(p) 
+dev.off()
+```
+
+
+<!-- Gene set enrichment analysis -->
+
+Load MsigDb gene set
+```{r go_enrichment, echo=FALSE}
+# I/O MSigDB
+io$msigFile <- "/Users/ricard/data/MSigDB/v6.0/mus_musculus/C5/bp_binary_matrix_ensembl.rds"
+# io$msigFile <- "/Users/ricard/data/MSigDB/v6.0/mus_musculus/C2/binary_matrix_ensembl.rds"
+
+# Load MSigDB files
+feature.sets <- readRDS(io$msigFile)
+```
+
+```{r}
+MOFA::featureNames(model)[["RNA expression"]] <- toupper(MOFA::featureNames(model)[["RNA expression"]])
+
+fsea.out <- runEnrichmentAnalysis(
+  model,
+  view = "RNA expression",
+  feature.sets = feature.sets,
+  statistical.test = "parametric",
+  alpha = 0.01
+)
+View(fsea.out$pval.adj)
+```
+
+
+
+
+<!-- Remove a couple of outliers -->
+```{r}
+# Z <- getFactors(model, factors=c(1,2), as.data.frame=F) %>% 
+#   as.data.frame %>% tibble::rownames_to_column("sample") %>% as.data.table
+# 
+# outliers <- c(
+#   Z[`Factor 2`<(-1.5),sample],
+#   Z[`Factor 1`<(-1) & `Factor 2`>(1),sample]
+# )
+#   
+# model <- subsetSamples(model, !sampleNames(model)%in%outliers)
+# 
+# sample_metadata_filt <- sample_metadata_filt %>% 
+#   setkey(sample) %>% .[MOFA::sampleNames(model)]
+```
+
+
+```{r}
+# plotWeights(model, view="RNA expression", factor=5, scale=F)
+# plotWeights(model, view="Ectoderm Enhancers (met)", factor=2, scale=F)
+```
+  
+
+```{r}
+Z <- getFactors(model, as.data.frame = F) %>% as.data.frame %>% tibble::rownames_to_column("sample")
+fwrite(Z[,c("sample","Factor1","Factor2")], sprintf("%s/coordinates.txt",io$outdir))
+```
+

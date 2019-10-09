@@ -1,0 +1,108 @@
+---
+title: "Gastrulation: plot expression levels"
+output: 
+  BiocStyle::html_document:
+  toc: false
+fig_width: 10
+fig_height: 8
+---
+  
+```{r echo=FALSE, include=FALSE}
+library(scater)
+library(data.table)
+library(purrr)
+library(ggplot2)
+```
+
+```{r funcs, echo=FALSE}
+# source("/Users/ricard/gastrulation/rna/differential/utils.R")
+boxplot_theme <- function() {
+  p <- theme(
+    plot.title = element_text(size=rel(1.2), hjust=0.5),
+    axis.title = element_text(colour="black", size=rel(1.2)),
+    axis.text.x = element_text(colour="black",size=rel(1.0), angle=10, hjust=1),
+    # axis.text.x = element_text(colour="black",size=rel(1.0)),
+    axis.text.y = element_text(colour="black",size=rel(1.1)),
+    axis.line = element_line(colour="black", size=rel(0.9)),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    legend.position="none",
+    legend.text=element_text(size=15),
+    legend.title=element_blank(),
+    legend.background=element_blank(),
+    panel.border = element_blank()
+  )
+}
+```
+
+```{r define_opts, echo=FALSE, include=FALSE}
+
+io <- list()
+io$basedir <- "/Users/ricard/data/gastrulation"
+io$sample_metadata <- paste0(io$basedir,"/sample_metadata.txt")
+io$rna.infile <- paste(io$basedir,"rna/parsed/SingleCellExperiment.rds",sep="/")
+io$outdir <- "/Users/ricard/gastrulation/rna/plot_example/out"
+
+## Define options
+
+opts <- list()
+opts$stage_lineage <- c(
+  "E4.5_Epiblast",#"E4.5_Primitive_endoderm",
+  "E5.5_Epiblast",#"E5.5_Primitive_endoderm",
+  "E6.5_Epiblast",#"E6.5_Primitive_Streak", "E6.5_Visceral_endoderm","E6.5_Nascent_mesoderm"
+  "E7.5_Epiblast",
+  "E7.5_Ectoderm",
+  "E7.5_Mesoderm"
+  # "E7.5_Endoderm"
+)
+
+# Define which cells to use
+opts$cells <- fread(io$sample_metadata, header=T) %>% 
+  .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")] %>% 
+  .[pass_rnaQC==T & stage_lineage%in%opts$stage_lineage,id_rna] 
+```
+
+<!-- Load sample metadata -->
+```{r}
+sample_metadata <- fread(io$sample_metadata) %>% .[id_rna %in% opts$cells] %>% 
+  .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")]
+```
+
+<!-- Load expression data -->
+```{r load_expr, echo=FALSE, include=FALSE}
+# Load SingleCellExperiment object
+sce <- readRDS(io$rna.infile)[,opts$cells]
+
+# Create data.table
+rna <- exprs(sce) %>% t %>% as.data.table(keep.rownames="id_rna") %>% melt(id.vars="id_rna", value.name="expr", variable.name="id") %>%
+  merge(rowData(sce) %>% as.data.frame(row.names=rownames(sce)) %>% tibble::rownames_to_column("ens_id") %>% .[,c("symbol","ens_id")] %>% as.data.table %>% setnames("ens_id","id"))
+```
+
+<!-- Merge data and metadata -->
+```{r}
+rna <- merge(rna, sample_metadata[,c("id_rna","stage_lineage","stage")], by="id_rna")
+```
+
+<!-- Boxplots of mean differences from manual hits -->
+```{r}
+gene_id <- "Dnmt3l"
+
+to.plot <- rna[symbol==gene_id] %>% 
+  .[,stage_lineage:=factor(stage_lineage, levels=opts$stage_lineage)]
+
+p <- ggplot(to.plot, aes(x=stage_lineage, y=expr)) +
+  geom_jitter(size=0.8, color="#3CB54E") +
+  # geom_point(aes(color=stage), size=1.0) +
+  geom_violin(fill="#3CB54E", alpha=0.6) +
+  geom_boxplot(fill="#3CB54E", alpha=0.4, width=0.3) +
+  # stat_summary(aes(fill=stage_lineage), fun.data=MinMeanSEMMax, geom="boxplot") + 
+  # coord_cartesian(ylim=c(0,9)) +
+  boxplot_theme() +
+  labs(title=gene_id, x="",y="RNA expression")
+print(p)
+
+# pdf(paste0(io$outdir,"/rna_",gene_id,".pdf"), width=8, height=5, useDingbats = F)
+# print(p)
+# dev.off()
+```
+  

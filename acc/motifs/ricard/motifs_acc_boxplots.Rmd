@@ -1,0 +1,359 @@
+---
+title: "Gastrulation: Overlap of motif enrichment analysis and MOFA trajectories"
+output:
+  BiocStyle::html_document: 
+    toc: false
+    fig_width: 10
+    fig_height: 8
+---
+
+```{r load_modules, echo=FALSE, include=FALSE}
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(RColorBrewer)
+library(weights)
+```
+
+<!-- Define I/O and options -->
+```{r define_opts, echo=FALSE}
+
+## Define I/O ##
+io <- list()
+io$basedir <- "/Users/ricard/data/gastrulation"
+io$sample.metadata <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
+io$motif.dir <- "/Users/ricard/data/gastrulation/acc/parsed/fimo_motifs"
+io$diff.acc <- "/Users/ricard/data/gastrulation/acc/differential/feature_level"
+# io$trajectory <- "/Users/ricard/data/gastrulation_norsync_stuff/metaccrna/mofa/full/umap_coordinates.txt"
+io$trajectory <- "/Users/ricard/data/gastrulation_norsync_stuff/metaccrna/mofa/E7.5/coordinates.txt"
+io$outdir <- "/Users/ricard/gastrulation/acc/motifs/ricard/out"
+
+## Define options ##
+opts <- list()
+
+opts$annos <- c(
+  "H3K27ac_distal_E7.5_Mes_intersect12"="Mesoderm enhancers",
+  "H3K27ac_distal_E7.5_End_intersect12"="Endoderm enhancers",
+  "H3K27ac_distal_E7.5_Ect_intersect12"="Ectoderm enhancers"
+)
+
+opts$colors <- c(
+  "Epiblast"="grey70",
+  "Mesoderm"="#CD3278",
+  "Primitive Streak"="sandybrown",
+  "Endoderm"="#43CD80",
+  "Ectoderm"="steelblue",
+
+  "E4.5 Epiblast"="#C1CDCD",
+  "E5.5 Epiblast"="#C1CDCD",
+  "E6.5 Epiblast"="#C1CDCD",
+  "E7.5 Epiblast"="#C1CDCD",
+  "E7.5 Ectoderm"="steelblue",
+  "E6.5 Primitive Streak"="sandybrown",
+  "E7.5 Primitive Streak"="sandybrown",
+  "E7.5 Endoderm"="#43CD80",
+  "E7.5 Mesoderm"="#CD3278"
+)
+
+# Define which stage and lineages to look at 
+opts$stage_lineage <- c(
+  "E4.5_Epiblast",
+  "E5.5_Epiblast",
+  "E6.5_Epiblast",
+  # "E7.5_Epiblast",
+  "E7.5_Ectoderm",
+  # "E6.5_Primitive_Streak",
+  # "E7.5_Primitive_Streak",
+  # "E7.5_Endoderm",
+  "E7.5_Mesoderm"
+)
+
+# Minimum number of GpC sites per TF window
+opts$min.GpC <- 5
+
+# Define the transcription factor hits per lineage
+# opts$hits <- list(
+#   "Ectoderm" = c("Pou5f1_Sox2","POU3F1","SP8"), # 
+#   "Endoderm" = c("Foxa2","Sox17","HNF1B"), # FOXA2
+#   "Mesoderm" = c("TWIST1","Gata4","Hand1_Tcf3") # TAL1_TCF3
+# )
+
+opts$hits <- list(
+  # "Ectoderm" = c("POU5F1","SP8","RREB1","TFAP2A","POU3F1","SOX2","Pou5f1_Sox2")
+  # "Ectoderm" = c("SP8","TFAP2A")
+  "Ectoderm" = c("POU3F1")
+  # "Ectoderm" = c("POU5F1","SOX2","Pou5f1_Sox2")
+)
+
+# Define which cells to use
+opts$cells <- fread(io$sample.metadata) %>% 
+  .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")] %>%
+  .[stage_lineage%in%opts$stage_lineage] %>%
+  .[pass_accQC==T,sample]
+```
+
+<!-- Load sample metadata -->
+```{r load_metadata}
+sample_metadata <- fread(io$sample.metadata) %>%
+  .[,stage_lineage:=factor(paste(stage,lineage10x_2,sep="_"),levels=opts$stage_lineage)] %>%
+  .[sample %in% opts$cells]
+```
+
+
+<!-- Load accessibility quantification over motifs -->
+```{r load_data, echo=FALSE, include=FALSE}
+foo <- c(
+  "Ectoderm" = "H3K27ac_distal_E7.5_Ect_intersect12",
+  "Endoderm" = "H3K27ac_distal_E7.5_End_intersect12",
+  "Mesoderm" = "H3K27ac_distal_E7.5_Mes_intersect12"
+)
+
+acc_dt <- list()
+for (i in names(opts$hits)) {
+  acc_dt[[i]] <- lapply(opts$hits[[i]], function(x) fread(sprintf("%s/%s.tsv.gz",io$motif.dir,x))) %>% 
+    rbindlist %>%
+    .[sample%in%opts$cells] %>%
+    .[grep(paste(names(opts$annos),collapse="|"), id_motif),] %>%
+    .[,anno:=sapply(strsplit(id_motif, "_"), function(x) paste(x[[2]],x[[3]],x[[4]],x[[5]],x[[6]],sep="_"))] %>%
+    .[,id:=sapply(strsplit(id_motif, "_"), function(x) paste(x[[2]],x[[3]],x[[4]],x[[5]],x[[6]],x[[7]],sep="_"))] %>%
+    .[anno%in%foo[[i]]] %>%
+    .[,motif:=toupper(sapply(strsplit(id_motif, "_"),"[[",1))] %>%
+    .[,lineage:=i]
+}
+acc_dt <- acc_dt %>% rbindlist %>% 
+  .[N>=opts$min.GpC]
+```
+
+```{r}
+# saveRDS(acc_dt, "/Users/ricard/data/gastrulation_norsync_stuff/acc/motifs/foo.rds")
+```
+
+<!-- Subset motifs in lineage-defining sites -->
+Lineage-defining elements are defined as ChIP-seq peaks that show differential activity during germ layer commitment
+```{r}
+opts$diff.type <- 2
+
+opts$min.fdr <- 0.10
+opts$min.acc.diff <- 5
+opts$min.met.diff <- 5
+
+source("/Users/ricard/gastrulation/metaccrna/differential/load_data.R")
+
+diff.acc <- diff.acc %>%
+  # .[,anno:=stringr::str_replace_all(anno,opts$acc.annos)] %>%
+  .[,c("id","anno","diff","sig","lineage")]
+
+acc_dt.filt <- acc_dt %>% split(.$anno) %>%
+  map2(.,names(.), function(x,y) x[id%in%diff.acc[sig==T & anno==y,id]]) %>%
+  rbindlist %>% droplevels()
+```
+
+```{r}
+acc_dt.filt <- acc_dt
+```
+
+```{r}
+acc_dt.summarised <- acc_dt.filt %>%
+  .[,Nacc:=round(N*(rate/100))] %>%
+  .[,.(rate=100*sum(Nacc)/sum(N), N=.N),by=c("sample","tf","anno","lineage")] %>%
+  .[N>=15] %>%
+  merge(sample_metadata[,c("sample","stage","stage_lineage","plate")], by="sample")
+```
+
+<!-- Regress out technical covariates -->
+```{r}
+io$acc.stats <- paste0(io$basedir,"/acc/stats/samples/sample_stats.txt")
+
+# Batch effect between plates
+# acc_dt.summarised[,rate:=mean(rate) + lm(formula=rate~plate)[["residuals"]], by=c("anno","tf")] %>% .[,plate:=NULL]
+
+# Global differences in global accessibility rate
+# foo <- fread(io$acc.stats) %>% .[,c("id_acc","mean")]
+# bar <- acc_dt.summarised %>% merge(foo, by="id_acc") %>%
+#   .[,rate:=mean(rate) + lm(formula=rate~mean)[["residuals"]], by=c("tf","anno","lineage")] %>%
+#   .[,mean:=NULL]
+```
+
+
+<!-- Merge pseudotime trajectory with motif activity -->
+```{r}
+# acc_dt.summarised <- merge(acc_dt.summarised, trajectory, by="sample")  
+```
+
+```{r}
+acc_dt.summarised %>% 
+  .[,tf:=stringr::str_replace_all(tf,"::","_")] %>%
+  .[,stage_lineage:=stringr::str_replace_all(stage_lineage,"_"," ")]  %>%
+  .[,stage_lineage:=factor(stage_lineage, levels=stringr::str_replace_all(opts$stage_lineage,"_"," "))]
+```
+
+Box plots normalised by global accessibility
+```{r}
+acc.stats <- fread(io$acc.stats) %>%
+  merge(sample_metadata[,c("sample","id_acc")], by="id_acc")
+
+for (i in names(opts$hits)) {
+  
+  to.plot <- acc_dt.summarised[lineage==i] %>% 
+    merge(acc.stats, by="sample") %>%
+    .[,norm_rate:=rate/mean] 
+  
+  p <- ggplot(to.plot, aes(x=stage_lineage, y=norm_rate)) + 
+    geom_boxplot(aes(fill=stage_lineage), color="black", outlier.shape = NA, coef=1) +
+    labs(title="", x="", y="TF motif accessibility") +
+    facet_wrap(~tf, nrow=1) +
+    scale_fill_manual(values=opts$colors) +
+    # coord_cartesian(ylim=c(15,70)) +
+    theme_bw() +
+    theme(
+      axis.text.x = element_text(size=rel(1.0), color="black", angle=50, vjust=1, hjust=1),
+      # axis.text.x = element_blank(),
+      axis.ticks.x = element_blank(),
+      axis.text.y = element_text(size=rel(1.2), color="black"),
+      axis.title.y = element_text(size=rel(1.4), color="black"),
+      strip.background = element_rect(fill="#00BFC4"),
+      strip.text = element_text(size=rel(1.8), color="black"),
+      legend.position="none",
+      legend.title = element_blank()
+    )
+
+  # pdf(sprintf("%s/%s_boxplots.pdf",io$outdir,i), width=12, height=5)
+  print(p)
+  # dev.off()
+}
+```
+
+Unnormalised Box plots
+```{r}
+for (i in names(opts$hits)) {
+  
+  to.plot <- acc_dt.summarised[lineage==i]
+  
+  p <- ggplot(to.plot, aes(x=stage_lineage, y=rate)) + 
+    geom_boxplot(aes(fill=stage_lineage), color="black", outlier.shape = NA, coef=1) +
+    labs(title="", x="", y="TF motif accessibility") +
+    facet_wrap(~tf, nrow=1) +
+    scale_fill_manual(values=opts$colors) +
+    coord_cartesian(ylim=c(15,70)) +
+    theme_bw() +
+    theme(
+      axis.text.x = element_text(size=rel(1.0), color="black", angle=30, vjust=1, hjust=1),
+      # axis.text.x = element_blank(),
+      axis.ticks.x = element_blank(),
+      axis.text.y = element_text(size=rel(1.2), color="black"),
+      axis.title.y = element_text(size=rel(1.4), color="black"),
+      strip.background = element_rect(fill="#00BFC4"),
+      strip.text = element_text(size=rel(1.8), color="black"),
+      legend.position="none",
+      legend.title = element_blank()
+    )
+
+  pdf(sprintf("%s/%s_boxplots_v2.pdf",io$outdir,i), width=12, height=5)
+  print(p)
+  dev.off()
+}
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- OLD -->
+
+
+<!-- Load pseudotime trajectory -->
+```{r}
+# trajectory <- fread(io$trajectory) %>%
+#   setnames(c("Factor1","Factor2"),c("V1","V2"))
+#   # dcast(sample+stage_lineage~factor)
+```
+
+
+Box plots (one plot per motif)
+```{r}
+# for (i in names(opts$hits)) {
+#   for (j in opts$hits[[i]]) {
+#     
+#     to.plot <- acc_dt.summarised[tf==j & lineage==i]
+#     
+#     p <- ggplot(to.plot, aes(x=stage_lineage, y=rate)) + 
+#       geom_boxplot(aes(fill=stage_lineage), color="black", outlier.shape = NA, coef=1) +
+#       labs(title="", x="", y="TF motif accessibility") +
+#       # facet_wrap(~tf, nrow=1) +
+#       scale_fill_manual(values=opts$colors) +
+#       coord_cartesian(ylim=c(15,70)) +
+#       theme_bw() +
+#       theme(
+#         axis.text.x = element_text(size=rel(1.4), color="black", angle=50, vjust=1, hjust=1),
+#         axis.text.y = element_text(size=rel(1.2), color="black"),
+#         axis.title.y = element_text(size=rel(1.4), color="black"),
+#         strip.background = element_rect(fill="#F37A71"),
+#         strip.text = element_text(size=rel(1.8), color="black"),
+#         legend.position="none",
+#         legend.title = element_blank()
+#       )
+# 
+#     pdf(sprintf("%s/%s_%s_boxplots.pdf",io$outdir,i,j), width=7, height=4.8)
+#     print(p)
+#     dev.off()
+#   }
+# }
+```
+
+
+
+<!-- Plot a transcription factor activity per cell -->
+TF activity is defined as the mean accessibility rate across all motifs that are associated with a specific TF
+
+Scatter plots
+```{r}
+# for (i in names(opts$hits)) {
+#   for (j in opts$hits[[i]]) {
+#   
+#     to.plot <- acc_dt.summarised[lineage==i & tf==j] %>%
+#       .[,rate:=ifelse(rate<30,30,rate)] %>%
+#       .[,rate:=ifelse(rate>70,70,rate)]
+#     
+#     p <- ggplot(to.plot, aes(x=V1, y=V2)) +
+#       labs(title="") +
+#       geom_point(aes(color=rate)) +
+#       scale_colour_gradient(low="lightgrey", high="#FF8C00") +
+#       theme(
+#         plot.title = element_text(size=rel(1.3), hjust=0.5),
+#         # axis.title = element_text(colour="black", size=rel(1.1)),
+#         axis.title = element_blank(),
+#         axis.ticks = element_blank(),
+#         axis.text = element_blank(),
+#         # axis.text.x = element_text(colour="black", size=rel(1.1)),
+#         # axis.text.y = element_text(colour="black", size=rel(1.1)),
+#         # axis.line = element_line(colour="black"),
+#         legend.position="right",
+#         # legend.text=element_text(size=rel(1.2), color="black"),
+#         # legend.title=element_blank(),
+#         legend.background = element_blank(),
+#         panel.background = element_blank()
+#       )
+#     # print(p)
+#     
+#     pdf(sprintf("%s/%s_%s_mofa.pdf",io$outdir,i,j), width=4, height=4, useDingbats=F)
+#     print(p)
+#     dev.off()
+#   }
+# }
+```
+
+
+
+
+  

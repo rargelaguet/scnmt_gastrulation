@@ -1,0 +1,110 @@
+---
+title: "Gastrulation: plot statistics of differential analysis for the three omics"
+output:
+  BiocStyle::html_document: 
+    toc: false
+    fig_width: 10
+    fig_height: 8
+---
+
+```{r load_modules, echo=FALSE, include=FALSE}
+library(data.table)
+library(purrr)
+library(ggplot2)
+```
+
+```{r}
+source("/Users/ricard/gastrulation/metaccrna/differential/load_settings.R")
+source("/Users/ricard/gastrulation/metaccrna/differential/load_data.R")
+```
+
+<!-- Bar plots with the fraction of hits per genomic context -->
+```{r}
+tmp <- diff.metacc %>%
+  .[,.(Nmet=mean(met,na.rm=T), Nacc=mean(acc,na.rm=T)), by=c("anno","lineage")] %>%
+  melt(id.vars=c("anno","lineage"), variable.name="assay", value.name="N")
+
+# Mesoderm
+# foo <- tmp[grep("End|Ect",anno,invert=T)] %>% .[lineage=="Mesoderm"]
+foo <- tmp[lineage=="Mesoderm"]
+p_mes <- ggplot(foo, aes(x=anno, y=N, group=assay)) +
+  geom_bar(aes(fill=assay), stat="identity", position="dodge", color="black", size=0.25) +
+  scale_fill_manual(values=c("Nmet"="#F37A71", "Nacc"="#00BFC4")) +
+  labs(x="", y="Fraction of differential sites") +
+  coord_cartesian(ylim=c(0,0.26)) +
+  theme_pub() + theme(legend.position = "none")
+
+pdf(paste0(io$outdir,"/mes_fractionsigcor.pdf"), width=8, height=5)
+print(p_mes)
+dev.off()
+  
+# Endoderm
+foo <- tmp[lineage=="Endoderm"]
+p_end <- ggplot(foo, aes(x=anno, y=N, group=assay)) +
+  geom_bar(aes(fill=assay), stat="identity", position="dodge", color="black", size=0.25) +
+  scale_fill_manual(values=c("Nmet"="#F37A71", "Nacc"="#00BFC4")) +
+  labs(x="", y="Fraction of differential sites") +
+  coord_cartesian(ylim=c(0,0.26)) +
+  theme_pub() + theme(legend.position = "none")
+
+pdf(paste0(io$outdir,"/end_fractionsigcor.pdf"), width=8, height=5)
+print(p_end)
+dev.off()
+
+# Ectoderm
+foo <- tmp[lineage=="Ectoderm"]
+p_ect <- ggplot(foo, aes(x=anno, y=N, group=assay)) +
+  geom_bar(aes(fill=assay), stat="identity", position="dodge", color="black", size=0.25) +
+  scale_fill_manual(values=c("Nmet"="#F37A71", "Nacc"="#00BFC4")) +
+  labs(x="", y="Fraction of differential sites") +
+  coord_cartesian(ylim=c(0,0.26)) +
+  theme_pub() + theme(legend.position = "none")
+
+pdf(paste0(io$outdir,"/ect_fractionsigcor.pdf"), width=8, height=5)
+print(p_ect)
+dev.off()
+```
+
+<!-- Barplots with the number of significant hits per annotation -->
+
+```{r}
+diff.metacc <- rbind(diff.met, diff.acc)
+
+tmp <- diff.metacc %>%
+  .[,.(number_positive_hits=sum(sig==T & diff>0, na.rm=T), 
+       number_negative_hits=-sum(sig==T & diff<0, na.rm=T)), by=c("assay","anno","lineage")] %>%
+  melt(id.vars=c("anno","lineage","assay"))
+
+ylim <- c(min(tmp$value), max(tmp$value))
+
+for (i in unique(tmp$lineage)) {
+# for (i in unique(diff.met$lineage)) {
+  p <- gg_barplot(tmp[lineage==i], title=i, ylim=ylim) +
+    theme(axis.text.x = element_blank())
+  
+  pdf(sprintf("%s/%s_barplotsN.pdf",io$outdir,i), width=8, height=4)
+  print(p)
+  dev.off()
+}
+```
+
+
+
+<!-- TEST -->
+```{r}
+opts$diff.type <- 1
+opts$min.fdr <- 0.10
+opts$min.acc.diff <- 10
+opts$min.met.diff <- 10
+
+source("/Users/ricard/gastrulation/metaccrna/differential/load_data.R")
+
+foo <- diff.met[anno=="H3K27ac_distal_E7.5_Ect_intersect12" & lineage=="Endoderm"]
+foo.filt <- foo[sig==T & diff>0]
+table(foo.filt$diff>0)
+
+foo <- diff.met[anno=="H3K27ac_distal_E7.5_Ect_intersect12" & lineage=="Mesoderm"]
+foo.filt <- foo[sig==T & diff>0]
+table(foo.filt$diff>0)
+```
+

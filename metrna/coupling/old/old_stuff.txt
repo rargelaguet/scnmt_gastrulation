@@ -1,0 +1,118 @@
+
+<!-- Split genes into informative groups -->
+```{r}
+genes <- unique(metrna_dt$id)
+sce_filt <- sce[genes,]
+```
+
+Highly variable genes 
+```{r}
+library(scran)
+
+# Temporarily remove the lowly expressed genes
+sce_filt <- sce_filt[!(rowMeans(counts(sce_filt)) <= 1 | rowData(sce_filt)$pct_dropout_counts > 90),]
+
+# Re-calculate size factors without the lowly expressed genes and normalize
+sf = computeSumFactors(counts(sce_filt), sizes=c(10,20,30,40), positive=TRUE)
+sizeFactors(sce_filt) <- sf; sce_filt$sizeFactor <- sf
+sce_filt <- normalize(sce_filt, exprs_values="counts")
+
+# Update quality metrics
+sce_filt = calculateQCMetrics(sce_filt)
+
+# Fit a mean-dependent trend to the gene-specific variances
+var.fit <- trendVar(sce_filt, method="loess", use.spikes=FALSE)
+
+# Decompose the gene-specific variance into biological and technical components
+var.out <- decomposeVar(sce_filt, var.fit)
+var.out[is.nan(var.out$p.value),] <- NA
+# Detect highly variable genes
+hvg.out <- var.out[which(var.out$FDR <= 0.05 & var.out$bio >= 1.0),]
+hvg.out <- hvg.out[order(hvg.out$bio, decreasing=TRUE),]
+
+# Plot highly variable genes
+plot(var.out$mean, var.out$total, pch=16, cex=0.6, xlab="Mean log-expression", ylab="Variance of log-expression")
+o <- order(var.out$mean)
+lines(var.out$mean[o], var.out$tech[o], col="dodgerblue", lwd=2)
+points(hvg.out$mean, hvg.out$total, col="green", pch=16)
+```
+
+```{r}
+hvg <- rownames(hvg.out)
+non.hvg <- rownames(var.out)[!rownames(var.out) %in% rownames(hvg.out)]
+
+metrna_dt2 <- copy(metrna_dt)
+
+metrna_dt2[id%in%hvg,type:="HVG"]
+metrna_dt2[id%in%non.hvg,type:="non-HVG"]
+metrna_dt2[is.na(type),type:="filtered_out"]
+```
+
+Recompute correlations
+```{r}
+# Weighted correlation
+if (opts$weight == TRUE){
+  if (opts$method != "pearson") { print("Weighted correlation only supported for pearson"); stop() }
+  cor <- metrna_dt2[, wtd.cor(rate, expr, N)[, c("correlation", "t.value", "p.value")], by = c("sample","anno","type")]
+  
+# Unweighted correlation
+} else{
+  cor <- metrna_dt2[, .(V1 = unlist(cor.test(rate, expr, alternative = "two.sided", method = opts$method)[c("estimate", "statistic", "p.value")])), by = c("sample","anno","type")]
+}
+
+# Compute adjusted p-values (both FDR and Bonferroni)
+cor <- cor %>% .[,para := c("r", "t", "p")] %>% dcast(sample + type + anno ~ para, value.var = "V1") %>% 
+      .[, c("padj_fdr", "padj_bonf") := list(p.adjust(p, method = "fdr"), p.adjust(p, method = "bonferroni")), by = c("anno","type")] %>%
+      .[, c("log_padj_fdr", "log_padj_bonf") := list(-log10(padj_fdr), -log10(padj_bonf))] %>%
+      .[, sig := padj_fdr <= opts$threshold_fdr] %>% setorder(padj_fdr)
+```
+
+```{r}
+tmp <- merge(cor, sample_metadata[,c("sample","stage","stage_lineage")], by="sample")
+
+p <- ggplot(tmp, aes(x=anno, y=r, fill=interaction(stage,type))) +
+  geom_boxplot(alpha=0.8, outlier.shape=NA) +
+  geom_hline(yintercept=0, colour="moblack", linetype="dashed") +
+  # scale_fill_manual(values=opts$colors) +
+  labs(title="", x="", y="Met/RNA correlation") +
+  boxplot_theme() +
+  # scale_fill_brewer(palette = "Accent") +
+  theme(
+    axis.text.x = element_text(color="black", size=13)
+  )
+print(p)
+```
+
+
+
+
+Plot histogram of coupling estimates
+```{r}
+tmp <- cor %>% merge(sample_metadata[,c("sample","stage")])
+p <- ggplot(tmp, aes(x=r)) +
+  geom_density(aes(fill=stage, group=stage), alpha=0.3) +
+  labs(title="", x="Met/RNA correlation", y="Density") +
+  theme_bw()
+print(p)
+```
+
+<!-- Pseudobulk correlation -->
+```{r}
+if (opts$pseudobulk==TRUE) {
+  
+  metrna_pseudobulk_dt <- metrna_dt[,.(rate=round(mean(rate),2), expr=round(mean(expr),2), N=.N),by=c("id","anno","gene")] %>% .[,sample:="pseudobulk"]
+  
+  cor_pseudobulk <- metrna_pseudobulk_dt[, wtd.cor(rate, expr, N)[, c("correlation", "t.value", "p.value")], by = c("sample", "anno")] %>%
+    .[,para := c("r", "t", "p")] %>% dcast(sample + anno ~ para, value.var = "V1") %>% 
+    .[, c("padj_fdr", "padj_bonf") := list(p.adjust(p, method = "fdr"), p.adjust(p, method = "bonferroni")), by = anno] %>%
+      .[, c("log_padj_fdr", "log_padj_bonf") := list(-log10(padj_fdr), -log10(padj_bonf))] %>%
+      .[, sig := padj_fdr <= opts$threshold_fdr] %>% setorder(padj_fdr)
+  
+  cor_pseudobulk[,anno:=stringr::str_replace_all(cor_pseudobulk$anno, opts$annos)]
+  
+  p <- p + geom_point(aes(x=anno, y=r), color="black", fill="#F8766D", shape=21, size=3.0, data=cor_pseudobulk)
+  print(p)
+}
+```
+
+

@@ -1,0 +1,267 @@
+---
+title: "Gastrulation: general methylation statistics of cells"
+output:
+  BiocStyle::html_document: 
+    toc: false
+    fig_width: 10
+    fig_height: 8
+---
+
+```{r load_modules, echo=FALSE, include=FALSE}
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(RColorBrewer)
+library(ggpubr)
+```
+
+```{r}
+theme_pub <- function() {
+  theme(
+    axis.title.y = element_text(colour="black", size=rel(1.3)),
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(colour="black",size=rel(1.3)),
+    axis.ticks = element_line(colour="black"),
+    legend.position = "top",
+    legend.title = element_blank(),
+    legend.direction = "horizontal",
+    legend.key.width = unit(1.2,"line"),
+    legend.key.height = unit(1.0,"line"),
+    legend.text = element_text(size=15)
+  )
+}
+```
+
+<!-- Define settings -->
+```{r define_opts, echo=FALSE}
+
+################
+## Define I/O ##
+################
+
+io <- list()
+io$basedir <- "/Users/ricard/data/gastrulation"
+io$metadata <- paste0(io$basedir,"/sample_metadata.txt")
+io$data <- paste0(io$basedir,"/met/raw")
+io$annos_dir  <- "/Users/ricard/data/gastrulation/features/filt"
+io$outdir <- "/Users/ricard/data/gastrulation/met/stats/samples"
+
+####################
+## Define options ##
+####################
+
+opts <- list()
+
+# Define which cells to use (use NULL for all cells)
+opts$stage_lineage10x <- c(
+  "E4.5_Epiblast",
+  "E4.5_Primitive_endoderm",
+  "E5.5_Epiblast",
+  "E5.5_Visceral_endoderm",
+  "E6.5_Epiblast",
+  "E6.5_Primitive_Streak",
+  # "E6.5_Mesoderm",
+  "E6.5_Visceral_endoderm",
+  "E7.5_Primitive_Streak",
+  "E7.5_Endoderm",
+  "E7.5_Mesoderm",
+  "E7.5_Epiblast",
+  "E7.5_Ectoderm"
+)
+# opts$stage_lineage10x <- NULL
+
+# Define genomic contexts (use NULL for no genomic context filtering)
+# opts$annos <- c(
+#   # "genebody"="Gene body",
+#   "prom_2000_2000_cgi",
+#   "prom_2000_2000_noncgi",
+#   "prom_2000_2000",
+#   "H3K27ac_distal_E7.5_union_intersect12_500",
+#   "H3K27ac_distal_E7.5_Mes_intersect12_500",
+#   "H3K27ac_distal_E7.5_Ect_intersect12_500",
+#   "H3K27ac_distal_E7.5_End_intersect12_500"
+#   # "exons"="Exons",
+#   # "introns"="Introns",
+#   # "CGI"="CpG islands",
+#   # "LINE"="LINE",
+#   # "LTR"="LTR"
+# )
+opts$annos <- NULL
+
+# Define which cells to use
+tmp <- fread(io$metadata) %>% .[!is.na(id_met)] 
+if (is.null(opts$stage_lineage10x)) {
+  opts$cells <- tmp[,id_met]
+} else {
+  opts$cells <- tmp %>%
+    .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")] %>%
+    .[pass_metQC==T & stage_lineage%in%opts$stage_lineage,id_met]
+}
+```
+
+<!-- Load sample metadata -->
+```{r}
+metadata <- fread(io$metadata,stringsAsFactors=F) %>% 
+  .[,c("id_met","stage","lineage10x_2","plate")] %>%
+  .[id_met%in%opts$cells] %>%
+  .[,stage_lineage:=as.factor(paste(stage,lineage10x_2,sep="_"))]
+```
+
+<!-- Load genomic contexts metadata -->
+```{r load_genomiccontexts}
+if (!is.null(opts$annos)) {
+  anno_dt <- lapply(opts$annos, function(anno) fread(sprintf("%s/%s.bed",io$annos_dir,anno), stringsAsFactors=T)) %>%  
+    rbindlist %>% setnames(c("chr","start","end","strand","id","anno"))
+}
+```
+
+<!-- Load methylation data and filter genomic contexts -->
+```{r load_data_and_calculate_stats, echo=FALSE}
+# stats <- data.table(expand.grid(opts$cells,c(names(opts$annos),"all"))) %>% setnames(c("id_met","anno")) %>%
+#   .[,c("coverage","mean"):=as.numeric(NA)]
+# 
+# for (cell in opts$cells) {
+#   if (file.exists(sprintf("%s/%s.tsv.gz",io$data,cell))) {
+#     # print(sprintf("Loading %s methylation...",cell))
+# 
+#     # Load sample methylation data
+#     data <- fread(cmd=sprintf("zcat < %s/%s.tsv.gz",io$data,cell), sep="\t", verbose=F, showProgress=F, stringsAsFactors=T)# %>%
+#       # setnames(c("chr","pos","id_met","met_reads","nonmet_reads","rate"))
+# 
+#     # Compute genome-wide statistics
+#     stats[id_met==cell & anno=="all", c("nreads","coverage","mean"):=list(sum(data$met_reads+data$nonmet_reads), nrow(data),mean(data$rate)*100)]
+# 
+#     # Calculate statistics per genomic context
+#     data[,c("start","end") := list(pos,pos)] %>% setkey(chr,start,end)
+#     if (!is.null(opts$annos[1])) {
+#       for (k in names(opts$annos)) {
+#         data_k <- foverlaps(data, anno_dt[anno==k] %>% setkey(chr,start,end), nomatch=0) %>%
+#           .[,c("start","end","strand","i.start","i.end"):=NULL]
+#         stats[id_met==cell & anno==k, c("nreads","coverage","mean"):=list(sum(data_k$met_reads+data_k$nonmet_reads),nrow(data_k),mean(data_k$rate)*100)]
+#       }
+#     }
+# 
+#   } else {
+#     print(sprintf("Sample %s not found for methylation",cell))
+#   }
+# }
+# stats <- stats[complete.cases(stats)]
+# fwrite(stats, file=paste0(io$outdir,"/sample_stats.txt"), sep="\t", row.names=F, col.names=T)
+```
+
+
+```{r read_stats, echo=FALSE}
+stats <- fread(paste0(io$outdir,"/sample_stats.txt")) %>% .[,mean:=mean*100]
+stats <- stats %>% merge(metadata, by="id_met")
+```
+
+<!-- Regress out effect of library size -->
+```{r}
+# stats[,mean_regressed := lm(formula=mean~log(coverage))[["coefficients"]][1] + lm(formula=mean~log(coverage))[["residuals"]], by=c("stage_lineage")]
+stats[,mean_regressed := mean(mean) + lm(formula=mean~log(coverage))[["residuals"]], by=c("stage_lineage")]
+```
+
+```{r}
+# foo <- stats[stage_lineage=="E7.5_Mature_mesoderm"] %>%
+#   .[,mean_regressed := mean(mean) + lm(formula=mean~log(coverage))[["residuals"]], by=c("stage_lineage")]
+# 
+# ggplot(foo, aes(x=log(coverage), y=mean_regressed)) +
+#   geom_point() +
+#   stat_smooth(method="lm") +
+#   theme_bw()
+# 
+# var(foo$mean)
+# var(foo$mean_regressed)
+```
+
+
+<!-- Boxplots with mean methylation rate per stage and lineage -->
+```{r}
+order.lineages <- c("Epiblast","Ectoderm","Primitive Streak","Mesoderm","Endoderm","Primitive endoderm","Visceral endoderm")
+
+stats_filt <- stats %>% copy %>%
+  .[, lineage10x_2:=stringr::str_replace_all( lineage10x_2,"_"," ")] %>%
+  .[,lineage10x_2:=factor(lineage10x_2, levels=order.lineages)]
+
+p <- ggplot(stats_filt, aes(x=lineage10x_2, y=mean_regressed)) +
+  geom_boxplot(alpha=1.0, fill="#F8766D", outlier.shape = NA) +
+  facet_grid(~stage, scales="free_x", space = "free_x") +
+  geom_jitter(alpha=0.5, color="#F8766D", size=0.40) +
+  coord_cartesian(ylim=c(0,100)) +
+  ylab("Global methylation rate") +
+  theme_bw() +
+  theme_pub() +
+  theme(
+    # axis.text.x = element_text(colour="black",size=rel(1.3), angle=90, hjust=1, vjust=0.5, margin=margin(5,0,0,0))
+    axis.text.x = element_text(colour="black",size=rel(1.2), angle=45, hjust=1, vjust=1),
+    strip.background = element_blank(),
+    strip.text = element_text(color="black", size=rel(1.2))
+  )
+print(p)
+
+# pdf(paste0(io$outdir,"/globalmet_stages.pdf"), width=9, height=5, useDingbats = F)
+# print(p)
+# dev.off()
+```
+
+<!-- Test difference of mean methylation rates between embryonic and extra-embryonic cells -->
+
+Classify cells as embryonic or extra-embryonic
+```{r}
+ExE <- c("Visceral endoderm","Primitive endoderm")
+stats_filt %>%
+  .[,embryonic:=ifelse(lineage10x_2%in%ExE,"ExE","Embryonic")]
+```
+
+Boxplots with t-tests
+```{r}
+my_comparisons <- list( c("ExE", "Embryonic"))
+  
+p <- ggboxplot(stats_filt, x = "embryonic", y = "mean_regressed", fill="#F8766D", coef=1, outlier.shape=NA) +
+  labs(x="", y="Methylation rate") +
+  facet_wrap(~stage, nrow=1, scales="fixed") +
+  stat_compare_means(aes(label = paste0("p = ", ..p.format..)), method="t.test", comparisons = my_comparisons) +
+  theme(
+    strip.background = element_blank(),
+    axis.text.x = element_text(size=rel(1.2), color="black", angle=50, vjust=1, hjust=1),
+    axis.title.y = element_text(size=rel(1.3), color="black"),
+    strip.text = element_text(size=rel(1.3), color="black"),
+    legend.position = "none"
+  )
+p
+
+pdf(paste0(io$outdir,"/pvalues.pdf"), width=9, height=5, useDingbats = F)
+print(p)
+dev.off()
+```
+
+<!-- Library size versus number of observed CpG sites -->
+```{r}
+p <- ggplot(stats[nreads<1e7], aes(x=nreads, y=coverage, color=stage)) +
+  geom_point() +
+  labs(x="Number of reads", y="Number of observed CpGs") +
+  theme_bw()
+print(p)
+```
+
+<!-- Library size -->
+```{r}
+to.plot <- stats %>% 
+  .[,N:=.N,by=c("stage","plate")] %>% .[N>5] %>%
+  .[,stage_plate:=paste(stage,plate,sep=" ")] %>%
+  .[,log_coverage:=log(coverage)]
+
+p <- ggboxplot(to.plot, x = "stage_plate", y = "log_coverage", fill="#F8766D", outlier.shape=NA) +
+  labs(x="", y="Library size (log)") +
+  facet_wrap(~stage, nrow=1, scales="free_x") +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+p
+
+pdf(paste0(io$outdir,"/stageAndplate_coverage.pdf"), width=6, height=4, useDingbats = F)
+print(p)
+dev.off()
+```

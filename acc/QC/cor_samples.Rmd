@@ -1,0 +1,181 @@
+---
+title: ""
+output: 
+  BiocStyle::html_document: 
+  fig_width: 10
+  fig_height: 8
+---
+
+```{r load_modules, echo=FALSE, include=FALSE}
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(RColorBrewer)
+```
+
+```{r}
+
+## Define I/O ##
+io <- list()
+io$acc.dir <- "/Users/ricard/data/gastrulation/acc/parsed/old"
+io$sample.metadata  <- "/Users/ricard/data/gastrulation/bar.txt"
+io$outdir <- "/Users/ricard/gastrulation/acc/QC/out"
+
+## Define options ##
+opts <- list()
+
+# Define genomic contexts
+opts$annos <- c(
+  "genebody",
+  "prom_200_200",
+  "H3K27ac_distal_E7.5_Ect_intersect12",
+  "H3K27ac_distal_E7.5_End_intersect12",
+  "H3K27ac_distal_E7.5_Mes_intersect12"
+)
+
+# Define filtering options
+opts$min.weight <- 5
+opts$min.coverage <- 15
+opts$min.var <- 0
+
+# Define cells
+opts$cells <- fread(io$sample.metadata) %>%
+  # .[,stage_lineage:=paste(stage,lineage,sep="_")] %>% 
+  # .[pass_accQC==T & stage_lineage%in%opts$stage_lineage,id_acc]
+  .[!is.na(id_acc) & pass_accQC==T,id_acc]
+```
+
+<!-- Load sample metadata -->
+```{r load_data, echo=FALSE}
+sample_metadata <- fread(io$sample.metadata) %>% 
+  .[id_acc%in%opts$cells] %>% 
+  .[,c("id_acc","stage")] %>% 
+  setkey(id_acc)
+```
+
+<!-- Load accessibility data -->
+```{r load, echo=FALSE}
+acc_dt <- lapply(opts$annos, function(n) {
+  data <- fread(cmd=sprintf("zcat < %s/%s.tsv.gz",io$acc.dir,n), showProgress=F, stringsAsFactors=F, quote="") %>%
+    .[V1%in%opts$cells]
+}) %>% rbindlist %>% setnames(c("id_acc","id","anno","Nmet","N","rate"))
+```
+
+<!-- Merge data with metadata -->
+```{r}
+acc_dt <- acc_dt %>% merge(sample_metadata[,c("id_acc","stage")], by="id_acc")
+```
+
+<!-- Filter data -->
+```{r filter_data, echo=FALSE}
+# Filter features by weight
+acc_dt <- acc_dt[N>=opts$min.weight]
+
+# Filter features by coverage (by stage)
+acc_dt <- acc_dt[,coverage:=.N, by=c("id","stage","anno")] %>% .[coverage>=opts$min.coverage] %>% .[,c("coverage"):=NULL]
+
+# Filter features by variance
+acc_dt <-  acc_dt[,var:=var(rate), by=c("id","stage","anno")] %>% .[var>opts$min.var] %>% .[,var:=NULL]
+```
+
+```{r}
+foo <- acc_dt[,.(var=var(rate)), by=c("id","stage","anno")]
+```
+
+<!-- Create matrix from the data.table -->
+```{r create_matrix, echo=FALSE, include=FALSE}
+acc_matrix_list <- lapply(opts$annos, function(i) {
+  tmp <- dcast(acc_dt[anno==i,c("id_acc","id","rate")], formula=id_acc~id, value.var="rate") %>% as.data.frame %>%
+    tibble::column_to_rownames("id_acc") %>% as.matrix;
+  return(tmp)
+})
+```
+
+<!-- Compute cell-to-cell correlation -->
+```{r cor}
+r <- lapply(acc_matrix_list, function(m) cor(t(m), use="pairwise.complete.obs", method="pearson"))
+```
+
+<!-- Correlation plot -->
+```{r}
+
+for (i in 1:length(opts$annos)) {
+  
+  annos <- data.frame(
+    row.names = sample_metadata[rownames(r[[i]]),id_acc],
+    stage=sample_metadata[rownames(r[[i]]),stage]
+    # stage_lineage=sample_metadata[rownames(r[[i]]),stage_lineage]
+  )
+  
+  breakList <- seq(0,1,by=0.01)
+  # pdf(file=paste0(io$outdir,"/cor_supervised_",opts$annos[i],"_heatmap.pdf"), height = 6, width=9)
+  pheatmap::pheatmap(
+    main=opts$annos[i],
+    r[[i]], cluster_rows=T, cluster_cols=T, 
+    show_rownames=F, show_colnames=F, annotation_col=annos,
+    # color = colorRampPalette(rev(brewer.pal(n = 7, name = "RdYlBu")))(length(breakList)),
+    breaks = breakList
+  )
+  # dev.off()
+}
+```
+
+<!-- Save results -->
+```{r}
+for (i in 1:length(opts$annos)) {
+  write.table(round(r[[i]],3), 
+              file=paste0(io$outdir,"/cor_supervised_",paste(opts$stage_lineage, collapse="-"),"_",opts$annos[i],".txt"), 
+              quote=F, row.names=T, col.names=T)
+}
+```
+
+
+<!-- Permute data and re-calculate correlations -->
+```{r}
+
+# Calculate permute accessibility values
+acc_matrix_perm_list <- lapply(1:length(opts$annos), function(i) {
+  tmp <- acc_dt[anno==opts$annos[i],c("id_acc","id","rate")] %>% .[,rate:=sample(rate),by="id_acc"] %>% dcast(formula=id_acc~id, value.var="rate") %>% as.data.frame %>%
+    tibble::column_to_rownames("id_acc") %>% as.matrix;
+  return(tmp)
+})
+
+r_perm <- lapply(acc_matrix_perm_list, function(m) abs(cor(t(m), use="pairwise.complete.obs", method="pearson")))
+
+
+# Plot
+for (i in 1:length(opts$annos)) {
+  
+  annos <- data.frame(
+    row.names = sample_metadata[rownames(r[[i]]),id_acc],
+    stage_lineage=sample_metadata[rownames(r[[i]]),stage_lineage]
+  )
+    
+  breakList <- seq(0,1,by=0.01)
+  # pdf(file=paste0(io$outdir,"/cor_supervised_",opts$annos[i],"_heatmap.pdf"), height = 6, width=9)
+  pheatmap::pheatmap(
+    main=opts$annos[i],
+    r_perm[[i]], cluster_rows=T, cluster_cols=T, 
+    show_rownames=F, show_colnames=F, annotation_col=annos,
+    # color = colorRampPalette(rev(brewer.pal(n = 7, name = "RdYlBu")))(length(breakList)),
+    breaks = breakList
+  )
+# dev.off()
+}
+```
+
+```{r}
+foo <- acc_dt[id_acc %in%c("E7.5_Plate2_C12","E7.5_Plate2_G12") & anno=="H3K27ac_distal_E7.5_Mes_intersect12"] %>%
+  dcast(id~id_acc, value.var="rate") %>%
+  .[complete.cases(.)] %>%
+  setnames(c("id","sample1","sample2"))
+
+cor(foo$sample1,foo$sample2)
+cor(foo$sample1>50,foo$sample2>50)
+
+
+ggplot(foo, aes(x=sample1, y=sample2)) +
+  geom_point() +
+  stat_smooth(method="lm")
+```
+

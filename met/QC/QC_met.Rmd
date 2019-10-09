@@ -1,0 +1,161 @@
+---
+title: "Gastrulation: quality control of methylation data"
+output: 
+  BiocStyle::html_document: 
+    fig_width: 10
+    fig_height: 8
+---
+
+```{r load_modules, include=FALSE, echo=FALSE}
+library(data.table)
+library(purrr)
+library(tidyr)
+library(ggplot2)
+library(cowplot)
+```
+
+
+```{r funcs, echo=FALSE}
+barplot_theme <- function() {
+  p <- theme(
+    plot.title = element_text(size=20, hjust=0.5),
+    # axis.title.x = element_text(colour="black", size=25, vjust=1.5),
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(colour="black", size=15),
+    # axis.text.x = element_text(colour="black",size=rel(1.6)),
+    axis.text.y = element_text(colour="black",size=rel(1.2)),
+    axis.line = element_line(colour="black", size=rel(0.7)),
+    axis.ticks.x = element_line(colour="black", size=rel(0.7)),
+    axis.ticks.y = element_line(colour="black", size=rel(0.7)),
+    legend.position="none",
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_blank()
+  )
+}
+```
+
+```{r define_opts, echo=FALSE, include=FALSE}
+
+## I/O ##
+io <- list()
+io$sample.metadata <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
+io$in.metdir <- "/Users/ricard/data/gastrulation/met/raw"
+io$stats <- "/Users/ricard/gastrulation/met/stats/samples/out/samples.txt"
+io$outdir <- "/Users/ricard/gastrulation/met/QC/out"
+
+# io$sample.metadata <- "/Users/ricard/data/gastrulation_norsync_stuff/new_cells/sample_metadata_PS_VE_dec18_filt_annotated_2.txt"
+# io$in.metdir <- "/Users/ricard/data/gastrulation/met/raw/scNMT/dec18"
+
+# io$sample.metadata <- "/Users/ricard/data/gastrulation_scBS/sample_metadata.txt"
+# io$in.metdir <- "/Users/ricard/data/gastrulation_scBS/met/raw/E5.5_scBS"
+# io$outdir <- "/Users/ricard/gastrulation/met/QC/out"
+
+
+## Options ##
+opts <- list()
+
+# Define which cells to use
+opts$cells <- fread(io$sample.metadata) %>% 
+  .[!is.na(id_met),id_met]
+
+# Filtering optionsopts$cell
+opts$met_coverage_threshold <- 5e4
+```
+
+<!-- Load sample metadata -->
+```{r load_metadata}
+sample_metadata <- fread(io$sample.metadata) %>% 
+  .[id_met%in%opts$cells]
+```
+
+<!-- Load methylation data and calculate QC statistics per sample -->
+```{r}
+stats <- data.table(id_met=opts$cells, coverage=as.numeric(NA))
+
+for (cell in opts$cells) {
+  if (file.exists(sprintf("%s/%s.tsv.gz",io$in.metdir,cell))) {
+    # print(sprintf("Loading %s...",cell))
+    tmp <- fread(cmd=sprintf("zcat < %s/%s.tsv.gz",io$in.metdir,cell), sep="\t", verbose=F, showProgress=F) %>% .[,c(1,2,5)] %>% setnames(c("chr","pos","rate"))
+    stats[id_met==cell,coverage:=nrow(tmp)]
+    stats[id_met==cell,mean:=mean(tmp$rate, na.rm=T)]
+  } else {
+    print(sprintf("Sample %s not found",cell))
+  }
+}
+stats <- stats[!is.na(coverage)]
+```
+
+<!-- Load statistics -->
+```{r read_stats, echo=FALSE}
+fwrite(stats,file=io$stats, sep="\t", row.names=F, col.names=T)
+# stats <- fread(io$stats) %>% merge(sample_metadata,by="sample")
+```
+
+<!-- Plot QC statistics -->
+
+Barplots with coverage per cell
+```{r}
+tmp <- stats[,c("id_met","coverage")] %>% setkey(coverage) %>% .[,id_met:=factor(id_met,levels=id_met)]
+tmp$cellcolor <- c("black","red")[as.numeric(tmp$coverage < opts$met_coverage_threshold)+1]
+
+p1 <- ggplot(tmp, aes(x=id_met, y=coverage)) +
+  geom_bar(stat="identity", position="dodge", fill="#F8766D", color="#F8766D") +
+  labs(title="", x="", y="Number of observed CpG sites") +
+  geom_hline(yintercept=opts$met_coverage_threshold, colour="black", linetype="dashed") +
+  barplot_theme() +
+  scale_y_continuous(expand=c(0,0), limits=c(0,4e+6)) +
+  # scale_y_continuous(expand=c(0,0), limits=c(0,7.5e+6)) +
+  theme(
+    # axis.text.x = element_text(angle=90, size=9, vjust=0.5, hjust=1.0, color=tmp$cellcolor)
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+print(p1)
+
+# pdf(file=paste0(io$outdir,"/qc_met.pdf"), width=8, height=5)
+# print(p1)
+# dev.off()
+```
+
+
+```{r}
+print("Fail QC for methylation:")
+failqc <- stats[coverage<opts$met_coverage_threshold,id_met]
+print(length(failqc))
+```
+
+
+<!-- Update sample metadata -->
+```{r}
+sample_metadata_updated <- fread(io$sample.metadata)
+sample_metadata_updated <- sample_metadata_updated[id_met%in%stats$id_met, pass_metQC:=ifelse(id_met%in%failqc,F,T)]
+
+table(sample_metadata_updated$pass_metQC)
+
+fwrite(sample_metadata_updated, io$sample.metadata, sep="\t", col.names=T, row.names=F, quote=F, na="NA")
+```
+
+```{r}
+# # metadata_all <- fread(io$sample.metadata)
+# metadata_modified <- sample_metadata
+# metadata_modified <- metadata_modified[,c("id_met","id_acc"):=NA]
+# metadata_modified[sample%in%stats$id_met,c("id_met","id_acc"):=sample] %>% .[,c("pass_metQC","pass_accQC"):=list(NA)]
+# # metadata_modified <- metadata_modified[id_met %in% stats$id_met]
+# metadata_modified[!is.na(id_met), pass_metQC:=ifelse(id_met%in%failqc,"FALSE","TRUE")]
+# 
+# tmp <- metadata_modified %>% 
+#   .[,c("sample","id_rna","id_met","id_acc","embryo","plate","pass_rnaQC","pass_metQC","pass_accQC","lineage")]
+# 
+# outfile = "/Users/ricard/data/gastrulation_norsync_stuff/new_cells/sample_metadata_PS_VE_dec18_filt_annotated_2.txt"
+# fwrite(tmp, outfile, sep="\t", col.names = T, row.names = F, quote=F, na="NA")
+```
+
+<!-- Save results -->
+```{r, echo=FALSE, include=FALSE}
+# p <- cowplot::plot_grid(p1, p2, ncol=2, nrow=1)
+# pdf(file=paste0(io$outdir,"/metacc.pdf"), width=19, height=7)
+# print(p)
+# dev.off()
+```
+

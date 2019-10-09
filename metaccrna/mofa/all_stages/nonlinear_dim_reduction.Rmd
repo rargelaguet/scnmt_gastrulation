@@ -1,0 +1,189 @@
+```{r}
+library(umap)
+library(Rtsne)
+library(irlba)
+```
+
+```{r}
+theme_pub <- function() {
+  theme_classic() +
+  theme(
+    legend.position = "right",
+    legend.title = element_blank(),
+    legend.text = element_text(size=rel(1.2)),
+    axis.title = element_text(size=rel(1.2), color="black"),
+    axis.text = element_blank(),
+    axis.ticks = element_blank()
+  )
+}
+```
+
+```{r}
+algorithms <- c("umap")
+views <- viewNames(model)
+
+umap.defaults$n_neighbors <- 20
+umap.defaults$min_dist <- 0.6
+
+
+samples <- MOFA::sampleNames(model)
+```
+
+<!-- Non-linear dimensionality reduction from MOFA factors -->
+```{r}
+# Fetch factors
+factors <- c(1,2,4,8)
+Z <- getFactors(model) %>% .[,factors]
+
+# Scale Z by the variance explained
+# r2 <- apply(calculateVarianceExplained(model, factors=factors)$R2PerFactor,1,sum)
+# Z <- Z %*% diag(r2*100)
+
+umap.defaults$n_neighbors <- 25
+umap.defaults$min_dist <- 0.55
+
+for (algorithm in algorithms) {
+
+  set.seed(42)
+  if (algorithm=="tsne") {
+    tsne <- Rtsne(Z, check_duplicates=FALSE, pca=FALSE, theta=0.5, dims=2)
+    Z.out <- tsne$Y
+  } else if (algorithm=="umap") {
+    umap.out <- umap(Z, config = umap.defaults)
+    Z.out <- umap.out$layout
+  }
+  
+  # Flip a factor  
+  Z.out[,2] <- -Z.out[,2]
+  
+  to.plot <- Z.out %>% as.data.table %>% .[,sample:=rownames(Z)] %>%
+      merge(sample_metadata_filt, by="sample")
+
+  p1 <- ggplot(to.plot, aes(x=V1, y=V2, color=lineage10x_2)) +
+    geom_point(alpha=0.7, size=2.0) +
+    scale_color_manual(values=opts$colors) +
+    guides(colour = guide_legend(override.aes = list(size=3))) +
+    labs(x="UMAP Dimension 1", y="UMAP Dimension 2") +
+    theme_pub() + theme(legend.position = "none")
+  
+  pdf(sprintf("%s/MOFA_%s.pdf",io$outdir,algorithm), width=5, height=7, useDingbats = F)
+  print(p1)
+  dev.off()
+  
+  # Save coordinates
+  # fwrite(to.plot[,c("sample","V1","V2")], sprintf("%s/%s_coordinates.txt",io$outdir,algorithm))
+}
+```
+
+Imputation
+```{r}
+model <- impute(model)
+```
+
+```{r}
+view <- "Mesoderm enhancers (met)"
+factor <- 1
+
+tmp <- names(tail(sort(abs(getWeights(model, views=view, factor=factor)[[1]][,1])), n=50))
+if (length(model@ImputedData)>0) {
+  met <- colMeans(model@ImputedData[[view]][tmp,], na.rm=T)
+} else {
+  met <- colMeans(model@TrainData[[view]][tmp,], na.rm=T)
+}
+
+if (view=="Ectoderm enhancers (met)") {
+  min_met <- (-6)
+  max_met <- 5
+} else if (view=="Mesoderm enhancers (met)") {
+  min_met <- (-6)
+  max_met <- 5
+} else if (view=="Endoderm enhancers (met)") {
+  min_met <- (-6)
+  max_met <- 5
+}
+met[met<(min_met)] <- min_met
+met[met>(max_met)] <- max_met
+
+# Convert M-values to B-values
+met <- 100*2**met/(1+2**met)
+
+foo <- to.plot %>% merge(
+  data.table(sample = MOFA::sampleNames(model), met = met), by="sample"
+)
+
+p <- ggplot(foo, aes(x=V1, y=V2, color=met)) +
+  geom_point(alpha=0.7, size=2.0) +
+  scale_colour_gradientn(colours = brewer.pal(9, "OrRd")) +
+  labs(x="UMAP Dimension 1", y=" UMAP Dimension 2") +
+  theme_pub() 
+# print(p)
+
+pdf(sprintf("%s/MOFA_%s_%d.pdf",io$outdir,view,factor), width=6, height=6, useDingbats = F)
+print(p)
+dev.off()
+```
+
+```{r}
+view <- "Mesoderm enhancers (acc)"
+factor <- 1
+
+tmp <- names(tail(sort(abs(getWeights(model, views=view, factor=factor)[[1]][,1])), n=50))
+if (length(model@ImputedData)>0) {
+  acc <- colMeans(model@ImputedData[[view]][tmp,], na.rm=T)
+} else {
+  acc <- colMeans(model@TrainData[[view]][tmp,], na.rm=T)
+}
+
+if (view=="Ectoderm enhancers (acc)") {
+  min_acc <- (-1.5)
+  max_acc <- 0.5
+} else if (view=="Mesoderm enhancers (acc)") {
+  min_acc <- (-1.5)
+  max_acc <- 0.5
+} else if (view=="Endoderm enhancers (acc)") {
+  min_acc <- (-1.5)
+  max_acc <- 0.5
+}
+acc[acc<(min_acc)] <- min_acc
+acc[acc>(max_acc)] <- max_acc
+
+# Convert M-values to B-values
+acc <- 100*2**acc/(1+2**acc)
+
+foo <- to.plot %>% merge(
+  data.table(sample = MOFA::sampleNames(model), acc = acc), by="sample"
+)
+
+p <- ggplot(foo, aes(x=V1, y=V2, color=acc)) +
+  geom_point(alpha=0.7, size=1.5) +
+  scale_colour_gradientn(colours = rev(brewer.pal(9, "Blues"))) +
+  labs(x="UMAP Dimension 1", y=" UMAP Dimension 2") +
+  theme_pub() 
+
+pdf(sprintf("%s/MOFA_%s_%d.pdf",io$outdir,view,factor), width=6, height=6, useDingbats = F)
+print(p)
+dev.off()
+```
+
+<!-- Plot Primitive Streak RNA signature -->
+```{r}
+PS_markers <- c("Fgf8", "Fst", "Eomes", "Mixl1", "T")
+rna.test <- scale(t(rna_matrix[PS_markers,sampleNames(model)]), center = T, scale=T)
+foo <- to.plot %>% merge(
+  data.table(
+    sample = sampleNames(model),
+    PS_markers = apply(rna.test,1,mean,na.rm=F)), by="sample"
+    # PS_markers = rna_matrix["Meis2",sampleNames(model)]), by="sample"
+)
+p <- ggplot(foo, aes(x=V1, y=V2, color=PS_markers)) +
+  geom_point(alpha=0.7, size=1.5) +
+  scale_colour_gradientn(colours = rev(brewer.pal(9, "Greens"))) +
+  labs(x="UMAP Dimension 1", y=" UMAP Dimension 2") +
+  theme_pub() 
+print(p)
+
+# pdf(sprintf("%s/MOFA_PS_RNA.pdf",io$outdir), width=5, height=5.5, useDingbats = F)
+# print(p)
+# dev.off()
+```
+

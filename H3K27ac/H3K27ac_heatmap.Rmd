@@ -1,0 +1,82 @@
+---
+title: 'Gastrulation: H3K27ac heat map'
+output: html_document
+---
+
+```{r echo=FALSE, include=FALSE}
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(viridis)
+library(RColorBrewer)
+```
+
+```{r}
+if (grepl("ricard",Sys.info()['nodename'])) {
+  source("/Users/ricard/gastrulation/H3K27ac/H3K27ac_load_settings.R")
+  source("/Users/ricard/gastrulation/H3K27ac/H3K27ac_load_data.R")  
+} else {
+  source("/Users/stapelc/Documents/Github/gastrulation/H3K27ac/H3K27ac_load_settings.R")
+  source("/Users/stapelc/Documents/Github/gastrulation/H3K27ac/H3K27ac_load_data.R")
+}
+```
+
+<!-- Prepare data for plotting -->
+```{r}
+data_plot <- melt(enh_marked_log, id.vars = c("chr","start","end","length","id","anno"),
+             measure.vars = c("E10.5_midbrain","E10.5_heart","E12.5_intestine"), 
+             variable.name = "tissue", value.name = "H3K27ac")
+```
+
+<!-- Plot heatmaps enhancer signal across tissues -->
+```{r}
+for (ann in unique(data_plot$anno)) {
+  
+  tmp <- data_plot[anno==ann] %>%
+  .[,.(rate=mean(H3K27ac)),by=c("id","tissue")] %>%
+  dcast(tissue~id, value.var="rate") %>% matrix.please
+
+  # cap minimum and maximum values
+  breaksList = seq(min(4), max(8), by = max(8/100))
+  
+  p_cap <- pheatmap::pheatmap(
+    mat = tmp, 
+    show_rownames = T, show_colnames = F, 
+    cluster_rows = F, labels_row = c("Midbrain","Heart","Intestine"),
+    color = colorRampPalette(rev(brewer.pal(n = 9, name ="PuOr")))(length(breaksList)-1),
+    breaks = breaksList,
+    fontsize = 14,
+    main = ann
+  )
+    
+  #pdf(file=paste0(io$outdir,"/H3K27ac_heatmap_",ann,".pdf"), width=7.29, height=4.51, useDingbats=F)
+  print(p_cap)
+  #dev.off()
+}
+```
+
+Plot heatmap with quantile breaks
+```{r}
+for (ann in unique(data_plot$anno)) {
+  
+  # determine values for quantile breaks
+  mat_breaks <- quantile_breaks(tmp, n = 21)
+  
+  p_quant <- pheatmap::pheatmap(
+    mat = tmp,
+    show_rownames = T, show_colnames = F,
+    cluster_rows = F, labels_row = c("Midbrain","Heart","Intestine"),
+    color = colorRampPalette(rev(brewer.pal(n = 7, name = "PuOr")))(length(mat_breaks)-1),
+    breaks = mat_breaks,
+    fontsize = 14,
+    main = paste(ann, "- Quantile Color Scale", sep=" ")
+  )
+
+  #pdf(file=paste0(io$outdir,"/H3K27ac_heatmap_quantile_",ann,".pdf"), width=7.29, height=4.51, useDingbats=F)
+  print(p_quant)
+  #dev.off()
+  
+}
+  
+```
+

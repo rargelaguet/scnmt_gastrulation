@@ -1,0 +1,204 @@
+---
+title: "Gastrulation: plot DNA methylation and chromatin accessibiliy dynamics associated with endoderm commitment"
+output: 
+  BiocStyle::html_document: 
+    fig_width: 10
+    fig_height: 8
+---
+
+
+```{r}
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(RColorBrewer)
+library(splines)
+library(scater)
+```
+
+```{r}
+source("/Users/ricard/gastrulation/metaccrna/mesendoderm_commitment/endoderm/load_settings.R")
+source("/Users/ricard/gastrulation/metaccrna/mesendoderm_commitment/endoderm/load_data.R")
+```
+
+<!-- Load results from differential methylation and accessibility analysis -->
+```{r}
+io$diff.met <- "/Users/ricard/data/gastrulation/met/differential/feature_level"
+io$diff.acc <- "/Users/ricard/data/gastrulation/acc/differential/feature_level"
+
+opts$diff.type <- 2
+opts$min.fdr <- 0.10
+opts$min.acc.diff <- 5
+opts$min.met.diff <- 5
+
+source("/Users/ricard/gastrulation/metaccrna/differential/load_data.R")
+```
+
+<!-- Subset differential sites from the data -->
+Lineage-defining elements are defined as ChIP-seq peaks that show differential activity during germ layer commitment.
+At 10% FDR, this represents around 25% of Endoderm and Mesoderm putative enhancers, as defined by the ChIP-seq.
+Ectoderm enhancers show very few associations with germ layer commitment, so there is no point in subsetting them.
+
+```{r}
+# Methylation
+met_dt <- met_dt %>% split(.$anno) %>%
+  map2(.,names(.), function(x,y) x[id%in%diff.met[sig==T & anno==y,id]]) %>%
+  rbindlist %>% droplevels()
+
+# Accessibility
+acc_dt <- acc_dt %>% split(.$anno) %>%
+  map2(.,names(.), function(x,y) x[id%in%diff.acc[sig==T & anno==y,id]]) %>%
+  rbindlist %>% droplevels()
+```
+
+<!-- Rename annotations for plotting -->
+```{r}
+met_dt %>% .[,anno:=stringr::str_replace_all(anno,opts$views_names)] 
+acc_dt %>% .[,anno:=stringr::str_replace_all(anno,opts$views_names)] 
+```
+
+<!-- Aggregate signal per cell (across all enhancers) -->
+```{r}
+met_dt.aggregated <- met_dt[,.(rate=mean(rate)),by=c("id_met","anno","sample","stage","plate")]
+acc_dt.aggregated <- acc_dt[,.(rate=mean(rate)),by=c("id_acc","anno","sample","stage","plate")]
+```
+
+<!-- Regress out technical covariates -->
+
+Methylation
+```{r}
+# Global differences in methylation rate
+foo <- fread(io$met.stats) %>%
+  .[,mean:=mean*100] %>%
+  .[,c("id_met","mean")]
+met_dt.aggregated <- met_dt.aggregated %>% merge(foo, by="id_met") %>%
+  .[,rate:=mean(rate) + lm(formula=rate~mean)[["residuals"]], by=c("anno")] %>%
+  .[,mean:=NULL]
+```
+
+Accessibility 
+```{r}
+# Global differences in accessibility rate
+foo <- fread(io$acc.stats) %>%
+  .[,c("id_acc","mean")]
+acc_dt.aggregated <- acc_dt.aggregated %>% merge(foo, by="id_acc") %>%
+  .[,rate:=mean(rate) + lm(formula=rate~mean)[["residuals"]], by=c("anno")] %>%
+  .[,mean:=NULL]
+```
+
+<!-- Load precomputed pseudotime  -->
+```{r}
+Z <- fread(io$pseudotime) %>%
+  .[,c("sample","x")] %>% setnames("sample","id_rna") %>%
+  merge(sample_metadata[,c("sample","id_rna","lineage10x_2")], by="id_rna") %>% 
+  setnames("x","Factor 1") %>% setorder("Factor 1") %>%
+  .[,rank:=1:.N]
+```
+
+<!-- Plot RNA pseudotime rank vs met/acc  -->
+```{r}
+to.plot <- merge(met_dt.aggregated, acc_dt.aggregated, by=c("sample","anno","stage")) %>% 
+  setnames(c("rate.x","rate.y"),c("met","acc")) %>%
+  merge(Z[,c("sample","lineage10x_2","rank","Factor 1")], by="sample") %>%
+  .[!(stage=="E7.5" & lineage10x_2=="Epiblast")] %>%
+  melt(id.vars=c("sample","rank","anno","lineage10x_2","Factor 1"), measure.vars=c("met","acc"), variable.name="assay")
+```
+
+
+```{r}
+p <- ggplot(to.plot, aes(x=`rank`, y=value)) +
+  geom_point(aes(fill=assay), pch=21, color="black", alpha=0.9, size=1.0, stroke=0.05) +
+  geom_rug(aes(color=lineage10x_2), sides="b") +
+  facet_wrap(~anno, nrow=2, scales="free_y") +
+  stat_smooth(aes(fill=assay), method="loess", color="black", alpha=0.75, span=0.3) +
+  scale_fill_manual(values=c(acc="#00BFC4", met="#F37A71")) +
+  scale_colour_manual(values=opts$colors) +
+  # coord_cartesian(ylim=c(25,85)) +
+  labs(x="Pseudotime (rank)", y="Methylation/Accessibility (%)") +
+  theme_classic() +
+  theme(
+    legend.position = "none",
+    axis.text.y = element_text(color="black", size=rel(1.0)),
+    axis.text.x = element_blank(),
+    axis.title = element_text(color="black", size=rel(1.2))
+  )
+# print(p)
+
+# pdf(paste0(io$outdir,"/pseudotime_endoderm.pdf"), useDingbats = F, width=9, height=4)
+# p
+# dev.off()
+```
+
+```{r}
+for (i in unique(to.plot$assay)) {
+  
+  p <- ggplot(to.plot[assay==i], aes(x=`rank`, y=value)) +
+    geom_point(aes(fill=assay), pch=21, color="black", alpha=0.9, size=1.0, stroke=0.05) +
+    facet_wrap(~anno, nrow=1, scales="fixed") +
+    stat_smooth(aes(fill=assay), method="loess", color="black", alpha=0.75, span=0.3) +
+    scale_fill_manual(values=c(acc="#00BFC4", met="#F37A71")) +
+    scale_colour_manual(values=opts$colors) +
+    labs(x="Pseudotime (rank)", y="Methylation/Accessibility (%)") +
+    theme_classic() +
+    theme(
+      legend.position = "none",
+      axis.text.y = element_text(color="black", size=rel(1.0)),
+      axis.text.x = element_blank(),
+      axis.title = element_text(color="black", size=rel(1.2))
+    )
+  
+  epi_to_ps <- 600
+  ps_to_endo <- 930
+  if (i=="met") {
+    p <- p +
+      geom_segment(aes(x=epi_to_ps, xend=epi_to_ps, y=20, yend=100), size=0.25, color="black", linetype="dashed") +
+      geom_segment(aes(x=ps_to_endo, xend=ps_to_endo, y=20, yend=100), size=0.25, color="black", linetype="dashed") +
+      coord_cartesian(ylim=c(20,100))
+  } else if (i=="acc") { 
+    p <- p +
+      geom_rug(aes(color=lineage10x_2), sides="b") + 
+      geom_segment(aes(x=epi_to_ps, xend=epi_to_ps, y=25, yend=52), size=0.25, color="black", linetype="dashed") +
+      geom_segment(aes(x=ps_to_endo, xend=ps_to_endo, y=25, yend=52), size=0.25, color="black", linetype="dashed") +
+      coord_cartesian(ylim=c(25,52))
+  }
+  print(p)
+  
+  pdf(sprintf("%s/pseudotime_endoderm_%s.pdf",io$outdir,i), useDingbats = F, width=9, height=2.5)
+  print(p)
+  dev.off()
+}
+```
+
+
+Piece-wise linear regression
+```{r}
+knots <- c(epi_to_ps, ps_to_endo)
+        
+regression.out <- list()
+for (i in unique(to.plot$anno)) {
+  foo.met <- to.plot[anno==i & assay=="met"]
+  foo.acc <- to.plot[anno==i & assay=="acc"]
+  lm.met <- lm(formula = value ~ bs(rank, df=NULL, knots=knots, degree=1), data = foo.met)
+  lm.acc <- lm(formula = value ~ bs(rank, df=NULL, knots=knots, degree=1), data = foo.acc)
+  
+  regression.out[[i]] <- data.table(
+    anno = i, 
+    knot = 1:(length(knots)+1), 
+    met.pval = unname(summary(lm.met)$coefficients[-1,"Pr(>|t|)"]),
+    met.r = unname(lm.met$coefficients[-1]),
+    acc.pval = unname(summary(lm.acc)$coefficients[-1,"Pr(>|t|)"]),
+    acc.r = unname(lm.acc$coefficients[-1])
+  )
+  
+}
+regression.out <- rbindlist(regression.out)
+```
+
+
+```{r}
+foo <- regression.out %>% 
+  melt(id.vars=c("anno","knot"), measure.vars=list(c("met.pval","acc.pval"),c("met.r","acc.r")), 
+       variable.name="assay", value.name=c("pval","r"), variable.factor=F) %>%
+  .[,assay:=ifelse(assay==1,"met","acc")] %>%
+  .[,padj_fdr:= list(p.adjust(pval, method="bonferroni"))] 
+```

@@ -1,0 +1,186 @@
+---
+title: "Gastrulation: quality control statistics for the three omics"
+output: 
+  BiocStyle::html_document: 
+    fig_width: 12
+    fig_height: 8
+---
+
+
+RNA color: #3CB54E
+Met color: #F37A71 (or #F8766D?)
+Acc color: #6691CB (or #00BFC4?)
+
+```{r echo=FALSE, include=FALSE}
+library(scater)
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(RColorBrewer)
+library(VennDiagram)
+```
+
+```{r define_opts, echo=FALSE}
+
+## Define I/O ##
+io <- list()
+io$outdir <- "/Users/ricard/gastrulation/metaccrna/overview_plot/out"
+io$sample_metadata <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
+io$outdir <- "/Users/ricard/gastrulation/metaccrna/qc_stats/out"
+
+## Define options ##
+opts <- list()
+
+opts$colors <- c(
+  "RNA expression"="#3CB54E",
+  "DNA methylation"="#F37A71",
+  "Chromatin accessibility"="#6691CB"
+)
+```
+
+<!-- Load sample metadata -->
+```{r}
+sample_metadata <- fread(io$sample_metadata) %>% 
+  .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")]
+```
+
+Fraction of cells processed as scNMT-seq vs scRNA-seq
+```{r}
+# scNMT
+sample_metadata[,sum(!is.na(pass_metQC) & !is.na(pass_accQC))]
+sample_metadata[,sum(!is.na(pass_metQC) & !is.na(pass_accQC) & (pass_rnaQC==T|pass_metQC==T|pass_accQC==T))]
+
+# scRNA
+sample_metadata[,sum(is.na(pass_metQC) & is.na(pass_accQC))]
+
+sample_metadata[,sum(is.na(pass_metQC) & is.na(pass_accQC) & pass_metQC==T)]
+sample_metadata[,sum(!is.na(pass_metQC) & pass_accQC==T)]
+
+sample_metadata[pass_rnaQC==T,.N]
+```
+
+Fraction of cells that passed QC for at least one omic, per protocol and stage
+```{r}
+# scNMT
+sample_metadata[pass_rnaQC==T | pass_metQC==T | pass_accQC==T, sum(!is.na(pass_metQC) & !is.na(pass_accQC)), by="stage"]
+
+# scRNA
+sample_metadata[pass_rnaQC==T | pass_metQC==T | pass_accQC==T, sum(is.na(pass_metQC) & is.na(pass_accQC)), by="stage"]
+```
+
+Fraction of cells that passed QC for each omic, per stage and lineage
+```{r}
+sample_metadata_filt <- sample_metadata[is.na(pass_metQC) & is.na(pass_accQC)]
+sample_metadata_filt[pass_rnaQC==T,.N,by=c("stage_lineage")]
+sample_metadata_filt[pass_metQC==T,.N,by=c("stage_lineage")]
+sample_metadata_filt[pass_accQC==T,.N,by=c("stage_lineage")]
+```
+
+Number of embryos per stage
+```{r}
+sample_metadata[,length(unique(embryo)),by=c("stage")]
+
+unique(sample_metadata$embryo)
+```
+
+
+<!-- Plot fraction of cells that passQC for each omic, per stage -->
+```{r}
+# foo <- data.frame(
+#   met = mean(sample_metadata$pass_metQC,na.rm=T),
+#   acc = mean(sample_metadata$pass_accQC,na.rm=T),
+#   rna = mean(sample_metadata$pass_rnaQC,na.rm=T)
+# ) %>% melt()
+
+foo <- sample_metadata[,c("stage","pass_rnaQC","pass_metQC","pass_accQC")] %>%
+  setnames(c("pass_rnaQC","pass_metQC","pass_accQC"),c("RNA expression","DNA methylation","Chromatin accessibility")) %>%
+  melt(id.vars="stage", variable.name="type", value.name="passQC") %>%
+  .[,mean(passQC,na.rm=T),by=c("stage","type")]
+
+p <- ggplot(foo, aes(x=stage, y=V1, fill=type)) +
+  geom_bar(stat="identity", position="dodge", color="black") +
+  labs(x="", y="Fraction of cells that pass QC") +
+  scale_fill_manual(values=opts$colors) +
+  theme_bw() +
+  coord_cartesian(ylim=c(0,1)) +
+  theme(
+    axis.text.y=element_text(size=rel(1.2), color='black'),
+    axis.text.x=element_text(size=rel(1.7), color='black'),
+    axis.title=element_text(size=rel(1.4), color='black'),
+    legend.position="top",
+    legend.title = element_blank(),
+    legend.text = element_text(size=rel(1.1), color="black")
+  )
+
+pdf(file=sprintf("%s/qc_barplots.pdf",io$outdir), width=7, height=5)
+print(p)
+dev.off()
+```
+
+<!-- Plot number cells that passQC for each omic, per stage_lineage -->
+```{r}
+foo <- sample_metadata[,c("stage","pass_rnaQC","pass_metQC","pass_accQC")] %>%
+  setnames(c("pass_rnaQC","pass_metQC","pass_accQC"),c("RNA expression","DNA methylation","Chromatin accessibility")) %>%
+  melt(id.vars="stage", variable.name="type", value.name="passQC") %>%
+  .[,sum(passQC,na.rm=T),by=c("stage","type")]
+
+p <- ggplot(foo, aes(x=stage, y=V1, fill=type)) +
+  geom_bar(stat="identity", position="dodge", color="black") +
+  labs(x="", y="Number of cells that pass QC") +
+  scale_fill_manual(values=opts$colors) +
+  theme_bw() +
+  theme(
+    axis.text.y=element_text(size=rel(1.2), color='black'),
+    axis.text.x=element_text(size=rel(1.7), color='black'),
+    axis.title=element_text(size=rel(1.4), color='black'),
+    legend.position="top",
+    legend.title = element_blank(),
+    legend.text = element_text(size=rel(1.1), color="black")
+  )
+
+pdf(file=sprintf("%s/qc_barplots2.pdf",io$outdir), width=7, height=4)
+print(p)
+dev.off()
+```
+
+<!-- Plot Venn Diagrams per stage with cell numbers -->
+
+Total
+```{r}
+tmp <- sample_metadata %>%
+  # [!is.na(pass_metQC) & !is.na(pass_accQC)] %>%
+  .[pass_rnaQC==T | pass_metQC==T | pass_accQC==T]
+
+foo <- venn.diagram(
+  x = list("RNA expression"=tmp[pass_rnaQC==T,sample],
+           "DNA methylation"=tmp[pass_metQC==T,sample],
+           "DNA accessibility"=tmp[pass_accQC==T,sample]
+           ),
+  filename=NULL,
+  col="transparent", fill=c("#3CB54E","#F37A71","#6691CB"), alpha = 0.60, cex = 1.5, 
+  fontfamily = "serif", fontface = "bold")
+
+pdf(file=sprintf("%s/venn_all.pdf",io$outdir))
+grid.draw(foo)
+dev.off()
+```
+
+Per stage
+```{r}
+for (i in unique(sample_metadata_filt$stage_lineage)) {
+  foo <- venn.diagram(
+    x = list("RNA expression"=sample_metadata_filt[stage_lineage==i & pass_rnaQC==T,sample],
+             "DNA methylation"=sample_metadata_filt[stage_lineage==i & pass_metQC==T,sample],
+             "DNA accessibility"=sample_metadata_filt[stage_lineage==i & pass_accQC==T,sample]
+             ),
+    filename=NULL,
+    col="transparent", fill=c("#3CB54E","#F37A71","#6691CB"), alpha = 0.60, cex = 1.5, 
+    fontfamily = "serif", fontface = "bold",
+    euler.d = TRUE
+    )
+
+  pdf(file=sprintf("%s/venn_%s.pdf",io$outdir,i))
+  grid.draw(foo)
+  dev.off()
+}
+```

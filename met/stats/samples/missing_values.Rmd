@@ -1,0 +1,141 @@
+---
+title: "Gastrulation: general methylation statistics of cells"
+output:
+  BiocStyle::html_document: 
+    toc: false
+    fig_width: 10
+    fig_height: 8
+---
+
+```{r load_modules, echo=FALSE, include=FALSE}
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(RColorBrewer)
+```
+
+```{r}
+theme_pub <- function() {
+  theme(
+    axis.title.y = element_text(colour="black", size=17, margin=margin(0,10,0,0)),
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(colour="black",size=rel(1.5)),
+    axis.ticks = element_line(colour="black"),
+    axis.line = element_line(color="black"),
+    legend.position="top",
+    legend.title = element_blank(),
+    legend.direction = "horizontal",
+    legend.key.width=unit(1.2,"line"),
+    legend.key.height=unit(1.0,"line"),
+    legend.text = element_text(size=15),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_blank()
+  )
+}
+```
+
+```{r define_opts, echo=FALSE}
+
+## Define I/O 
+io <- list()
+io$sample.metadata <- "/Users/ricard/data/gastrulation/sample_metadata_scNMT.txt"
+io$data <- "/Users/ricard/data/gastrulation/met/parsed"
+io$annos_dir  <- "/Users/ricard/data/gastrulation/features/filt"
+io$outdir <- "/Users/ricard/gastrulation/met/stats/samples/out"
+
+## Define options
+opts <- list()
+
+# Define which stage and lineages to look at 
+opts$stage_lineage <- c(
+  "E4.5_EPI","E4.5_PE",
+  "E5.5_EPI","E5.5_PE",
+  "E6.5_EPI","E6.5_PS","E6.5_VE",
+  "E7.5_Ectoderm","E7.5_Mesoderm","E7.5_Endoderm"
+)
+
+# Define genomic contexts (use NULL for no genomic context filtering)
+opts$annos <- c(
+  # "genebody"="Gene body",
+  "window5000_step5000"="window5000_step5000"
+  # "prom_2000_2000_noncgi",
+  # "prom_2000_2000",
+  # "H3K27ac_distal_E7.5_union_intersect12_500",
+  # "H3K27ac_distal_E7.5_Mes_intersect12_500",
+  # "H3K27ac_distal_E7.5_Ect_intersect12_500",
+  # "H3K27ac_distal_E7.5_End_intersect12_500"
+  # "exons"="Exons",
+  # "introns"="Introns",
+  # "CGI"="CpG islands",
+  # "LINE"="LINE",
+  # "LTR"="LTR"
+)
+
+# Define which cells to use
+opts$cells <- fread(io$sample.metadata) %>%
+  .[,stage_lineage:=paste(stage,lineage,sep="_")] %>%
+  .[pass_metQC==T & stage_lineage%in%opts$stage_lineage,id_met]
+  # .[!is.na(pass_metQC) & stage_lineage%in%opts$stage_lineage,id_met]
+```
+
+<!-- Load sample metadata -->
+```{r}
+sample_metadata <- fread(io$sample.metadata,stringsAsFactors=T) %>% 
+  .[id_met%in%opts$cells] %>%
+  .[,stage_lineage:=as.factor(paste(stage,lineage,sep="_"))]
+```
+
+<!-- Load genomic contexts metadata -->
+```{r load_genomiccontexts}
+anno_dt <- lapply(opts$annos, function(anno) 
+  fread(sprintf("%s/%s.bed",io$annos_dir,anno), stringsAsFactors=T)) %>%
+  rbindlist %>% setnames(c("chr","start","end","strand","id","anno"))
+```
+
+```{r}
+met_dt <- lapply(opts$annos, function(n) {
+  data <- fread(sprintf("zcat < %s/%s.tsv.gz",io$data,n), showProgress=F, stringsAsFactors=T, sep="\t", quote="") %>%
+  .[V1%in%opts$cells]
+}) %>% rbindlist
+colnames(met_dt) <- c("id_met","id","anno","Nmet","N","rate")
+```
+
+<!-- Merge methylation data and sample metadata -->
+```{r}
+# met_dt <- met_dt %>% merge(sample_metadata, by="id_met") %>% droplevels()
+```
+
+
+<!-- Create matrix from the data.table -->
+```{r}
+dmatrix_list <- met_dt %>% split(.$anno) %>%
+  map(~
+    dcast(.[,c("id_met","id","rate")], formula=id_met~id, value.var="rate") %>% as.data.frame %>%
+      tibble::column_to_rownames("id_met") %>% as.matrix %>% t
+     )
+lapply(dmatrix_list,dim)
+```
+
+```{r}
+foo <- lapply(dmatrix_list, function(X) data.table(id_met=colnames(X), na=colMeans(is.na(X))) )
+
+for (i in names(foo)) {
+  bar <- foo[[i]] %>% merge(sample_metadata[,c("id_met","stage")], by="id_met")
+  p <- ggplot(bar, aes(x=stage, y=100*na)) +
+    geom_boxplot(alpha=1.0, fill="#F8766D", outlier.shape = NA) +
+    geom_jitter(alpha=0.5, color="#F8766D") +
+    coord_cartesian(ylim=c(0,100)) +
+    ylab("Missing values (%)") +
+    theme_pub() +
+    theme(
+      axis.text.x = element_text(colour="black",size=rel(1.5), angle=90, hjust=1, vjust=0.5, margin=margin(5,0,0,0))
+    )
+  print(p)
+}
+
+pdf(paste0(io$outdir,"/pdf/MissingValuesBoxPlot.pdf"), width=7, height=5, useDingbats = F)
+print(p)
+dev.off()
+```

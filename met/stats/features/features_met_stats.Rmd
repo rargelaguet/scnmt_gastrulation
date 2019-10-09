@@ -1,0 +1,341 @@
+---
+title: ""
+output: 
+  BiocStyle::html_document:
+    toc: false
+    fig_width: 10
+    fig_height: 8
+---
+
+```{r import, include=FALSE}
+library(ggplot2)
+library(data.table)
+library(purrr)
+library(RColorBrewer)
+```
+
+```{r, echo=FALSE}
+mean_sd <- function(x) { return(data.frame(y=mean(x), ymin=mean(x)-sd(x), ymax=mean(x)+sd(x))) }
+```
+
+<!-- Define I/O and options -->
+```{r options, echo=FALSE}
+
+## Define I/O ##
+io <- list()
+io$basedir <- "/Users/ricard/data/gastrulation"
+# io$features.indir <- paste(io$basedir,"features/filt",sep="/")
+io$in.sample_metadata <- "/Users/ricard/data/gastrulation/sample_metadata_scNMT.txt"
+
+io$in.data <- paste(io$basedir,"met/parsed",sep="/")
+io$in.features <- "/Users/ricard/data/gastrulation/features/filt"
+io$out <- "/Users/ricard/gastrulation/met/stats/features/out"
+
+## Define options ##
+opts <- list()
+
+# Define which annotations to look at
+opts$annos <- c(
+  "CGI"="CpG islands",
+  "genebody"="Gene body",
+  "prom_2000_2000_cgi"="CGI promoters",
+  "prom_2000_2000_noncgi"="non-CGI promoters",
+  # "prom_2000_2000"="Promoters",
+  # "exons"="Exons",
+  # "introns"="Introns",
+  "E3.5_Distal_H3K27ac"="E3.5 enhancers",
+  "E6.5_Distal_H3K27ac"="E6.5 enhancers",
+  "Wei_Distal_K27ac_intersect"="E7.5 enhancers",
+  "LINE"="LINE",
+  "LTR"="LTR"
+)
+
+# Define which stage and lineages to look at 
+# opts$stage_lineage <- c(
+#   "E4.5_EPI","E4.5_PE",
+#   "E5.5_EPI",
+#   # "E6.5_early_EPI","E6.5_early_PS",
+#   # "E6.5_late_EPI","E6.5_late_PS",
+#   "E6.5_EPI","E6.5_PS",
+#   "E6.75_EPI","E6.75_PS",
+#   "E7.5_Ectoderm","E7.5_Mesoderm","E7.5_Endoderm"
+# )
+
+opts$stage_lineage <- c(
+  "E4.5_EPI","E4.5_PE",
+  "E5.5_EPI",
+  "E6.5_EPI","E6.5_PS",
+  "E6.75_EPI","E6.75_PS",
+  "E7.5_Ectoderm","E7.5_Mesoderm","E7.5_Endoderm"
+)
+
+# Define which cells to use
+opts$cells <- fread(io$in.sample_metadata) %>% 
+  .[,stage_lineage:=paste(stage,lineage,sep="_")] %>%
+  .[KO_3b=="not"] %>%
+  .[pass_metQC==T & stage_lineage%in%opts$stage_lineage,id_met]
+```
+
+<!-- Load methylation data -->
+```{r load, echo=FALSE}
+data <- lapply(names(opts$annos), function(n) fread(sprintf("zcat < %s/%s.tsv.gz",io$in.data,n), showProgress=F, stringsAsFactors = F, sep="\t", quote="")) %>% rbindlist
+colnames(data) <- c("id_met","id","anno","rate","Nmet","N")
+```
+
+<!-- Load sample metadata -->
+```{r}
+sample_metadata <- fread(file=io$in.sample_metadata, header=T, sep="\t", stringsAsFactors=F) %>%
+  .[,stage_lineage:=paste(stage,lineage,sep="_")] %>%
+  .[id_met%in%opts$cells] %>% 
+  .[,c("id_met","stage","stage_lineage")]
+```
+
+<!-- Merge methylation data and metadata -->
+```{r}
+data <- merge(sample_metadata, data, by="id_met")
+```
+
+<!-- Calculate statistics per features -->
+```{r, echo=FALSE}
+fstats <- data %>% 
+  .[,.(Nmet=sum(Nmet), Ncells=.N, NCpGs=sum(N)), by=c("id","stage","stage_lineage","anno")] %>%
+  .[,rate:=Nmet/NCpGs] %>%
+  .[,anno:=stringr::str_replace_all(anno, opts$annos)]
+```
+
+```{r}
+fstats[,stage:=stringr::str_replace_all(stage, c("E6.75"="E6.5"))]
+# fstats[,stage:=stringr::str_replace_all(stage, c("_early"="","_late"=""))]
+# fstats[,stage_lineage:=stringr::str_replace_all(stage_lineage, c("early_"="","late_"=""))]
+```
+
+<!-- Boxplots pooling lineages and stages -->
+```{r echo=FALSE}
+# p <- ggplot(fstats, aes(x=anno, y=mean)) +
+#   ggtitle("") + xlab('') + ylab('Mean methylation rate') +
+#   geom_boxplot(fill="#F8766D", alpha=0.8, coef=0, outlier.shape=NA) +
+#   # coord_flip(ylim=c(0,50)) +
+#   boxplot_theme()
+# print(p)
+
+# p <- ggplot(fstats, aes(x=anno, y=var)) +
+#   ggtitle("") + xlab('') + ylab('Variance on the methylation rate') +
+#   geom_boxplot(fill="#F8766D", alpha=0.8, coef=0, outlier.shape=NA) +
+#   # coord_flip(ylim=c(0,1500)) +
+#   boxplot_theme()
+# print(p)
+
+```
+
+<!-- Boxplots per stage (pooling lineages) -->
+
+X axis: mean or variance
+Y axis: annotation
+Grouped by stage
+```{r echo=FALSE}
+
+p <- ggplot(fstats, aes(x=anno, y=rate, fill=stage)) +
+  ggtitle("") + xlab('') + ylab('Mean methylation rate') +
+  # geom_point(alpha=0.5) +
+  geom_boxplot(alpha=0.8, coef=0, outlier.shape=NA) +
+  coord_flip() +
+  boxplot_theme()
+p
+
+p <- ggplot(fstats, aes(x=anno, y=var, fill=stage)) +
+  ggtitle("") + xlab('') + ylab('Variance methylation rate') +
+  # geom_point(alpha=0.5) +
+  geom_boxplot(alpha=0.8, coef=0, outlier.shape=NA) +
+  coord_flip() +
+  scale_y_continuous(limits=c(0,1500)) +
+  boxplot_theme()
+p
+
+```
+
+X axis: stage
+Y axis: mean or variance
+Grouped by annotation
+```{r echo=FALSE}
+
+p <- ggplot(fstats, aes(x=stage, y=rate, fill=anno)) +
+  ggtitle("") + xlab('') + ylab('Mean methylation rate') +
+  geom_boxplot(alpha=0.8, coef=0, outlier.shape=NA) +
+  geom_line(aes(x=stage, y=rate, group=anno, color=anno), data=fstats[,.(rate=mean(rate,na.rm=T)),by=c("stage","anno")]) +
+  theme_bw() +
+  boxplot_theme() +
+  theme(
+    legend.position = "right",
+    axis.text.x = element_text(angle=90, size=rel(1.3), hjust=1, vjust=0.5)
+  )
+p
+
+# p <- ggplot(fstats, aes(x=stage, y=var, fill=anno)) +
+#   ggtitle("") + xlab('') + ylab('Variance methylation rate') +
+#   # geom_point(alpha=0.5) +
+#   geom_boxplot(alpha=0.8, coef=0, outlier.shape=NA) +
+#   # scale_y_continuous(limits=c(0,1500)) +
+#   boxplot_theme() +
+#   theme_bw() +
+#   theme(
+#     legend.position = "right"
+#   )
+# p
+
+```
+
+<!-- Boxplots per stage (pooling lineages), splitted by annotation -->
+
+<!-- Mean -->
+```{r}
+for (k in opts$annos) {
+  p <- ggplot(fstats[anno==k], aes(x=stage, y=rate)) +
+    ggtitle(k) + xlab('') + ylab('Mean methylation rate') +
+    # geom_point(alpha=0.5) +
+    geom_boxplot(alpha=0.8, coef=0, outlier.shape=NA, fill="grey") +
+    # coord_flip(ylim=c(0,100)) +
+    boxplot_theme() +
+    theme(
+      plot.title = element_text(size=14),
+      legend.position = "none",
+      axis.text.x = element_text(size=11, hjust=1, vjust=0.5, angle=90),
+      axis.title.y = element_text(size=16, angle=90)
+    )
+  print(p)
+}
+```
+
+<!-- Variance -->
+```{r}
+# for (k in opts$annos) {
+#   p <- ggplot(fstats[anno==k], aes(x=stage, y=var)) +
+#     ggtitle(k) + xlab('') + ylab('Variance methylation rate') +
+#     geom_boxplot(alpha=0.8, coef=0, outlier.shape=NA, fill="grey") +
+#     coord_cartesian(ylim=c(0,2000)) +
+#     boxplot_theme() +
+#     theme(
+#       plot.title = element_text(size=14),
+#       legend.position = "none",
+#       axis.text.x = element_text(size=11, hjust=1, vjust=0.5, angle=90),
+#       axis.title.y = element_text(size=16, angle=90)
+#     )
+#   print(p)
+# }
+```
+
+
+
+<!-- Boxplots per lineage and stage -->
+```{r echo=FALSE}
+
+fstats_filt <- fstats[stage_lineage%in%c("E7.5_Mesoderm_KO","E7.5_Mesoderm_WT")]
+p <- ggplot(fstats_filt, aes(x=anno, y=rate, fill=stage_lineage)) +
+  ggtitle("") + xlab('') + ylab('Mean methylation rate') +
+  # geom_point(alpha=0.5) +
+  geom_boxplot(alpha=0.8, coef=0, outlier.shape=NA) +
+  # coord_flip(ylim=c(0,100)) +
+  boxplot_theme()
+p
+
+# p <- ggplot(fstats, aes(x=anno, y=var, fill=stage_lineage)) +
+#   ggtitle("") + xlab('') + ylab('Variance methylation rate') +
+#   # geom_point(alpha=0.5) +
+#   geom_boxplot(alpha=0.8, coef=0, outlier.shape=NA) +
+#   # coord_flip(ylim=c(0,1500)) +
+#   # coord_flip(ylim=c(0,1600)) +
+#   # coord_flip(ylim=c(0,1700))  +
+#   boxplot_theme()
+# p
+
+
+```
+
+<!-- Boxplots per lineage and stage, splitted by annotation -->
+
+Mean
+```{r}
+for (k in opts$annos) {
+  p <- ggplot(fstats_filt[anno==k], aes(x=stage_lineage, y=rate)) +
+    ggtitle(k) + xlab('') + ylab('Mean methylation rate') +
+    # geom_point(alpha=0.5) +
+    geom_boxplot(alpha=0.8, coef=0, outlier.shape=NA, fill="grey") +
+    # coord_flip(ylim=c(0,100)) +
+    boxplot_theme() +
+    theme(
+      plot.title = element_text(size=14),
+      legend.position = "none",
+      axis.text.x = element_text(size=11, hjust=1, vjust=0.5, angle=90),
+      axis.title.y = element_text(size=16, angle=90)
+    )
+  print(p)
+}
+```
+
+Variance
+```{r}
+# for (k in opts$annos) {
+#   p <- ggplot(fstats[anno==k], aes(x=stage_lineage, y=var)) +
+#     ggtitle(k) + xlab('') + ylab('Variance methylation rate') +
+#     geom_boxplot(alpha=0.8, coef=0, outlier.shape=NA, fill="grey") +
+#     coord_cartesian(ylim=c(0,2000)) +
+#     boxplot_theme() +
+#     theme(
+#       plot.title = element_text(size=14),
+#       legend.position = "none",
+#       axis.text.x = element_text(size=11, hjust=1, vjust=0.5, angle=90),
+#       axis.title.y = element_text(size=16, angle=90)
+#     )
+#   print(p)
+# }
+```
+
+<!-- Heatmap with mean methylation per stage -->
+```{r}
+tmp <- fstats[,.(rate=sum(Nmet)/sum(NCpGs)),by=c("anno","stage")] %>% dcast(anno~stage, value.var="rate") %>% 
+  as.data.frame %>% tibble::column_to_rownames("anno")
+
+order <- c("CpG islands", "CGI promoters", "non-CGI promoters", "E6.5 enhancers", "E7.5 enhancers", "Gene body", "LINE", "LTR")
+
+color = colorRampPalette(brewer.pal(n = 7, name="OrRd"))(100)
+pdf("/Users/ricard/gastrulation/met/stats/features/out/met_mean_heatmap.pdf", useDingbats = F, onefile = F, width=7, height=3)
+pheatmap::pheatmap(tmp[order,], cluster_cols = F, cluster_rows=F, color=color)
+dev.off()
+```
+
+<!-- Heatmap with variance methylation per stage -->
+```{r}
+tmp <- fstats[,.(var=var(mean)), by=c("anno","stage")] %>% dcast(anno~stage, value.var="var") %>% 
+  as.data.frame %>% tibble::column_to_rownames("anno")
+
+color = colorRampPalette(brewer.pal(n = 7, name="OrRd"))(100)
+# pdf("/Users/ricard/gastrulation/met/stats/features/out/met_variance_heatmap.pdf", useDingbats = F, onefile = F, width=6, height=4)
+pheatmap::pheatmap(tmp, cluster_cols = F, color=color)
+# dev.off()
+```
+
+<!-- Heatmap with mean methylation per lineage -->
+```{r}
+for (i in unique(fstats$stage)) {
+  tmp <- fstats[stage==i,.(rate=mean(rate)),by=c("anno","stage_lineage")] %>% dcast(anno~stage_lineage, value.var="rate") %>% 
+    as.data.frame %>% tibble::column_to_rownames("anno")
+  
+  color = colorRampPalette(brewer.pal(n = 7, name="OrRd"))(100)
+  # color = colorRampPalette(c("Yellow", "Red"))(100)
+  # pdf(sprintf("%s/met_mean_%s_heatmap.pdf",io$out,i), onefile = F, width=6, height=4)
+  pheatmap::pheatmap(tmp, cluster_cols = F, color=color)
+  # dev.off()
+}
+```
+
+<!-- Heatmap with variance methylation per lineage -->
+```{r}
+for (i in unique(fstats$stage)) {
+  tmp <- fstats[stage==i,.(var=var(mean)),by=c("anno","stage_lineage")] %>% dcast(anno~stage_lineage, value.var="var") %>% 
+    as.data.frame %>% tibble::column_to_rownames("anno")
+  
+  # pdf(sprintf("%s/met_var_%s_heatmap.pdf",io$out,i), onefile = F, width=6, height=4)
+  color = colorRampPalette(brewer.pal(n = 7, name="OrRd"))(100)
+  pheatmap::pheatmap(tmp, cluster_cols = F, color=color)
+  # dev.off()
+}
+```

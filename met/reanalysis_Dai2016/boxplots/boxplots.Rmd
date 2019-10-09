@@ -1,0 +1,83 @@
+---
+title: "Gastrulation:"
+output:
+  BiocStyle::html_document: 
+    toc: false
+    fig_width: 10
+    fig_height: 8
+---
+
+```{r load_modules, echo=FALSE, include=FALSE}
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(ggpubr)
+```
+
+<!-- Define I/O and options -->
+```{r define_opts, echo=FALSE}
+source("/Users/ricard/gastrulation/public_datasets/Dai2016/boxplots/load_settings.R")
+```
+
+<!-- Load sample metadata -->
+```{r load_metadata}
+sample_metadata <- fread(io$sample.metadata) %>%
+  .[,lineage:=stringr::str_replace_all(lineage,"_"," ")] %>% 
+  .[,stage_lineage:=paste(stage,lineage,sep="_")] %>% 
+  .[id_met%in%opts$samples]
+```
+
+<!-- Load methylation data -->
+```{r load_data, echo=FALSE, include=FALSE}
+met_dt <- lapply(names(opts$met.annos), function(n) {
+  data <- fread(cmd=sprintf("zcat < %s/%s.tsv.gz",io$met.dir,n), showProgress=F, quote="") %>%
+  .[V1%in%opts$samples]
+}) %>% rbindlist %>% setnames(c("id_met","id","anno","rate","Ntotal"))
+```
+
+<!-- Merge data with metadata -->
+```{r merge}
+met_dt <- merge(met_dt, sample_metadata, by="id_met") %>% droplevels()
+```
+
+<!-- Load results from the differential analysis -->
+```{r}
+source("/Users/ricard/gastrulation/metaccrna/differential/load_data.R")
+
+diff.met <- diff.met %>%
+  .[,c("id","anno","diff","sig","lineage")]
+```
+
+<!-- Subset lineage-defining sites -->
+Lineage-defining elements are defined as ChIP-seq peaks that show differential activity during germ layer commitment
+
+Methylation
+```{r}
+met_dt <- met_dt %>% split(.$anno) %>%
+  map2(.,names(.), function(x,y) x[id%in%diff.met[sig==T & anno==y,id]]) %>%
+  rbindlist %>% droplevels()
+```
+
+
+<!-- Boxplots with methylation rate per genomic context and stage_lineage -->
+```{r}
+foo.met <- met_dt %>%
+  .[,.(rate=mean(rate)),by=c("sample","stage_lineage","anno","genotype","replicate")] %>%
+  .[,anno:=stringr::str_replace_all(anno,opts$met.annos)] %>%
+  .[,stage_lineage:=factor(stage_lineage, levels=names(opts$colors))] %>%
+  .[,genotype:=factor(genotype, levels=c("WT","TKO"))]
+
+
+p <- ggbarplot(foo.met, x="genotype", y="rate", add = "mean_se", facet.by="anno", fill="grey70", color="black") +
+  labs(x="", y="Methylation (%)") +
+  theme(
+    axis.title.y = element_text(size=rel(1.2), color="black"),
+    strip.text = element_text(size=rel(1.3), color="black"),
+    strip.background = element_rect(fill="#F37A71")
+  )
+print(p)
+
+pdf(paste0(io$outdir,"/boxplots_met.pdf"), useDingbats = F, onefile = F, width=11, height=5)
+print(p)
+dev.off()
+```

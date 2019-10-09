@@ -1,0 +1,63 @@
+---
+title: 'Gastrulation: H3K27ac barplot tissues'
+output: html_document
+---
+
+```{r echo=FALSE, include=FALSE}
+library(data.table)
+library(purrr)
+library(ggplot2)
+```
+
+```{r}
+if (grepl("ricard",Sys.info()['nodename'])) {
+  source("/Users/ricard/gastrulation/H3K27ac/H3K27ac_load_settings.R")
+  source("/Users/ricard/gastrulation/H3K27ac/H3K27ac_load_data.R")  
+} else {
+  source("/Users/stapelc/Documents/Github/gastrulation/H3K27ac/H3K27ac_load_settings.R")
+  source("/Users/stapelc/Documents/Github/gastrulation/H3K27ac/H3K27ac_load_data.R")
+}
+
+theme_pub <- function() {
+  theme_classic() +
+  theme(
+    axis.title.y = element_text(colour="black", size=rel(1.0), vjust=1.5),
+    axis.title.x = element_text(colour="black", size=rel(1.0), vjust=1.5),
+    # axis.text.x = element_text(angle=90, size=10, vjust=0.5, hjust=1.0, color="black),
+    axis.text = element_text(colour="black",size=rel(1.0)),
+    axis.line = element_line(colour="black", size=0.5),
+    axis.ticks = element_line(colour="black", size=rel(0.8)),
+    legend.title = element_blank()
+  )
+}
+```
+
+<!-- Classify enhancers by tissue  -->
+```{r}
+data_plot <- enh_marked %>% 
+  .[,tissue:=ifelse(marked_brain==T & nr_marked==1, "brain", 
+                    ifelse(marked_esc==T & nr_marked==1, "esc", 
+                           ifelse(marked_brain==T & marked_esc==T, "ecto", 
+                                  ifelse(marked_gut==T & nr_marked==1, "gut", 
+                                         ifelse(marked_heart==T & nr_marked==1, "heart", "other")))))] %>%
+  .[nr_marked==1 | nr_marked==2]
+```
+
+<!-- Remove tissues -->
+```{r}
+data_plot <- data_plot[!tissue %in% c("esc","other","ecto")]
+```
+
+<!-- Barplot fraction of marked lineage-specific enhancers in each cell type --> 
+
+```{r}
+p <- ggplot(data_plot, aes(anno)) +
+  geom_bar(aes(fill=tissue) ,position="fill", color="black") +
+  scale_fill_manual("legend", values=opts$colors) +
+  labs(x="") +
+  theme_pub()
+
+pdf(paste0(io$outdir,"/Proportion_marked.pdf"), width=7, height=8, useDingbats=F)
+print(p)
+dev.off()
+```

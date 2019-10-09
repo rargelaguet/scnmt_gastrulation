@@ -1,0 +1,204 @@
+
+<!-- Characterisation of the proximity to the PS factor -->
+
+```{r}
+factor <- "Factor3"
+```
+
+```{r}
+opts$mesoderm.colors <- c(
+  "Ectoderm" = "steelblue",
+  "Nascent mesoderm" = "#FF82AB",
+  "Mature mesoderm" = "#CD3278",
+  "Endoderm" = "#43CD80"
+)
+```
+
+```{r}
+sample_metadata_filt %>%
+  .[,mesoderm_lineage:=lineage10x_2] %>%
+  .[lineage10x_2=="Mesoderm",mesoderm_lineage:=ifelse(lineage10x%in%c("Nascent_mesoderm","Intermediate_mesoderm"),"Nascent mesoderm","Mature mesoderm")]
+```
+
+```{r}
+# anno_df <- data.frame(
+#   row.names = sample_metadata_filt$sample,
+#   lineage = sample_metadata_filt$lineage,
+#   factor <- getFactors(model,factor)
+# )
+# annotation_colors=list(
+#   lineage=opts$colors[unique(sample_metadata_filt$lineage)]
+# )
+```
+
+Beeswarmplot
+```{r}
+p <- plotFactorBeeswarm(model, 
+  factors=factor, 
+  color_by=sample_metadata_filt$mesoderm_lineage,
+  shape_by=sample_metadata_filt$lineage10x_2
+) 
+p <- p + scale_shape_manual(values=c("Ectoderm"=16, "Endoderm"=16, "Mesoderm"=16))
+p <- p + scale_color_manual(values=opts$mesoderm.colors)
+
+p <- p + facet_wrap(~shape_by) +
+  theme(
+    # axis.text = element_blank(),
+    # axis.title = element_blank(),
+    # axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_blank(),
+    legend.position = "none"
+  )
+  
+# pdf(sprintf("%s/pdf/anteroposterior/beeswarmplot.pdf",io$outdir), useDingbats = F, width=6, height=4)
+print(p)
+# dev.off()
+```
+
+Scatterplot
+```{r}
+p <- plotFactorScatter(model, 
+  factors = c("Factor2",factor), 
+  color_by = sample_metadata_filt$mesoderm_lineage
+) + scale_color_manual(values=opts$mesoderm.colors)
+
+p <- p + theme(legend.position = "right")
+
+pdf(paste0(io$outdir,"/pdf/anteroposterior/scatterplot.pdf"), useDingbats = F, onefile = F, width=9, height=5)
+print(p)
+dev.off()
+```
+
+Plot loadings
+```{r}
+p <- plotWeights(model, view="RNA expression", factor=factor, abs=F, nfeatures = 25, scale=T)
+
+pdf(paste0(io$outdir,"/pdf/anteroposterior/loadings.pdf"), useDingbats = F, width=6, height=3)
+print(p)
+dev.off()
+```
+
+Beeswarmplot coloring by known markers
+```{r}
+anterior.markers <- c("Sfrp1","Crabp2","Tmem88")
+posterior.markers <- c("T","Mixl1","Fst")
+markers <- c(anterior.markers,posterior.markers)
+
+# all(markers%in%featureNames(model)[["RNA expression"]])
+
+for (i in markers) {
+  p <- plotFactorBeeswarm(model, 
+    factors=factor, 
+    color_by=i,
+    shape_by=sample_metadata_filt$lineage10x_2
+  ) 
+  p <- p + scale_shape_manual(values=c("Ectoderm"=16, "Endoderm"=16, "Mesoderm"=16))
+  p <- p + facet_wrap(~shape_by)
+  
+  p <- p + viridis::scale_color_viridis() +
+    theme(
+      axis.text = element_blank(),
+      # axis.title = element_blank(),
+      axis.ticks = element_blank(),
+      strip.background = element_blank(),
+      strip.text = element_blank(),
+      legend.position = "none"
+    )
+  
+  
+  pdf(sprintf("%s/pdf/anteroposterior/beeswarmplot_anteroposterior_%s.pdf",io$outdir,i), useDingbats = F, width=4, height=3)
+  print(p)
+  dev.off()
+}
+```
+
+Plot GO enrichment
+```{r}
+pdf(paste0(io$outdir,"/pdf/anteroposterior/axialpatterning_GO.pdf"), useDingbats = F, onefile = F, width=10, height=4)
+plotEnrichment(model, fsea.out, factor = factor, max.pathways = 12)
+dev.off()
+```
+
+RNA
+```{r}
+pdf(paste0(io$outdir,"/pdf/anteroposterior/axialpatterning_heatmap_rna.pdf"), useDingbats = F, onefile = F, width=6, height=4)
+plotDataHeatmap(
+  model, view="RNA expression", factor=factor, features=20,
+  cluster_rows=F, cluster_cols=T,
+  show_rownames=F,show_colnames=T,
+  color=colorRampPalette(rev(brewer.pal(n = 9, name="Greens")))(100),
+  annotation_row=anno_df, annotation_colors=annotation_colors
+)
+dev.off()
+```
+
+```{r}
+getWeights(model, views="RNA expression", factor=factor, as.data.frame = T) %>% View
+```
+
+
+Top weights Methylation
+```{r}
+plotWeights(model, view="Mesoderm Enhancers (met)", factor=factor, abs=F, nfeatures = 15, scale=T)
+```
+
+```{r}
+w <- getWeights(model, view="Endoderm Enhancers (met)", factor=factor)[[1]][,1]
+tail(sort(abs(w)))
+# w[grep("H3K27ac_distal_E7.5_End_intersect12_1075",names(w))]
+```
+
+
+```{r}
+view <- "Mesoderm Enhancers (met)"
+
+tmp <- names(tail(sort(abs(getWeights(model, views=view, factor=factor)[[1]][,1])), n=50))
+if (length(model@ImputedData)>0) {
+  met <- colMeans(model@ImputedData[[view]][tmp,], na.rm=T)
+} else {
+  met <- colMeans(model@TrainData[[view]][tmp,], na.rm=T)
+}
+
+met <- 100*2**met/(1+2**met) # Convert M-values to B-values
+
+p <- plotFactorBeeswarm(model, 
+  factors=factor, 
+  color_by=met,
+  shape_by=sample_metadata_filt$lineage10x_2
+) + facet_wrap(~shape_by)
+p <- p + scale_shape_manual(values=c("Ectoderm"=16, "Endoderm"=16, "Mesoderm"=16)) +
+  scale_colour_gradientn(colours = brewer.pal(9, "OrRd")) +
+  # scale_colour_gradientn(colours = brewer.pal(9, "Blues")) +
+  theme(legend.position = "none")
+
+pdf(paste0(io$outdir,"/pdf/anteroposterior/beeswarmplot_met.pdf"), useDingbats = F, onefile = F, width=4, height=3)
+print(p)
+dev.off()
+```
+
+```{r}
+view <- "Mesoderm Enhancers (acc)"
+
+tmp <- names(tail(sort(abs(getWeights(model, views=view, factor=factor)[[1]][,1])), n=50))
+if (length(model@ImputedData)>0) {
+  acc <- colMeans(model@ImputedData[[view]][tmp,], na.rm=T)
+} else {
+  acc <- colMeans(model@TrainData[[view]][tmp,], na.rm=T)
+}
+
+acc <- 100*2**acc/(1+2**acc) # Convert M-values to B-values
+
+p <- plotFactorBeeswarm(model, 
+  factors=factor, 
+  color_by=met,
+  shape_by=sample_metadata_filt$lineage10x_2
+) + facet_wrap(~shape_by)
+p <- p + scale_shape_manual(values=c("Ectoderm"=16, "Endoderm"=16, "Mesoderm"=16)) +
+  scale_colour_gradientn(colours = brewer.pal(9, "Blues")) +
+  theme(legend.position = "none")
+
+pdf(paste0(io$outdir,"/pdf/anteroposterior/beeswarmplot_acc.pdf"), useDingbats = F, onefile = F, width=4, height=3)
+print(p)
+dev.off()
+```

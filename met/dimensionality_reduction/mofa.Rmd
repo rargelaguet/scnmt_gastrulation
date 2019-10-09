@@ -1,0 +1,236 @@
+---
+title: "Gastrulation: dimensionality reduction on the DNA methylation data"
+output:
+  BiocStyle::html_document: 
+    fig_width: 10
+    fig_height: 8
+---
+
+```{r load_modules, echo=FALSE, include=FALSE}
+library(MOFA)
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(umap)
+library(Rtsne)
+```
+
+```{r define_opts, echo=FALSE, include=FALSE}
+if (grepl("ricard",Sys.info()['nodename'])) {
+  source("/Users/ricard/gastrulation/met/dimensionality_reduction/load_settings.R")
+} else {
+  source("/homes/ricard/gastrulation/met/dimensionality_reduction/load_settings.R")
+}
+```
+
+<!-- Load methylation data -->
+```{r load_data, echo=FALSE, include=FALSE}
+# if (grepl("tmp",io$data.dir)) {
+#   met_dt <- lapply(names(opts$annos), function(n)
+#     lapply(opts$cells, function(i)
+#       fread(cmd=sprintf("zcat < %s/%s_%s.gz",io$data.dir,i,n), stringsAsFactors=T, showProgress=F, select=c(1,2,3,5,6)) %>% 
+#          setnames(c("id_met","id","anno","N","rate")) %>% .[N>=opts$min.CpGs] %>% .[,N:=NULL]) %>% rbindlist
+#   ) %>% rbindlist
+# } else {
+#   met_dt <- lapply(names(opts$annos), function(n) 
+#     fread(cmd=sprintf("zcat < %s/%s.tsv.gz",io$data.dir,n), stringsAsFactors=T, showProgress=F, select=c(1,2,3,5,6)) %>% 
+#       setnames(c("id_met","id","anno","N","rate")) %>% .[N>=opts$min.CpGs] %>% .[,N:=NULL]
+#     ) %>% rbindlist 
+# }
+met_dt <- lapply(names(opts$annos), function(n)
+  fread(cmd=sprintf("zcat < %s/%s.tsv.gz",io$data.dir,n), stringsAsFactors=T, showProgress=F, select=c(1,2,3,5,6)) %>%
+  setnames(c("id_met","id","anno","N","rate")) %>% .[N>=opts$min.CpGs] %>% .[,N:=NULL]
+) %>% rbindlist
+```
+
+<!-- Merge methylation data and sample metadata -->
+```{r}
+met_dt <- met_dt %>% merge(sample_metadata, by="id_met") %>% droplevels()
+```
+
+<!-- Calculate M value from Beta value -->
+```{r}
+met_dt[,m:=log2(((rate/100)+0.01)/(1-(rate/100)+0.01))]
+```
+
+<!-- Filter data -->
+```{r}
+# Filter features by coverage
+nsamples <- length(unique(met_dt$id_met))
+met_dt <- met_dt[,cov:=.N/nsamples,by=c("id","anno")] %>% .[cov>=opts$min.coverage] %>% .[,c("cov"):=NULL]
+```
+
+<!-- Regress out covariates -->
+Global methylation rate
+```{r}
+foo <- met_dt[,.(mean=mean(m)),by=c("id_met","anno")]
+met_dt <- met_dt %>% merge(foo, by=c("id_met","anno")) %>%
+  .[,m:=mean(m)+lm(formula=m~mean)[["residuals"]], by=c("id","anno","stage_lineage")]
+```
+
+<!-- Filter data -->
+```{r}
+# Filter features by variance
+keep_hv_sites <- met_dt %>% split(.$anno) %>% map(~ .[,.(var = var(rate)), by="id"] %>% .[var>0] %>% setorder(-var) %>% head(n = opts$nfeatures) %>% .$id)
+met_dt <- met_dt %>% split(.$anno) %>% map2(.,names(.), function(x,y) x[id %in% keep_hv_sites[[y]]]) %>% rbindlist
+```
+
+<!-- Create matrix from the data.table -->
+```{r}
+dmatrix_list <- met_dt %>% split(.$anno) %>% 
+  map(~
+    dcast(.[,c("id_met","id","m")], formula=id_met~id, value.var="m") %>% as.data.frame %>% 
+      tibble::column_to_rownames("id_met") %>% as.matrix %>% t
+     )
+lapply(dmatrix_list,dim)
+# rm(met_dt); gc(reset=T)
+```
+
+<!-- Fit MOFA model -->
+```{r,}
+# Create MOFAobject
+MOFAobject <- createMOFAobject(dmatrix_list)
+
+# Set options
+ModelOptions <- getDefaultModelOptions(MOFAobject)
+ModelOptions$numFactors <- 2
+
+TrainOptions <- getDefaultTrainOptions()
+TrainOptions$maxiter <- 1000
+TrainOptions$tolerance <- 0.25
+TrainOptions$DropFactorThreshold <- 0.00
+TrainOptions$seed <- 42
+
+# Prepare
+MOFAmodel <- prepareMOFA(
+  MOFAobject,
+  ModelOptions = ModelOptions, 
+  TrainOptions = TrainOptions
+)
+
+# Train the model
+model <- runMOFA(MOFAmodel, io$outfile)
+```
+
+<!-- Load pretrained model -->
+```{r}
+model <- loadModel(io$outfile)
+```
+
+<!-- Sort sample metadata to match the order of the sample names in MOFA -->
+```{r}
+sample_metadata_filt <- sample_metadata %>% setkey(id_met) %>% .[MOFA::sampleNames(model)]
+```
+
+<!-- Classify cells as embryonic or extra-embryonic -->
+```{r}
+ExE <- c("Visceral_endoderm","Primitive_endoderm")
+sample_metadata_filt %>%
+  .[,embryonic:=ifelse(lineage10x_2%in%ExE,"ExE","Embryonic")]
+```
+
+<!-- Calculate variance explained per factor and view -->
+```{r}
+r2 <- calculateVarianceExplained(model)$R2PerFactor
+```
+
+```{r}
+# plotVarianceExplained(model)
+```
+
+<!-- (Optional) Rotate a factor -->
+```{r}
+# model@Expectations$Z[,1] <- -model@Expectations$Z[,1]
+```
+
+<!-- Scatter plots of Factors -->
+```{r}
+p <- plotFactorScatter(
+  model, 
+  factors=c("LF1","LF2"), 
+  color_by=sample_metadata_filt$lineage10x_2
+)
+
+p <- p + 
+  scale_colour_manual(values=opts$colors) +
+  labs(x=sprintf("Factor 1 (%.2f%%)",r2["LF1",]*100), y=sprintf("Factor 2 (%.2f%%)",r2["LF2",]*100)) +
+  theme(
+    axis.title = element_text(size=rel(1.2)),
+    legend.position = "none"
+  )
+print(p)
+
+# pdf(sprintf("%s/pdf/mofa_met_%s_%s.pdf",io$outdir,paste(names(opts$annos), collapse="_"), paste(opts$stage_lineage10x, collapse="_")), useDingbats = F, onefile = F, width=6, height=6)
+# print(p)
+# dev.off()
+```
+
+<!-- Correlate Factor 1 with global methylation differences -->
+```{r}
+# library(ggpubr) 
+# 
+# foo <- fread(io$met.stats) %>% .[,c("id_met","mean")] %>% 
+#   merge(sample_metadata_filt, by="id_met") %>%
+#   setnames("id_met","sample") %>% .[,mean:=100*mean] %>%
+#   setkey(sample) %>% .[MOFA::sampleNames(model)] 
+# 
+# Z <- getFactors(model, 1, as.data.frame=T) %>% 
+#   as.data.table %>% merge(foo, by="sample") 
+# 
+#  p <- ggscatter(Z, x="value", y="mean", color="embryonic",
+#   add="reg.line", add.params = list(color="black", fill="lightgray"), conf.int=TRUE) +
+#   stat_cor(method = "pearson", label.x = -2.5, label.y = 90) +
+#   labs(x="Factor 1", y="Mean methylation rate") +
+#   scale_colour_manual(values=opts$colors) +
+#   theme(
+#     axis.title = element_text(size=rel(1.2)),
+#     legend.position = "none"
+#   )
+#  
+# pdf(sprintf("%s/pdf/mofa_met_CORRELATION.pdf",io$outdir), useDingbats = F, width=6, height=6)
+# print(p)
+# dev.off()
+```
+
+<!-- Non-linear dimensionality reduction from MOFA factors -->
+```{r}
+# Define settings
+algorithms <- c("umap")
+
+# Fetch factors
+Z <- getFactors(model)
+
+for (algorithm in algorithms) {
+
+  set.seed(1)
+  if (algorithm=="tsne") {
+    tsne <- Rtsne::Rtsne(Z, check_duplicates=FALSE, pca=FALSE, theta=0.5, dims=2)
+    Z.out <- tsne$Y
+  } else if (algorithm=="umap") {
+    umap.defaults$n_neighbors <- 20
+    umap.defaults$min_dist <- 0.7
+    umap.out <- umap(Z, config = umap.defaults)
+    Z.out <- umap.out$layout
+  }
+
+  to.plot <- Z.out %>% as.data.table %>% .[,id_met:=rownames(Z)] %>%
+      merge(sample_metadata, by="id_met")
+
+  p <- ggplot(to.plot, aes(x=V1, y=V2, color=lineage10x_2)) +
+    geom_point(alpha=0.7, size=1.5) +
+    scale_color_manual(values=opts$colors) +
+    guides(colour = guide_legend(override.aes = list(size=3))) +
+    labs(x="Dimension 1", y="Dimension 2") +
+    theme_classic() +
+    theme(
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      legend.position = "none"
+    )
+
+# pdf(sprintf("%s/pdf/mofa+umap_met_%s_%s.pdf",io$outdir,paste(names(opts$annos), collapse="_"), paste(opts$stage_lineage10x, collapse="_")), useDingbats = F, onefile = F, width=6, height=6)
+print(p)
+# dev.off()
+}
+```
+

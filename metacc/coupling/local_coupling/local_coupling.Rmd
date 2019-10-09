@@ -1,0 +1,185 @@
+---
+title: "Gastrulation: local coupling between DNA methylation and DNA accessibility"
+output: 
+  BiocStyle::html_document: 
+    fig_width: 12
+    fig_height: 8
+---
+
+```{r echo=FALSE, include=FALSE}
+suppressPackageStartupMessages(library(scater))
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(purrr))
+suppressPackageStartupMessages(library(ggplot2))
+```
+
+<!-- Define functions -->
+```{r definefuncs, echo=FALSE}
+source("/Users/ricard/gastrulation/metacc/local_coupling/utils.R")
+```
+
+<!-- Define I/O and options -->
+```{r define_opts, echo=FALSE, include=FALSE}
+
+## Define I/O ##
+io <- list()
+if (grepl("ricard",Sys.info()['nodename'])) {
+  io$basedir <- "/Users/ricard/data/gastrulation"
+  io$outdir <- "/Users/ricard/gastrulation/metacc/local_coupling/out"
+  io$tss <- "/Users/ricard/data/mm10_regulation/promoters/TSS.bed"
+} else {
+  stop()
+}
+io$in.sample_metadata <- paste0(io$basedir,"/sample_metadata_scNMT.txt")
+io$met.indir <- paste(io$basedir,"met/raw",sep="/")
+io$acc.indir <- paste(io$basedir,"acc/raw",sep="/")
+
+## Define options ##
+opts <- list()
+
+# Define stage and lineages
+opts$stage_lineage <- c(
+  "E4.5_EPI",#"E4.5_PE",
+  "E5.5_EPI",#"E5.5_PE"
+  "E6.5_EPI","E6.5_PS",#"E6.5_VE",
+  "E7.5_Ectoderm","E7.5_Mesoderm"#"E7.5_Endoderm"
+)
+
+# Define window options
+opts$up <- 2500
+opts$window <- 150
+opts$slide <- 50
+opts$down <- 2500
+```
+
+<!-- Load gene metadata -->
+```{r}
+# All promoters
+tss <- fread(io$tss, stringsAsFactors=TRUE)[,c(1,2,3,6,4)] %>%
+  setnames(c("chr","start","end","strand","ens_id")) %>%
+  .[strand=="+"] %>%
+  .[,chr:=as.factor(sub("chr","",chr))] %>%
+  .[,TSS:=start] %>%
+  .[,c("start","end"):=.(start-opts$up,end+opts$down)] %>%
+  setkey(chr,start,end)
+```
+
+<!-- Filter CGI and non-CGI promoters -->
+```{r}
+non_cgi_promoters <- fread("/Users/ricard/data/gastrulation/features/filt/prom_2000_0_noncgi.bed",stringsAsFactors=TRUE)[,V5]
+cgi_promoters <- fread("/Users/ricard/data/gastrulation/features/filt/prom_2000_0_cgi.bed",stringsAsFactors=TRUE)[,V5]
+tss <- tss[,type:=ifelse(ens_id%in%non_cgi_promoters,'non_cgi','cgi')] %>% .[,type:=as.factor(type)]
+
+# tss <- tss[type=="non_cgi"]
+```
+
+<!-- Load sample metadata and define which cells to use -->
+```{r}
+sample_metadata <- fread(io$in.sample_metadata, stringsAsFactors=TRUE) %>% 
+  .[,stage_lineage:=paste(stage,lineage,sep="_")] %>%
+  .[pass_metQC==T & pass_accQC==T & stage_lineage%in%opts$stage_lineage] %>%
+  .[,c("sample","id_met","id_acc","stage","lineage")]
+
+opts$met.cells <- sample_metadata$id_met
+opts$acc.cells <- sample_metadata$id_acc
+```
+
+<!-- Subset cells to reduce memory burden -->
+```{r}
+opts$ncells <- 15
+opts$filt.cells <- sample_metadata[,head(unique(sample),n=opts$ncells),by="stage"] %>% .$V1
+
+sample_metadata <- sample_metadata[sample %in% opts$filt.cells]
+opts$met.cells <- sample_metadata$id_met
+opts$acc.cells <- sample_metadata$id_acc
+```
+
+<!-- Load methylation data -->
+```{r load_data, echo=FALSE, include=FALSE}
+met_dt <- loadMultipleMetData(io$met.indir, opts$met.cells, tss)
+```
+
+<!-- Load accessibility data -->
+```{r}
+acc_dt <- loadMultipleMetData(io$acc.indir, opts$acc.cells, tss) %>% setnames("id_met","id_acc")
+```
+
+<!-- Merge data and sample metadata -->
+```{r}
+met_dt <- met_dt %>% merge(sample_metadata[,c("id_met","sample","stage")], by="id_met") %>% .[,id_met:=NULL]
+acc_dt <- acc_dt %>% merge(sample_metadata[,c("id_acc","sample","stage")], by="id_acc") %>% .[,id_acc:=NULL]
+```
+
+<!-- Filter data -->
+```{r filter, echo=FALSE}
+```
+
+<!-- Overlap DNA methylation and DNA accessibility data with windows -->
+```{r}
+tmp <- seq(from=0-opts$up, to=0+opts$down-opts$window, by=opts$slide)
+foo <- data.table(window_center=tmp+(opts$window/2), rel_start=tmp, rel_end=tmp+opts$window)
+```
+
+DNA methylation
+```{r}
+met_ov_dt <- foverlaps(
+    x=foo %>% setkey(rel_start,rel_end),
+    y=met_dt[,c("rel_start","rel_end"):=dist] %>% setkey(rel_start,rel_end)
+  ) %>%
+  .[,c("i.rel_start","i.rel_end","rel_start","rel_end"):=NULL] %>%
+  .[,.(met.rate=mean(rate)), by=c("sample","ens_id","window_center","stage")] %>% droplevels()
+```
+
+DNA accessibility
+```{r}
+acc_ov_dt <- foverlaps(
+    x=acc_dt[,c("rel_start","rel_end"):=dist] %>% setkey(rel_start,rel_end),
+    y=foo %>% setkey(rel_start,rel_end),
+    nomatch = 0
+  ) %>%
+  .[,c("i.rel_start","i.rel_end","rel_start","rel_end"):=NULL] %>%
+  .[,.(acc.rate=mean(rate)), by=c("sample","ens_id","window_center","stage")] %>% droplevels()
+```
+
+Merge
+```{r}
+bar <- merge(
+  met_ov_dt,
+  acc_ov_dt,
+  by = c("sample","ens_id","window_center","stage")
+  # allow.cartesian = TRUE
+)
+```
+
+Permute chromatin accessibility values
+```{r}
+bar %>% .[,acc.rate:=sample(acc.rate), by=c("sample")]
+```
+
+<!-- Compute local correlations -->
+```{r}
+cor <- bar %>% .[,.(r=cor(x=met.rate, y=acc.rate, method="pearson", use="pairwise.complete.obs")), by=c("sample","window_center","stage")]
+```
+
+<!-- Plot -->
+```{r}
+p <- ggplot(cor,aes(x=window_center, y=r)) +
+  # stat_summary(aes(fill=type, color=type), fun.data=mean_sd, geom="smooth", alpha=0.2, size=1.0) +
+  stat_summary(aes(fill=stage, color=stage), fun.data=mean_sd, geom="smooth", alpha=0.2, size=1.0) +
+  # stat_summary(aes(fill=interaction(type,stage), color=interaction(type,stage)), fun.data=mean_sd, geom="smooth", alpha=0.2, size=1.0) +
+  geom_hline(yintercept=0, linetype="dashed", color="black", size=0.5) +
+  geom_vline(xintercept=0, linetype="dashed", color="black", size=0.5) +
+  # geom_segment(x=-opts$up, xend=opts$down, y=0, yend=0, color="black", size=0.5,  linetype="dashed") +
+  ylab("Correlation") + xlab("Genomic distance from TSS (bp)") +
+  scale_x_continuous(limits=c(-opts$up,opts$down)) +
+  coord_cartesian(ylim=c(-0.25,0.25)) +
+  # scale_y_continuous(limits=c(-0.35,0.35), breaks=c(-0.3,0,0.3), expand=c(0,0)) +
+  scale_fill_discrete(guide=FALSE) +
+  theme_pub()
+p
+
+pdf(file=paste0(io$outdir,"/metacc_local_permuted.pdf"), width=6.5, height=5)
+print(p)
+dev.off()
+```
+

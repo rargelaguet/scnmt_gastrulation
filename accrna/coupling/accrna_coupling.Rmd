@@ -1,0 +1,312 @@
+---
+title: "Gastrulation: Coupling between RNA expression and DNA accessibility"
+output: 
+  BiocStyle::html_document: 
+    fig_width: 12
+    fig_height: 8
+---
+
+```{r echo=FALSE, include=FALSE}
+suppressPackageStartupMessages(library(scater))
+suppressPackageStartupMessages(library(purrr))
+suppressPackageStartupMessages(library(weights))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(cowplot))
+suppressPackageStartupMessages(library(data.table))
+```
+
+<!-- User-defined functions -->
+```{r echo=FALSE, include=FALSE}
+source("/Users/ricard/NMT-seq_ESC/correlations/utils.R")
+```
+
+<!-- Define I/O and options -->
+```{r echo=TRUE, include=FALSE}
+# Data
+io   <- list()
+io$base_dir  <- "/Users/ricard/data/gastrulation"
+io$in.sample_metadata <- paste0(io$base_dir,"/sample_metadata_scNMT.txt")
+io$annos_dir <- paste0(io$base_dir,"/features/filt")
+io$rna_file <- paste0(io$base_dir,"/rna/parsed/sceset_scNMT.rds")
+io$acc_dir <- paste0(io$base_dir,"/acc/parsed")
+io$gene_metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
+io$outdir <- "/Users/ricard/gastrulation/accrna/coupling/out"
+
+# Filtering parameters
+opts <- list()
+opts$min.GpCs <- 3       # Minimum number of CpGs per feature
+opts$gene_window <- 1e4  # window length for the overlap between genes and features
+
+# Multiple testing options
+opts$threshold_fdr  <- 0.10   # pvalue threshold for significance in FDR
+
+# Correlation type options
+opts$method <- "pearson"      # correlation type
+opts$weight <- FALSE          # weighted correlation? 
+
+# Permutation test options
+opts$permutation <- TRUE   # do permutation test?
+opts$n_perms <- 10          # Number of random permutations
+
+# opts$pseudobulk <- T          # Include pseudobulk estimates?
+
+# Define genomic contexts
+opts$annos <- c(
+  "genebody",
+  # "prom_100_100_cgi",
+  # "prom_100_100_noncgi",
+  "prom_100_100",
+  "CGI",
+  # "H3K27ac_distal_E7.5_union",
+  # "H3K27ac_promoter_E7.5_union",
+  # "H3K4me3_E7.5_union",
+  "LINE"="LINE",
+  "LTR"="LTR"
+)
+
+# Define stage and lineages
+opts$stage_lineage <- c(
+  "E4.5_EPI",#"E4.5_PE",
+  "E5.5_EPI",#"E5.5_PE",
+  "E6.5_EPI","E6.5_PS",#"E6.5_VE",
+  "E7.5_Ectoderm","E7.5_Mesoderm","E7.5_Endoderm"
+)
+
+# Define plotting colors
+opts$colors <- c(E4.5="#F8766D", E5.5="#7CAE00", E6.5="#00BFC4", E7.5="#C77CFF")
+
+# Define which cells to use
+foo <- fread(io$in.sample_metadata) %>% 
+  .[,stage_lineage:=paste(stage,lineage,sep="_")] %>%
+  .[pass_accQC==T & pass_rnaQC==T & stage_lineage%in%opts$stage_lineage]
+opts$rna.cells <- foo$id_rna
+opts$acc.cells <- foo$id_acc
+```
+
+<!-- Load sample metadata -->
+```{r}
+sample_metadata <- fread(io$in.sample_metadata, stringsAsFactors=T) %>% 
+  .[,stage_lineage:=as.factor(paste(stage,lineage,sep="_"))] %>%
+  .[sample%in%foo$sample]
+```
+
+<!-- Load RNA data -->
+```{r load_rna, echo=FALSE, include=FALSE}
+# Load expression as SCE object
+sce <- readRDS(file = io$rna_file)
+
+# Subset cells
+sce <- sce[,opts$rna.cells]
+
+# Create data.table
+rna_dt <- exprs(sce) %>% t %>% as.data.table(keep.rownames="id_rna") %>% 
+  melt(id.vars="id_rna", value.name="expr", variable.name="id") %>%
+  merge(sample_metadata[,c("sample","id_rna")]) %>%
+  merge(rowData(sce) %>% as.data.frame(row.names=rownames(sce)) %>% tibble::rownames_to_column("ens_id") %>%
+          .[,c("symbol","ens_id")] %>% as.data.table %>% setnames(c("ens_id","symbol"),c("id","gene")),
+        by=c("id")
+        )
+rna_dt[,c("id","gene"):=list(as.factor(id),as.factor(gene))]
+```
+
+<!-- Load accessibility data -->
+```{r load_met, echo=FALSE, include=FALSE}
+acc_dt <- lapply(opts$annos, function(n) {
+  data <- fread(sprintf("zcat < %s/%s.tsv.gz",io$acc_dir,n), showProgress=F, stringsAsFactors=T, sep="\t", quote="") %>%
+  .[V1%in%opts$acc.cells]
+}) %>% rbindlist
+colnames(acc_dt) <- c("sample","id","anno","Nmet","N","rate")
+```
+
+<!-- Load genomic contexts -->
+```{r load_genomiccontexts}
+feature_metadata <- lapply(opts$annos, function(anno) 
+  fread(sprintf("%s/%s.bed",io$annos_dir,anno), stringsAsFactors=T)[,c(1,2,3,4,5,6)]) %>%
+  rbindlist %>% setnames(c("chr","start","end","strand","id","anno"))
+
+# Load gene metadata 
+gene_metadata <- fread(io$gene_metadata,stringsAsFactors=T) %>% 
+  setnames(c("ens_id","symbol"),c("id","gene")) %>% 
+  .[,chr:=as.factor(substr(chr,4,4))]
+```
+
+<!-- Parse gene and feature metadata -->
+```{r}
+feature_metadata_filt <- feature_metadata %>% split(.$anno) %>% 
+  map2(.,names(.), function(x,y) x[id %in% acc_dt[anno==y,id]] ) %>%
+  rbindlist
+
+gene_metadata_filt <- gene_metadata %>% .[,c("chr","start","end","gene")] %>% 
+  .[,c("start", "end") := list(start-opts$gene_window, end+opts$gene_window)] %>% 
+  setkey(chr,start,end)
+```
+
+<!-- Associate the non-genic contexts with overlapping genes -->
+```{r associate, echo=FALSE}
+acc_list <- list()
+for (ann in unique(acc_dt$anno)){
+  
+  # Subset corresponding anno
+  acc_tmp <- acc_dt[anno == ann, ]
+  
+  # Non gene-associated feature
+  if (all(grepl("ENSMUSG", unique(acc_tmp$id)) == FALSE)) {
+    
+    # Extract coordiantes for accessibility sites and for genes
+    feature_metadata_tmp <- feature_metadata_filt[anno==ann, c("chr","start","end","id")] %>% 
+      .[,c("start","end") := list(start - opts$gene_window, end + opts$gene_window)] %>% setkey(chr,start,end)
+    
+    # Do the overlap
+    ov <- foverlaps(gene_metadata_filt, feature_metadata_tmp, nomatch=0) %>% .[,c("gene", "id")]# %>%
+      # # If a feature overlap with more than one gene, concatenate all of them
+      # .[,.(gene=paste(gene, collapse="_")),by="id"] %>%
+      # .[,c("gene", "id")]
+    
+    # Merge with accessibility data
+    acc_list[[ann]] <- merge(acc_tmp, ov, by="id", allow.cartesian=T) 
+  }
+  # Gene-associated feature
+  else if (all(grepl("ENSMUSG", unique(acc_tmp$id)) == TRUE)) {
+    acc_list[[ann]] <- merge(acc_tmp, gene_metadata[,c("id","gene")], by="id")
+  }
+}
+acc_dt <- rbindlist(acc_list)
+rm(acc_list,acc_tmp,ov,feature_metadata_tmp)
+```
+
+<!-- Merge chromatin accessibility and RNA expression data -->
+```{r}
+accrna_dt <- merge(
+  acc_dt, 
+  rna_dt[,c("sample","gene","expr")], 
+  by=c("sample","gene")
+)
+rm(acc_dt,rna_dt)
+```
+
+
+<!-- Filter data -->
+```{r filter_all, echo=FALSE}
+# Filter by mininum number of GpCs per feature
+accrna_dt <- accrna_dt[N >= opts$min.GpCs]
+```
+
+<!-- Compute coupling  -->
+
+Continuous correlation coefficient
+```{r cor_rate, echo=FALSE, include=FALSE}
+
+# Weighted correlation
+if (opts$weight == TRUE){
+  if (opts$method != "pearson") { print("Weighted correlation only supported for pearson"); stop() }
+  cor <- accrna_dt[, wtd.cor(rate, expr, N)[, c("correlation", "t.value", "p.value")], by = c("sample", "anno")]
+  
+# Unweighted correlation
+} else{
+  cor <- accrna_dt[, .(V1 = unlist(cor.test(rate, expr, alternative = "two.sided", method = opts$method)[c("estimate", "statistic", "p.value")])), by = c("sample", "anno")]
+}
+
+# Compute adjusted p-values (both FDR and Bonferroni)
+cor <- cor %>% .[,para := c("r", "t", "p")] %>% dcast(sample + anno ~ para, value.var = "V1") %>% 
+      .[, c("padj_fdr", "padj_bonf") := list(p.adjust(p, method = "fdr"), p.adjust(p, method = "bonferroni")), by = anno] %>%
+      .[, c("log_padj_fdr", "log_padj_bonf") := list(-log10(padj_fdr), -log10(padj_bonf))] %>%
+      .[, sig := padj_fdr <= opts$threshold_fdr] %>% setorder(padj_fdr)
+```
+
+<!-- Save results -->
+```{r}
+fwrite(cor, paste0(io$outdir,"/accrna_coupling.txt"), sep="\t")
+cor <- fread(paste0(io$outdir,"/accrna_coupling.txt"))
+```
+
+<!-- Run permutation test -->
+```{r}
+if (opts$permutation) {
+  pp_vals <- vector(mode = "numeric", length = length(cor$p))
+  for (k in 1:opts$n_perms){
+    print(k)
+    accrna_dt_perm <- copy(accrna_dt)
+    
+    # Permute gene expression levels and methylation rates
+    accrna_dt_perm[, c("rate","expr") := list(sample(rate),sample(expr)), by = c("sample","anno")]
+    
+    # Compute coupling
+    cor_perm <- accrna_dt_perm[, .(p = cor.test(rate, expr, method=opts$method)[["p.value"]]), by = c("sample","anno")]
+    
+    # For each annotation sort by p-value and store them
+    cor_perm <- cor_perm %>% split(.$anno) %>% map(~ .[,.(anno = anno, p = sort(p))]) %>% rbindlist
+    pp_vals <- pp_vals + cor_perm %>% .[, p]
+  }
+  # Compute the average p-values across all permutations
+  pp_vals <- pp_vals / opts$n_perms
+  cor_perm <- cor_perm[, p := pp_vals]
+}
+```
+
+<!-- QQplots of true vs permuted signal -->
+```{r, echo=FALSE}
+if (opts$permutation) {
+  pp <- qq <- list()
+  for (n in unique(cor$anno)) {
+    
+    # Generate permutation plot
+    qq[[n]] <- gg_qqplot(cor[anno == n, ], cor_perm[anno == n]$p, title = "")
+    
+    # Combine and save
+    pdf(file=paste0(io$outdir,"/permutation_", n, ".pdf"), height=4, width=6, useDingbats = FALSE)
+    print(qq[[n]])
+    dev.off()
+    
+  }
+}
+```
+
+<!-- Boxplots -->
+
+Annotation in the X axis and grouped by stage
+```{r}
+# Divergent
+opts$colors <- c(E4.5="#F8766D", E5.5="#7CAE00", E6.5="#00BFC4", E7.5="#C77CFF")
+
+subset_annos <- c(
+  "prom_100_100"="Promoters",
+  "genebody"="Gene\nbodies",
+  # "H3K27ac_distal_E7.5_common_500"="Distal\nH3K27ac",
+  # "H3K27ac_promoter_E7.5_common_500"="Proximal\nH3K27ac",
+  # "H3K27ac_distal_E7.5_union_500"="E7.5 Distal\nH3K27ac",
+  # "H3K27ac_promoter_E7.5_union_500"="E7.5 Proximal\nH3K27ac",
+  # "H3K4me3_E7.5_common"="H3K4me3",
+  # "H3K4me3_E7.5_union"="E7.5\nH3K4me3",
+  # "ESC_p300"="p300 ChIP-seq (ESCs)",
+  # "ESC_CTCF"="CTCF ChIP-seq (ESCs)",
+  "CGI"="CpG\nislands",
+  "LINE"="LINE",
+  "LTR"="LTR"
+)
+  
+
+tmp <- merge(cor, sample_metadata[,c("sample","stage","stage_lineage")], by="sample") %>%
+  .[anno%in%names(subset_annos)] %>%
+  .[,anno:=stringr::str_replace_all(anno, subset_annos)] %>%
+  .[,anno:=factor(anno,levels=subset_annos)]
+
+
+# p <- ggplot(tmp, aes(x=anno, y=r, fill=stage)) +
+p <- ggplot(tmp, aes(x=anno, y=r, fill=stage)) +
+  geom_boxplot(alpha=0.8, outlier.shape=NA) +
+  geom_hline(yintercept=0, colour="black", linetype="dashed") +
+  scale_fill_manual(values=opts$colors) +
+  # coord_cartesian(ylim=c(-0.15,0.15)) +
+  labs(title="", x="", y="Met/RNA correlation") +
+  boxplot_theme() +
+  # scale_fill_brewer(palette = "Accent") +
+  theme(
+    legend.position=c(0.3,1.05),
+    axis.text.x = element_text(color="black", size=11)
+  )
+print(p)
+
+pdf(paste0(io$outdir,"/accrna_coupling_boxplots2.pdf"), width=9, height=5, useDingbats = F)
+print(p)
+dev.off()
+```

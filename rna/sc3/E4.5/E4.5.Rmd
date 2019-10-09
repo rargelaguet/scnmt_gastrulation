@@ -1,0 +1,145 @@
+---
+title: "Gastrulation: analysis of transcriptomics in E4.5 using SC3"
+output: 
+  BiocStyle::html_document: 
+  fig_width: 10
+  fig_height: 8
+---
+
+```{r include=FALSE}
+library(data.table)
+library(purrr)
+library(scater) 
+library(SC3)
+```
+
+```{r}
+source("/Users/ricard/gastrulation/rna/sc3/utils.R")
+```
+
+```{r define_opts, echo=FALSE, include=FALSE}
+
+## Define I/O ##
+io <- list()
+io$basedir <- "/Users/ricard/data/gastrulation"
+io$sample_metadata <- paste0(io$basedir,"/sample_metadata.txt")
+io$rna <- paste(io$basedir,"rna/parsed/SingleCellExperiment.rds",sep="/")
+io$outdir <- "/Users/ricard/gastrulation/rna/sc3/E4.5/out"
+
+## Define options ##
+opts <- list()
+
+# Define which cells to use
+opts$cells <- fread(io$sample_metadata) %>% 
+  .[pass_rnaQC==T & stage=="E4.5",id_rna]
+```
+
+<!-- Load sample metadata -->
+```{r}
+sample_metadata <- fread(io$sample_metadata) %>% 
+  .[,c("id_rna","stage","lineage10x")] %>% 
+  .[id_rna%in%opts$cells]
+```
+
+```{r}
+table(sample_metadata$lineage10x)
+```
+
+<!-- Load RNA expression data -->
+```{r}
+sce <- readRDS(file=io$rna)[,opts$cells]
+rowData(sce)$feature_symbol <- rowData(sce)$symbol
+```
+
+```{r}
+sce$lineage <- sample_metadata$lineage10x
+```
+
+<!-- Run sc3 -->
+```{r, cache=T}
+sce_sc3 <- sc3(sce, ks=2, gene_filter=TRUE, pct_dropout_min=20, pct_dropout_max=80, n_cores=1, biology=TRUE, rand_seed=1)
+sce_sc3$sc3_2_clusters <- as.factor(sce_sc3$sc3_2_clusters)
+```
+
+<!-- Consensus plots -->
+```{r}
+pdf(file=paste0(io$outdir,"/consensus.pdf"))
+sc3_plot_consensus(sce_sc3, k=2, show_pdata=c("lineage"))
+dev.off()
+```
+
+<!-- Silhouette plot -->
+```{r}
+# sc3_plot_silhouette(sce_sc3, k=2)
+```
+
+<!-- tSNE -->
+```{r}
+plotTSNE(sce_sc3, ncomponents=2, colour_by="lineage", run_args=list("rand_seed"=1), add_ticks=F) +
+    labs(x="t-SNE dimension 1", y="t-SNE dimension 1", title="") +
+    scatter_theme()
+
+# pdf(file=paste0(io$outdir,"/tsne.pdf"), width=6.5, height=5, useDingbats = F)
+# dev.off()
+```
+
+
+<!-- PCA -->
+```{r}
+plotPCA(sce_sc3, ncomponents=2, colour_by="lineage", add_ticks=F) +
+    labs(x="PC1", y="PC2", title="") +
+    scatter_theme()
+```
+
+
+<!-- Heatmap -->
+```{r}
+sc3_plot_expression(sce_sc3, k=2, show_pdata=c("lineage","embryo","plate"))
+```
+
+<!-- Marker genes -->
+
+```{r}
+rownames(sce_sc3) <- rowData(sce_sc3)$symbol
+```
+
+```{r}
+pdf(file=paste0(io$outdir,"/gene_markers.pdf"))
+sc3_plot_markers(sce_sc3, k=2, show_pdata="lineage")
+dev.off()
+```
+
+Epiblast: Nanog, Ubd
+```{r}
+markers <- c("Otx2", "Tdgf1","Igfbp2","Fgf4")
+for (i in markers) {
+  set.seed(1)
+  pdf(file=sprintf("%s/Epiblast_markers/tsne_%s.pdf",io$outdir,i), width=6.5, height=5, useDingbats = F)
+  p <- plotTSNE(sce_sc3, ncomponents=2, colour_by=i, shape_by="lineage", add_ticks=F) +
+    labs(x="t-SNE dimension 1", y="t-SNE dimension 1", title=i) +
+    scatter_theme() +
+    theme(
+      axis.text = element_blank()      
+    )
+  print(p)
+  dev.off()
+}
+```
+
+Primitive endoderm: Gata6, Lrp2
+```{r}
+markers <- c("Gata6", "Lrp2","Srgn","Cubn","Col4a2")
+for (i in markers) {
+  set.seed(1)
+  pdf(file=sprintf("%s/PrimitiveEndoderm_markers/tsne_%s.pdf",io$outdir,i), width=6.5, height=5, useDingbats = F)
+  p <- plotTSNE(sce_sc3, ncomponents=2, colour_by=i, shape_by="lineage", add_ticks=F) +
+    labs(x="t-SNE dimension 1", y="t-SNE dimension 1", title=i) +
+    scatter_theme() +
+    theme(
+      axis.text = element_blank()      
+    )
+  print(p)
+  dev.off()
+}
+```
+

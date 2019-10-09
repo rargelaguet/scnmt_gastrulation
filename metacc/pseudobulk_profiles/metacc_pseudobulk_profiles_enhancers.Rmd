@@ -1,0 +1,340 @@
+---
+title: "Gastrulation: pseudobulked profiles of DNA methylation and chromatin accessibility"
+output: 
+  BiocStyle::html_document: 
+    fig_width: 10
+    fig_height: 8
+---
+
+```{r load_modules, echo=FALSE, include=FALSE}
+library(data.table)
+library(purrr)
+library(ggplot2)
+```
+
+```{r fncs, echo=FALSE}
+theme_boxplot <- function() {
+    theme(
+      plot.margin = unit(c(t=1,r=1,b=1,l=1), "cm"),
+      plot.title = element_text(size=25,hjust=0.5),
+      axis.text=element_text(size=15, colour="black"),
+      axis.title.x=element_text(size=17, margin=margin(10,0,0,0)),
+      axis.title.y=element_text(size=17, margin=margin(0,10,0,0)),
+      axis.line = element_line(size=rel(1.0)),
+      axis.ticks = element_line(size=rel(1.3), color="black"),
+      legend.key = element_blank(),
+      legend.position = "top",
+      legend.direction = "horizontal",
+      # legend.key.size= unit(0.5, "cm"),
+      legend.key.width=unit(1.2,"line"),
+      legend.key.height=unit(1.0,"line"),
+      legend.margin = margin(t=10, r=0, b=0, l=0, unit="pt"),
+      legend.title = element_blank(),
+      legend.text = element_text(size=15),
+      panel.border=element_blank(),
+      panel.grid.major=element_blank(),
+      panel.grid.minor=element_blank(),
+      panel.background=element_blank()
+    )
+}
+
+f <- function(x) { return(data.frame(y=mean(x), ymin=mean(x)-sd(x), ymax=mean(x)+sd(x))) }
+```
+
+<!-- Define I/O and options -->
+```{r define_options, echo=FALSE}
+source("/Users/ricard/gastrulation/metaccrna/profiles_enhancers/load_settings.R")
+```
+
+<!-- Load sample metadata -->
+```{r load_metadata}
+sample_metadata <- fread(io$sample.metadata) %>%
+  .[,c("sample","id_acc","id_met","id_rna","stage","lineage10x_2")] %>%
+  .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")] %>%
+  .[id_met%in%opts$met.cells | id_acc%in%opts$acc.cells] %>%
+  droplevels()
+```
+
+<!-- Merge E5.5 and E6.5 epiblast -->
+```{r}
+# sample_metadata %>% 
+  # .[,stage_lineage:=ifelse(stage_lineage=="E5.5_Epiblast","E6.5_Epiblast",stage_lineage)] %>%
+  # .[,stage_lineage:=ifelse(stage_lineage=="E7.5_Primitive_Streak","E6.5_Primitive_Streak",stage_lineage)]
+  # .[,stage_lineage:=ifelse(stage_lineage=="E6.5_Nascent_mesoderm","E7.5_Nascent_mesoderm",stage_lineage)]
+```
+
+
+<!-- Subset cells to reduce memory burden -->
+```{r}
+# opts$ncells <- 3
+# opts$filt.cells <- sample_metadata[,head(unique(sample),n=opts$ncells),by="stage_lineage"] %>% .$V1
+# 
+# sample_metadata <- sample_metadata[sample %in% opts$filt.cells]
+# opts$met.cells <- sample_metadata$id_met
+# opts$acc.cells <- sample_metadata$id_acc
+```
+
+<!-- Load results from the differential analysis -->
+
+
+```{r}
+opts$met.annos <- opts$annos
+opts$acc.annos <- opts$annos
+source("/Users/ricard/gastrulation/metaccrna/differential/load_data.R")
+```
+
+<!-- Extract lineage-defining elements -->
+Lineage-defining elements are defined as ChIP-seq peaks that show differential activity during germ layer commitment.
+At 10% FDR, this represents around 25% of Endoderm and Mesoderm putative enhancers, as defined by the ChIP-seq.
+Ectoderm enhancers show very few associations with germ layer commitment, so there is no point in subsetting them.
+```{r}
+# diff.acc <- rbind(
+#   diff.acc[lineage!="Ectoderm"] %>% .[sig==T],
+#   diff.acc[lineage=="Ectoderm"]
+# )
+# 
+# diff.met <- rbind(
+#   diff.acc[lineage!="Ectoderm"] %>% .[sig==T],
+#   diff.acc[lineage=="Ectoderm"]
+# )
+```
+
+```{r}
+diff.met <- diff.met %>% .[sig==T]
+diff.acc <- diff.acc %>% .[sig==T]
+```
+
+
+<!-- Load genomic annotations -->
+```{r}
+source("/Users/ricard/gastrulation/metaccrna/profiles_enhancers/load_annotations.R")
+
+# Methylation
+anno_df.met <- anno_df %>% split(.$anno) %>%
+  map2(.,names(.), function(x,y) x[id %in% diff.met[anno==y,id]] ) %>%
+  rbindlist %>% setkey(chr,start,end)
+
+# Accessibility
+anno_df.acc <- anno_df %>% split(.$anno) %>%
+  map2(.,names(.), function(x,y) x[id %in% diff.acc[anno==y,id]] ) %>%
+  rbindlist %>% setkey(chr,start,end)
+```
+
+<!-- Load data -->
+```{r load_data, echo=FALSE}
+source("/Users/ricard/gastrulation/metaccrna/profiles_enhancers/load_data.R")
+```
+
+```{r}
+data <- rbind(
+  met[,c("sample","stage","stage_lineage","id","anno","dist","rate","context")],
+  acc[,c("sample","stage","stage_lineage","id","anno","dist","rate","context")]
+)
+data[,rate:=rate*100]
+```
+
+<!-- Quantify methylation/accessibility across all features -->
+```{r}
+# data_filt <- data %>%
+# .[,.(rate=mean(rate), N=.N, var=var(rate)), by=c("stage","stage_lineage","dist","anno","context")]
+# fwrite(data, "/Users/ricard/data/gastrulation_norsync_stuff/foo.txt", quote=F)
+```
+
+<!-- Load genome-wide global methylation and accessibility rates -->
+```{r}
+met.stats <- fread(io$met.stats) %>% .[,c("id_met","mean")] %>%
+  merge(sample_metadata[,.(sample,id_met)], by="id_met") %>% .[,context:="CG"] %>%
+  .[,mean:=mean*100]
+
+acc.stats <- fread(io$acc.stats) %>% .[,c("id_acc","mean")] %>%
+  merge(sample_metadata[,.(sample,id_acc)], by="id_acc") %>% .[,context:="GC"]
+
+stats <- rbind(
+  met.stats[,c("sample","mean","context")],
+  acc.stats[,c("sample","mean","context")]
+) %>% merge(sample_metadata[,c("sample","stage","stage_lineage")],by="sample") %>%
+  .[,.(mean=mean(mean)),by=c("stage_lineage","context")]
+```
+
+<!-- Plot joint methylation and accessibility profiles -->
+
+Per stage_lineage and genomic context separately
+```{r plot_profiles, echo=FALSE, include=TRUE, warning=FALSE}
+# f <- function(x) { return(data.frame(y=mean(x), ymin=mean(x)-sd(x), ymax=mean(x)+sd(x))) }
+# # mean_sd <- function(x) { return(data.frame(y=mean(x), ymin=mean(x)-sd(x)/2, ymax=mean(x)+sd(x)/2)) }
+# mean_sd <- function(x, mult = 1) {  
+#   x <- na.omit(x)
+#   sd <- mult * sqrt(var(x))
+#   mean <- mean(x)
+#   data.frame(y = mean, ymin = mean - sd, ymax = mean + sd)
+# }
+# 
+# for (i in as.character(unique(data$stage_lineage))) {
+#   for (n in as.character(unique(data$anno))) {
+#     tmp <- data[anno==n & stage_lineage==i]
+#     p <- ggplot(tmp, aes(x=dist, y=rate, group=context, fill=context, color=context)) +
+#       stat_summary(fun.data="mean_se", geom="ribbon", alpha=0.25) +
+#       # stat_summary(aes(fill=context, color=context), fun.data=mean_se, geom="smooth", alpha=0.5, size=1.0) +
+#       stat_summary(geom="line") +
+#       # geom_line() +
+#       # stat_summary(aes(group=context, colour=context, fill=context), fun.y=mean, geom="line") +
+#       labs(x="Distance from center (bp)", y="Rate", title=sprintf("%s:%s",i,n)) +
+#       xlim(-opts$window_size, opts$window_size) +
+#       # scale_colour_manual(values=opts$colors) +
+#       guides(fill=FALSE, color=FALSE, linetype=FALSE) +
+#       theme_boxplot() +
+#       theme(
+#         plot.title = element_text(size=15,hjust=0.5),
+#         axis.text=element_text(size=12, colour="black"),
+#         axis.title.x=element_text(size=rel(1.0), margin=margin(10,0,0,0)),
+#         axis.title.y=element_text(size=rel(1.0), margin=margin(0,10,0,0)),
+#         axis.line = element_line(size=rel(1.0)),
+#         axis.ticks = element_line(size=rel(1.3), color="black"),
+#         legend.text = element_text(size=11)
+#       )
+#     print(p)
+#     
+#     pdf(file=sprintf("%s/%s_%s.pdf",io$outdir,i,n), width=5, height=5)
+#     print(p)
+#     dev.off()
+#   }
+# }
+```
+
+Per stage_lineage, genomic contexts side by side
+```{r}
+for (i in as.character(unique(data$stage_lineage))) {
+  print(i)
+  
+  tmp <- data[stage_lineage==i]
+  
+  p <- ggplot(tmp, aes(x=dist, y=rate, group=context, fill=context, color=context)) +
+    facet_wrap(~anno, nrow=1, scales="fixed") +
+    stat_summary(geom="ribbon", alpha=0.10) +
+    stat_summary(geom="line") +
+    geom_hline(yintercept=stats[context=="CG" & stage_lineage==i,mean(mean,na.rm=T)], color="#F37A71", linetype="dashed", alpha=0.75, size=0.75) +
+    geom_hline(yintercept=stats[context=="GC" & stage_lineage==i,mean(mean,na.rm=T)], color="#00BFC4", linetype="dashed", alpha=0.75, size=0.75) +
+    # labs(x="Distance from center (bp)", y="Rate", title=i) +
+    labs(x="", y="") +
+    coord_cartesian(ylim=c(15,90)) +
+    xlim(-opts$window_size, opts$window_size) +
+    # scale_colour_manual(values=opts$colors) +
+    guides(fill=FALSE, color=FALSE, linetype=FALSE) +
+    theme_boxplot() +
+    theme(
+      axis.text.x = element_text(size=rel(0.9), colour="black"),
+      axis.text.y = element_text(size=rel(1.1), colour="black"),
+      axis.title.x = element_text(size=rel(1.0), margin=margin(10,0,0,0)),
+      axis.title.y = element_text(size=rel(1.0), margin=margin(0,10,0,0)),
+      axis.line = element_line(size=rel(1.0)),
+      axis.ticks = element_line(size=rel(1.3), color="black"),
+      legend.text = element_text(size=11),
+      strip.text = element_blank()
+    )
+  # print(p)
+
+  pdf(file=sprintf("%s/%s.pdf",io$outdir,i), width=8.5, height=5)
+  print(p)
+  dev.off()
+}
+```
+
+
+Per genomic_context, stage_lineage side by side
+```{r}
+# for (i in unique(data$anno)) {
+#   
+#   p <- ggplot(data[anno==i], aes(x=dist, y=rate, group=context, fill=context, color=context)) +
+#     facet_wrap(~stage_lineage, nrow=1, scales="fixed") +
+#     stat_summary(geom="ribbon", alpha=0.10, fun.data="mean_se") +
+#     stat_summary(geom="line", fun.data="mean_se") +
+#     # geom_hline(yintercept=stats[context=="CG" & stage_lineage==i,mean(mean,na.rm=T)], color="#F37A71", linetype="dashed", alpha=0.75, size=0.75) +
+#     # geom_hline(yintercept=stats[context=="GC" & stage_lineage==i,mean(mean,na.rm=T)], color="#00BFC4", linetype="dashed", alpha=0.75, size=0.75) +
+#     # labs(x="Distance from center (bp)", y="Rate", title=i) +
+#     labs(x="", y="") +
+#     coord_cartesian(ylim=c(25,90)) +
+#     xlim(-opts$window_size, opts$window_size) +
+#     # scale_colour_manual(values=opts$colors) +
+#     guides(fill=FALSE, color=FALSE, linetype=FALSE) +
+#     theme_boxplot() +
+#     theme(
+#       axis.text.x = element_text(size=rel(0.9), colour="black"),
+#       axis.text.y = element_text(size=rel(1.1), colour="black"),
+#       axis.title.x = element_text(size=rel(1.0), margin=margin(10,0,0,0)),
+#       axis.title.y = element_text(size=rel(1.0), margin=margin(0,10,0,0)),
+#       axis.line = element_line(size=rel(1.0)),
+#       axis.ticks = element_line(size=rel(1.3), color="black"),
+#       legend.text = element_text(size=11),
+#       strip.text = element_blank()
+#     )
+#   # print(p)
+# 
+#   pdf(file=sprintf("%s/%s.pdf",io$outdir,i), width=8.5, height=5)
+#   print(p)
+#   dev.off()
+# }
+```
+
+
+
+Relative rates
+```{r}
+# # mean_f <- function(x,context) 100 * (mean(x) - asd[context,min]) / ( asd[context,max] - asd[context,min] )
+# # all_f <- function(x,context) { return(
+# #   data.frame(
+# #     y = 100 * (mean(x) - asd[context,min]) / ( asd[context,max] - asd[context,min]),
+# #     ymin = 100 * (mean(x) - asd[context,min]) / ( asd[context,max] - asd[context,min]) - sd(x),
+# #     ymax = 100 * (mean(x) - asd[context,min]) / ( asd[context,max] - asd[context,min]) + sd(x)
+# #     )
+# # ) }
+# 
+# all_f <- function(x,foo) { return(
+#   data.frame(
+#     y = 100 * (mean(x) - asd[foo,min]) / ( asd[foo,max] - asd[foo,min]),
+#     ymin = 100 * (mean(x) - asd[foo,min]) / ( asd[foo,max] - asd[foo,min]) - sd(x),
+#     ymax = 100 * (mean(x) - asd[foo,min]) / ( asd[foo,max] - asd[foo,min]) + sd(x)
+#     )
+# ) }
+# 
+# asd <- data[,.(rate=mean(rate)), by=c("context","anno","dist","stage_lineage")] %>%
+#   .[,.(min=min(rate), max=max(rate)), by=c("context","stage_lineage")] %>% 
+#   .[,foo:=paste(context,stage_lineage,sep="_")] %>%
+#   setkey(foo)
+#     
+# for (i in as.character(unique(data$stage_lineage))) {
+#     tmp <- data[stage_lineage==i] %>% 
+#       .[,foo:=paste(context,stage_lineage,sep="_")]
+#     
+#     # to.plot <- tmp[,.(rate=mean(rate)), by=c("sample","context","dist","anno")]
+#     
+#     p <- ggplot(tmp, aes(x=dist, y=rate)) +
+#       facet_wrap(~anno, nrow=1, scales="fixed") +
+#       stat_summary(fun.data=all_f, fun.args=paste0("GC_",i), geom="smooth", size=1.0, data=tmp[context=="GC" & stage_lineage==i], color="#00BFC4", fill="#00BFC4", alpha=0.5) +
+#       stat_summary(fun.data=all_f, fun.args=paste0("CG_",i), geom="smooth", size=1.0, data=tmp[context=="CG" & stage_lineage==i], color="#F37A71", fill="#F37A71", alpha=0.5) +
+#       # stat_summary(fun.y=mean_f, geom="line") +
+#       # stat_summary(geom="ribbon", alpha=0.10) +
+#       # stat_summary(geom="line") +
+#       # labs(x="Distance from center (bp)", y="Rate", title=i) +
+#       labs(x="", y="") +
+#       coord_cartesian(ylim=c(0,100)) +
+#       xlim(-opts$window_size, opts$window_size) +
+#       # scale_colour_manual(values=opts$colors) +
+#       guides(fill=FALSE, color=FALSE, linetype=FALSE) +
+#       theme_boxplot() +
+#       theme(
+#         axis.text.x = element_text(size=rel(0.9), colour="black"),
+#         axis.text.y = element_text(size=rel(1.1), colour="black"),
+#         axis.title.x = element_text(size=rel(1.0), margin=margin(10,0,0,0)),
+#         axis.title.y = element_text(size=rel(1.0), margin=margin(0,10,0,0)),
+#         axis.line = element_line(size=rel(1.0)),
+#         axis.ticks = element_line(size=rel(1.3), color="black"),
+#         legend.text = element_text(size=11),
+#         strip.text = element_blank()
+#       )
+#     # print(p)
+# 
+#     pdf(file=sprintf("%s/%s_relative.pdf",io$outdir,i), width=8.5, height=5)
+#     print(p)
+#     dev.off()
+# }
+```

@@ -1,0 +1,86 @@
+---
+title: "Gastrulation: MOFA applied to E7.5 stage"
+output: 
+  BiocStyle::html_document: 
+    fig_width: 10
+    fig_height: 8
+---
+
+
+```{r}
+devtools::load_all("/Users/ricard/mofa")
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(scater)
+library(reticulate)
+library(RColorBrewer)
+```
+
+```{r}
+source("/Users/ricard/gastrulation/metaccrna/mofa/full/load_settings.R")
+```
+
+<!-- Load pretrained model -->
+```{r}
+model <- loadModel(paste0(io$outdir,"/hdf5/model_1.hdf5"))
+```
+
+<!-- Filter sample metadata -->
+```{r}
+sample_metadata_filt <- sample_metadata %>% 
+  setkey(sample) %>% .[MOFA::sampleNames(model)] %>%
+  .[,lineage10x_2:=stringr::str_replace_all(lineage10x_2,"_"," ")]
+```
+
+<!-- Rename views -->
+```{r}
+opts$views_names <- c(
+  "acc_H3K27ac_distal_E7.5_Mes_intersect12"="Mesoderm enhancers (acc)",
+  "acc_H3K27ac_distal_E7.5_Ect_intersect12"="Ectoderm enhancers (acc)",
+  "acc_H3K27ac_distal_E7.5_End_intersect12"="Endoderm enhancers (acc)",
+  "acc_prom_2000_2000"="Acc CGI Promoters",
+  "met_H3K27ac_distal_E7.5_Mes_intersect12"="Mesoderm enhancers (met)",
+  "met_H3K27ac_distal_E7.5_Ect_intersect12"="Ectoderm enhancers (met)",
+  "met_H3K27ac_distal_E7.5_End_intersect12"="Endoderm enhancers (met)",
+  "met_prom_2000_2000"="Met Promoters",
+  "rna" = "RNA expression"
+)
+
+viewNames(model) <- stringr::str_replace_all(viewNames(model), opts$views_names)
+```
+
+
+<!-- Subset factors -->
+Select Factors that are active in the RNA
+```{r}
+r2 <- calculateVarianceExplained(model)$R2PerFactor
+factors <- r2[,"RNA expression"]>0.005
+model <- subsetFactors(model, which(factors))
+factorNames(model) <- paste("Factor",1:getDimensions(model)[["K"]], sep=" ")
+```
+
+<!-- Calculate variance explained -->
+```{r}
+plotVarianceExplained(model)
+```
+
+<!-- Scatterplot of Factors -->
+```{r}
+p <- plotFactorScatter(model, 
+  factors=c(1,2), 
+  color_by=sample_metadata_filt$lineage10x_2,
+  # shape_by=sample_metadata_filt$stage,
+  dot_size = 0.5
+)
+p <- p + scale_color_manual(values=opts$colors)
+
+# pdf(paste0(io$outdir,"/pdf/scatterplot_F1vsF2.pdf"), useDingbats = F, onefile = F, width=7, height=4)
+print(p)
+# dev.off()
+```
+
+```{r}
+plotWeights(model, view="RNA expression", factor=3, abs=F, nfeatures = 10, scale=T)
+```
+

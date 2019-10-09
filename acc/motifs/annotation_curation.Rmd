@@ -1,0 +1,117 @@
+---
+title: "Curation of motif annotations"
+author: "Stephen Clark"
+date: "04/09/2018"
+output: html_document
+---
+
+Here we select which motif annotations we keep. Accessibility has been pre-calculated in windows at the motif sites (see acc_profiles_motifs.Rmd). Now we select those that have an accessibility enrichment (a peak or a trough).  
+
+
+
+```{r}
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(cowplot)
+
+
+io <- list()
+io$data_dir <- "/bi/scratch/Stephen_Clark/gastrulation_data"
+io$base_dir <- "/bi/group/reik/Stephen/github/gastrulation"
+io$acc_motif_data <- paste0(io$base_dir, "/acc/motifs/profiles/out/accessibility_at_motifs.csv")
+io$anno_dir <- paste0(io$data_dir, "/features/sjc/motifs/motifdb/")
+io$anno_selection_out <- paste0(io$base_dir, "/acc/motifs/profiles/out/anno_selection.rds")
+# io$annotation_out <- paste0(io$data_dir, "/features/sjc/motifs/curated/motifs_e7.5.bed")
+
+opts <- list()
+
+
+source(paste0(io$base_dir, "/fread_gz.R"))
+```
+
+
+```{r}
+data <- fread_gz(io$acc_motif_data)
+
+# find annotations which have a peak or a dip in the center
+
+data <- data[, mean := mean(rate), .(anno, stage_lineage)] %>%
+    .[, ratio := rate/mean]
+
+anno_keep <- data[dist<100&dist>-100] %>%
+    .[ratio<0.8|ratio>1.2, unique(anno)]
+
+to_plot <- data[anno %in% anno_keep]
+
+plots = map(anno_keep, ~{
+    ggplot(to_plot[anno==.], aes(dist, rate, colour=stage_lineage, fill=stage_lineage)) +
+        geom_line() +
+        geom_ribbon(aes(ymin=rate-sd, ymax=rate+sd), alpha=0.2, colour=NA) +
+        ggtitle(.) 
+    })
+plots
+
+
+```
+Now we save the list of PWMs to use as annotations.  
+
+```{r}
+saveRDS(paste0("Mmusculus-", anno_keep), io$anno_selection_out)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Re-code start and end positions to +/- 50bp of center. Save annotation file.  
+
+```{r}
+# dir.create(dirname(io$annotation_out), recursive=TRUE)
+# 
+# files <- dir(io$anno_dir, pattern=paste(anno_keep, collapse="|"), full=TRUE)
+# 
+# anno <- map(files, fread, select=1:6, colClasses=list("character"=1)) %>%
+#     rbindlist()
+# 
+# fwrite(anno, io$annotation_out, sep="\t")
+# # most tfs have max accessibility at -50 to +50
+# # generate annotations using these positions
+# 
+# anno_100bp <- copy(anno)[, mid := start+(end-start)/2] %>%
+#     .[, c("start", "end", "mid") := list(mid-50, mid+50, NULL)] %>%
+#      # re-code strand column
+#     .[strand==1, strand:="+"] %>%
+#     .[strand==-1, strand:="-"]
+# 
+# 
+# 
+# fwrite(anno_100bp, sub(".bed", "_100bp.bed", io$annotation_out), sep="\t")
+
+# # save as 1 bed file per tf
+# 
+# anno_files <- split(anno_file, by="anno", keep.by=FALSE)
+# 
+# walk2(anno_files, names(anno_files), ~{
+#     file_name <- paste0(io$annotation_out, "/", .y, ".bed")
+#     fwrite(.x, file_name, sep="\t")
+# })
+
+
+
+```
+
+
+
+
+

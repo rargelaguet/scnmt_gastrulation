@@ -1,0 +1,46 @@
+---
+title: "Gastrulation: H3K27ac scatter plot"
+output: html_document
+---
+
+```{r echo=FALSE, include=FALSE}
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(ggpubr)
+```
+
+```{r}
+if (grepl("ricard",Sys.info()['nodename'])) {
+  source("/Users/ricard/gastrulation/H3K27ac/H3K27ac_load_settings.R")
+  source("/Users/ricard/gastrulation/H3K27ac/H3K27ac_load_data.R")  
+} else {
+  source("/Users/stapelc/Documents/Github/gastrulation/H3K27ac/H3K27ac_load_settings.R")
+  source("/Users/stapelc/Documents/Github/gastrulation/H3K27ac/H3K27ac_load_data.R")
+}
+```
+
+<!-- Scatter plot signal cell type 1 vs cell type 2 with correlation -->
+
+```{r}
+data.plot <- enh_marked_log[anno=="Ectoderm enhancers"]
+```
+
+```{r}
+p <- ggplot(data.plot, aes(x=serum, y=E10.5_midbrain)) +
+  geom_point(size=1) +
+  geom_point(data=enh_diff[class=="esc"], colour="grey70", size=1.5) +
+  geom_point(data=enh_diff[class=="brain"], colour="steelblue", size=1.5) +
+  geom_smooth(method="lm", color="black") +
+  stat_cor(method="pearson", label.x.npc=0.9, label.y.npc=0.9) +
+  labs(x="H3K27ac levels in E10.5 Midbrain (log)", y="H3K27ac levels in ESCs (log)") +
+  theme_classic() +
+  theme(
+    axis.title = element_text(colour="black", size=rel(1.4)),
+    axis.text = element_text(colour="black", size=rel(1.3))
+  )
+
+pdf(file=paste0(io$outdir,"/H3K27ac_scatter_ESC_brain_cor.pdf"), width=10.5, height=5, useDingbats=F)
+print(p)
+dev.off()
+```

@@ -1,0 +1,167 @@
+---
+title: "Local correlation between accessibility and expression at motif sitees"
+author: "Stephen Clark"
+date: "05/16/2018"
+output: html_document
+---
+
+```{r}
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(cowplot)
+library(doParallel)
+
+
+io <- list()
+io$data_dir <- "/bi/scratch/Stephen_Clark/gastrulation_data"
+io$base_dir <- "/bi/group/reik/Stephen/github/gastrulation"
+
+io$sample_meta <-  paste0(io$data_dir, "/sample_metadata.txt")
+io$anno_dir <- paste0(io$data_dir, "/features/sjc/motifs/motifdb/filt/motif_only")
+io$raw_acc_dir <- paste0(io$data_dir, "/acc/raw")
+io$rna_file <- paste0(io$data_dir, "/rna/parsed/rna_dt.csv")
+io$gene_file <- paste0(io$data_dir, "/features/genes/Mmusculus_genes_BioMart.87.txt")
+
+
+## Options ##
+opts <- list()
+opts$window_size <- 600 # in bp
+opts$tile <- 50          # window size to calculate accessibility rates 
+opts$numb_cells_per_group = 10 # take a random sample of this many cells for each group
+
+# Define stages and lineages
+opts$stage <- c("E4.5", "E5.5", "E6.5", "E7.5")
+opts$lineages <- "all"
+opts$KO_3b <- "not"
+```
+
+```{r}
+meta <- fread(io$sample_meta) %>%
+  .[pass_rnaQC==TRUE & pass_accQC==TRUE & stage %in% opts$stage & KO_3b %in% opts$KO_3b ] %>%
+  .[, stage_lineage := paste0(stage, "_", lineage)]
+if (opts$lineages!="all") {
+  meta <- meta[lineage %in% opts$lineages] %>%
+    split(by="stage_lineage") 
+} else {
+  meta <- split(meta, by="stage") 
+}
+meta <- map(meta, ~.[sample(min(opts$numb_cells_per_group, .N))]) %>%
+    rbindlist()
+
+anno <- dir(io$anno_dir, pattern=".bed", full=TRUE) %>%
+  map(fread) %>%
+  rbindlist() %>%
+  .[, mid := start + (end-start)/2] %>%
+  .[, c("start", "end") := .(mid-opts$window_size, mid+opts$window_size)] %>%
+  setkey(chr, start, end)
+
+#anno_select <- tfs[tf %in% c("CTCF", "TYY1", "E4F1", "Cebpa", "Bhlhb2", "Klf7", "Osr1", "Tbp"), anno]
+
+# anno <- anno[anno %in% anno_select]%>%
+#   setkey(chr, start, end)
+
+# find the TF names 
+tfs <- anno[, .(anno=unique(anno))] %>%
+  .[, tf := gsub("cispb_1.02-|_1.02|jaspar2016-|jolma2013-|HOCOMOCOv10-|UniPROBE-|JASPAR_2014-|JASPAR_CORE-|_MOUSE|\\..*|\\-.*", "", anno)] %>%
+  .[, tf := toupper(tf)]
+
+
+
+cells <- meta[, sample]
+files <- paste0(io$raw_acc_dir, "/", cells, ".tsv.gz") %>% .[file.exists(.)]
+
+```
+
+```{r}
+rna <- fread(io$rna_file) %>%
+  .[sample %in% cells] %>%
+  .[, gene := toupper(gene)]
+
+rna_tf <- rna[gene %in% tfs[, tf]] %>%
+  setnames("gene", "tf")
+
+tf_select <- rna_tf[, mean(exp), tf] %>% 
+  .[V1>2, tf]
+
+anno_select <- tfs[tf %in% tf_select, anno]
+anno <- anno[anno %in% anno_select]
+
+registerDoParallel(cores=detectCores())
+acc_data <- foreach(file=files) %dopar% {
+  cell <- basename(file) %>%
+    gsub(".tsv.gz", "", .)
+  paste("zcat", file) %>%
+    fread(select=c(1:2, 5)) %>%
+    setnames("pos", "start") %>%
+    .[, end := start] %>%
+    setkey(chr, start, end) %>%
+    foverlaps(anno, nomatch=0L) %>%
+    .[, bp := opts$tile*round((i.start-mid)/opts$tile)] %>%
+    .[, .(rate=round(mean(rate*100)), .N, sample=cell), .(anno, id, bp)]
+}
+acc_data <- rbindlist(acc_data) %>%
+  setkey(anno) %>%
+  merge(tfs %>% setkey(anno))
+
+```
+
+```{r}
+
+
+setkey(rna_tf, tf, sample)
+setkey(acc_data, tf, sample)
+
+tf_cors <-  acc_data[, .(rate=mean(rate)), .(sample, tf, bp)] %>%
+  setkey(tf, sample) %>%
+  merge(rna_tf) %>%
+  setkey(sample) %>%
+  merge(meta[, .(sample, stage)] %>% setkey(sample)) %>%
+  .[, .(cor=cor(rate, exp, use="complete.obs"), .N), .(tf, bp, stage)]
+               
+map(tf_cors[, unique(tf)], ~{
+  ggplot(tf_cors[tf==.], aes(bp, cor, colour=stage)) +
+    geom_line() +
+    #facet_wrap(~tf) +
+    ggtitle(.)
+})
+
+
+```
+
+```{r}
+genes <- fread(io$gene_file) %>%
+  setnames("symbol", "gene") %>%
+  .[, c("chr", "gene") := .(gsub("chr", "", chr), toupper(gene))] %>%
+  .[, .(chr, start, end, gene)] 
+  
+
+rna <- merge(genes, rna, by="gene") %>%
+  setkey(chr, start, end)
+
+anno <- setkey(anno, chr, start, end) %>%
+  foverlaps(rna, nomatch=0L) %>%
+  .[, .(anno, id, sample, exp, gene)] %>%
+  setkey(anno, id, sample)
+
+acc_data <- setkey(acc_data, anno, id, sample) %>%
+  merge(anno) %>%
+  setkey(sample) %>%
+  merge(meta[, .(sample, stage)] %>% setkey(sample))
+
+
+gene_cors <- acc_data[, .(cor=cor(rate, exp, use="complete.obs"), .N), .(tf, bp, stage, sample)] %>%
+  .[, .(cor=mean(cor), sd=sd(cor)), .(stage, bp, tf)]
+
+map(gene_cors[, unique(tf)], ~{
+  ggplot(gene_cors[tf==.], aes(bp, cor, colour=stage, fill=stage)) +
+    geom_line() +
+    geom_ribbon(aes(ymin=cor-sd, ymax=cor+sd), alpha=0.2, colour=NA) +
+    #facet_wrap(~tf) +
+    ggtitle(.)
+})
+
+```
+
+
+

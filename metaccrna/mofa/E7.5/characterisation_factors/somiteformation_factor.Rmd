@@ -1,0 +1,147 @@
+<!-- Characterisation of the somite formation factor -->
+
+
+```{r}
+factor <- "Factor5"
+```
+
+```{r}
+opts$mesoderm.colors <- c(
+  "Ectoderm" = "steelblue",
+  "Nascent mesoderm" = "#FF82AB",
+  "Mature mesoderm" = "#CD3278",
+  "Mesoderm" = "#CD3278",
+  "Mesenchyme" = "green",
+  "Somitic mesoderm" = "blue",
+  "Endoderm" = "#43CD80"
+)
+```
+
+```{r}
+sample_metadata_filt %>%
+  .[,mesoderm_lineage:=lineage10x_2] %>%
+  # .[lineage10x_2=="Mesoderm",mesoderm_lineage:=ifelse(lineage10x%in%c("Nascent_mesoderm","Intermediate_mesoderm"),"Nascent mesoderm","Mature mesoderm")] %>%
+  .[lineage10x_2=="Mesoderm",mesoderm_lineage:=ifelse(lineage10x==c("Mesenchyme"),"Mesenchyme",mesoderm_lineage)]
+  # .[lineage10x_2=="Mesoderm",mesoderm_lineage:=ifelse(lineage10x==c("Somitic_mesoderm"),"Somitic mesoderm",mesoderm_lineage)]
+```
+
+```{r}
+p <- plotFactorBeeswarm(model, 
+  factors=factor, 
+  color_by=sample_metadata_filt$lineage10x_2,
+  shape_by=sample_metadata_filt$lineage10x_2
+) 
+p <- p + scale_shape_manual(values=c("Ectoderm"=16, "Endoderm"=16, "Mesoderm"=16))
+p <- p + scale_color_manual(values=opts$colors)
+
+p <- p + facet_wrap(~shape_by) +
+  theme(
+    # axis.text = element_blank(),
+    # axis.title = element_blank(),
+    # axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_blank(),
+    legend.position = "none"
+  )
+  
+pdf(sprintf("%s/pdf/mesoderm_patterning/beeswarmplot.pdf",io$outdir), useDingbats = F, width=6, height=4)
+print(p)
+dev.off()
+```
+
+Scatterplot
+```{r}
+p <- plotFactorScatter(model, 
+  factors=c("Factor2",factor), 
+  color_by=sample_metadata_filt$lineage10x_2
+)
+p <- p + scale_color_manual(values=opts$colors)
+
+pdf(paste0(io$outdir,"/pdf/mesoderm_patterning/scatterplot.pdf"), useDingbats = F, onefile = F, width=9, height=5)
+print(p)
+dev.off()
+```
+
+Plot loadings
+```{r}
+p <- plotWeights(model, view="RNA expression", factor=factor, abs=F, nfeatures = 15, scale=T)
+
+pdf(paste0(io$outdir,"/pdf/mesoderm_patterning/loadings.pdf"), useDingbats = F, width=6, height=3)
+print(p)
+dev.off()
+```
+
+Top weights Methylation
+```{r}
+# plotWeights(model, view="Met Gene bodies", factor="Factor 3", abs=F, nfeatures = 10, scale=T)
+```
+
+
+```{r}
+model_j <- subsetSamples(model, as.character(sample_metadata_filt[stage_lineage=="E7.5_Mesoderm",sample]))
+foo <- sample_metadata_filt %>% copy %>% setkey(sample) %>% .[MOFAtools::sampleNames(model_j)]
+```
+
+Heatmap of the data
+```{r}
+# anno_df_j <- data.frame(
+#   row.names = foo$sample,
+#   lineage = foo$lineage,
+#   factor <- getFactors(model_j,"Factor 7")
+# )
+# annotation_colors=list(
+#   lineage=opts$colors[unique(foo$stage_lineage)]
+# )
+```
+
+RNA
+```{r}
+# pdf(paste0(io$outdir,"/pdf/mesoderm_patterning/mesoderm_patterning_heatmap_rna.pdf"), useDingbats = F, onefile = F, width=7, height=4)
+# plotDataHeatmap(
+#   model_j, view="RNA expression", factor="Factor 7", features=15,
+#   cluster_rows=F, cluster_cols=T,
+#   show_rownames=F,show_colnames=T,
+#   color=colorRampPalette(brewer.pal(n = 9, name="Greens"))(100),
+#   annotation_row=anno_df_j, annotation_colors=annotation_colors
+# )
+# dev.off()
+```
+
+
+Beeswarmplot coloring by known markers
+```{r}
+markers <- c("Hoxb1","Hoxb2","Msx2", "Lhx1", "Lefty2", "Foxc2","Stra6")
+
+# all(markers%in%featureNames(model)[["RNA expression"]])
+
+for (i in markers) {
+  p <- plotFactorBeeswarm(model, 
+    factors=factor, 
+    color_by=i,
+    shape_by=sample_metadata_filt$lineage10x_2
+  ) 
+  p <- p + scale_shape_manual(values=c("Ectoderm"=16, "Endoderm"=16, "Mesoderm"=16))
+  p <- p + facet_wrap(~shape_by)
+  
+  p <- p + viridis::scale_color_viridis() +
+    theme(
+      axis.text = element_blank(),
+      # axis.title = element_blank(),
+      axis.ticks = element_blank(),
+      strip.background = element_blank(),
+      strip.text = element_blank(),
+      legend.position = "none"
+    )
+  
+  
+  pdf(sprintf("%s/pdf/mesoderm_patterning/beeswarmplot_%s.pdf",io$outdir,i), useDingbats = F, width=4, height=2.8)
+  print(p)
+  dev.off()
+}
+```
+
+```{r}
+Z <- getFactors(model, factors=factor, as.data.frame=T) %>% as.data.table %>%
+  merge(sample_metadata, by="sample")
+```
+

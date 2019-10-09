@@ -1,0 +1,199 @@
+<!-- Characterisation of the notocord formation factor -->
+
+```{r}
+factor <- "Factor4"
+```
+
+```{r}
+opts$notochord.colors <- c(
+  "Ectoderm" = "steelblue",
+  "Mesoderm" = "#CD3278",
+  "Endoderm (not notochord)" = "#43CD80",
+  "Endoderm (notochord)" = "#2E8B57"
+)
+```
+
+<!-- Parse metadaat -->
+```{r}
+sample_metadata_filt %>%
+  .[,notochord_lineage:=lineage10x_2] %>%
+  # .[,notochord_lineage:=ifelse(lineage10x_2=="Endoderm",lineage10x,lineage10x_2)]
+  .[lineage10x_2=="Endoderm",notochord_lineage:=ifelse(lineage10x=="Notochord","Endoderm (notochord)","Endoderm (not notochord)")]
+```
+
+<!-- Subset model to endoderm cells -->
+```{r}
+submodel <- subsetSamples(model, as.character(sample_metadata_filt[lineage10x_2=="Endoderm",sample]))
+subsample_metadata_filt <- sample_metadata_filt %>% copy %>% setkey(sample) %>% .[MOFA::sampleNames(submodel)]
+```
+
+<!-- Beeswarmplot -->
+```{r}
+p <- plotFactorBeeswarm(model, 
+  factors=factor, 
+  color_by=sample_metadata_filt$notochord_lineage,
+  shape_by=sample_metadata_filt$lineage10x_2
+) 
+p <- p + scale_shape_manual(values=c("Ectoderm"=16, "Endoderm"=16, "Mesoderm"=16))
+p <- p + scale_color_manual(values=opts$notochord.colors)
+
+p <- p + facet_wrap(~shape_by) +
+  theme(
+    # axis.text = element_blank(),
+    # axis.title = element_blank(),
+    # axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_blank(),
+    legend.position = "none"
+  )
+  
+pdf(sprintf("%s/pdf/notochord/beeswarmplot.pdf",io$outdir), useDingbats = F, width=6, height=3.5)
+print(p)
+dev.off()
+```
+
+
+<!-- Scatterplot -->
+```{r}
+# p <- plotFactorScatter(model, 
+#   factors=c("Factor1",factor), 
+#   color_by=sample_metadata_filt$notochord_lineage
+# ) + scale_color_manual(values=opts$notochord.colors)
+# 
+# pdf(paste0(io$outdir,"/pdf/notochord/scatterplot_notocord.pdf"), useDingbats = F, width=9, height=4)
+# print(p)
+# dev.off()
+```
+
+<!-- Scatterplot coloring by known markers -->
+```{r}
+# markers <- c("Mlf1","Ccpg1os","Calca","Aplnr")
+# markers <- c("Noto")
+# 
+# for (i in markers) {
+#   p <- plotFactorScatter(model, 
+#     factors=c("Factor1",factor), 
+#     color_by=i
+#   ) + viridis::scale_color_viridis() +
+#     theme(
+#       axis.text = element_blank(),
+#       # axis.title = element_blank(),
+#       axis.ticks = element_blank()
+#     )
+#   # + scale_color_manual(values=opts$notochord.colors)
+#   
+#   # pdf(sprintf("%s/pdf/notochord/scatterplot_notocord_%s.pdf",io$outdir,i), useDingbats = F, width=4, height=3)
+#   print(p)
+#   # dev.off()
+# }
+```
+
+Beeswarmplot coloring by known markers
+```{r}
+markers <- c("Mlf1","Ccpg1os","Calca","Aplnr")
+
+for (i in markers) {
+  p <- plotFactorBeeswarm(model, 
+    factors=factor, 
+    color_by=i,
+    shape_by=sample_metadata_filt$lineage10x_2
+  ) 
+  p <- p + scale_shape_manual(values=c("Ectoderm"=16, "Endoderm"=16, "Mesoderm"=16))
+  p <- p + facet_wrap(~shape_by)
+  
+  p <- p + viridis::scale_color_viridis() +
+    theme(
+      axis.text = element_blank(),
+      # axis.title = element_blank(),
+      axis.ticks = element_blank(),
+      strip.background = element_blank(),
+      strip.text = element_blank(),
+      legend.position = "none"
+    )
+  
+  
+  # pdf(sprintf("%s/pdf/notochord/beeswarmplot_%s.pdf",io$outdir,i), useDingbats = F, width=4, height=3)
+  print(p)
+  # dev.off()
+}
+```
+
+<!-- Impute missing observations (only for visualisation) -->
+```{r}
+model <- impute(model)
+```
+
+Top weights RNA
+```{r}
+p <- plotWeights(model, view="RNA expression", factor=factor, abs=F, nfeatures = 25, scale=T)
+
+pdf(paste0(io$outdir,"/pdf/notochord/weights_rna_f2.pdf"), useDingbats = F, onefile = F, width=6, height=3)
+print(p)
+dev.off()
+```
+
+Top weights Methylation
+```{r}
+plotWeights(model, view="Endoderm Enhancers (met)", factor=factor, abs=F, nfeatures = 15, scale=T)
+```
+
+```{r}
+w <- getWeights(model, view="Endoderm Enhancers (met)", factor=factor)[[1]][,1]
+tail(sort(abs(w)))
+# w[grep("H3K27ac_distal_E7.5_End_intersect12_1075",names(w))]
+```
+
+```{r}
+view <- "Endoderm Enhancers (met)"
+
+tmp <- "H3K27ac_distal_E7.5_End_intersect12_1024_NA"
+
+if (length(model@ImputedData)>0) {
+  met <- model@ImputedData[[view]][tmp,]
+} else {
+  met <- model@TrainData[[view]][tmp,]
+}
+# met <- model@TrainData[[view]][tmp,]
+
+met <- 100*2**met/(1+2**met) # Convert M-values to B-values
+
+p <- plotFactorBeeswarm(model, 
+  factors=factor, 
+  color_by=met,
+  shape_by=sample_metadata_filt$lineage10x_2
+) + facet_wrap(~shape_by)
+p <- p + scale_shape_manual(values=c("Ectoderm"=16, "Endoderm"=16, "Mesoderm"=16)) +
+  scale_colour_gradientn(colours = brewer.pal(9, "OrRd")) +
+  # scale_colour_gradientn(colours = brewer.pal(9, "Blues")) +
+  theme(legend.position = "none")
+
+# pdf(paste0(io$outdir,"/pdf/notochord/beeswarmplot_met.pdf"), useDingbats = F, onefile = F, width=5, height=4.5)
+print(p)
+# dev.off()
+```
+
+<!-- Heatmap of the data -->
+```{r}
+subanno_df <- data.frame(
+  row.names = subsample_metadata_filt$sample,
+  lineage = subsample_metadata_filt$notochord_lineage,
+  factor = getFactors(submodel,factor)
+)
+annotation_colors=list(
+  lineage = opts$notochord.colors[unique(subsample_metadata_filt$notochord_lineage)],
+  Factor = colorRampPalette(rev(brewer.pal(n = 7, name = "RdYlBu")))(100)
+)
+```
+
+RNA
+```{r}
+pdf(paste0(io$outdir,"/pdf/notochord/notocord_heatmap_rna.pdf"), useDingbats = F, onefile = F, width=6, height=4)
+plotDataHeatmap(
+  submodel, view="RNA expression", factor=factor, features=10,
+  cluster_rows=F, cluster_cols=T,
+  show_rownames=F,show_colnames=T,
+  color=colorRampPalette(brewer.pal(n = 9, name="Greens"))(100),
+  annotation_row=subanno_df, annotation_colors=annotation_colors, annotation_legend=F
+)
+dev.off()
+```

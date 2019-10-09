@@ -1,0 +1,196 @@
+---
+title: "Gastrulation: pseudobulked profiles of DNA methylation and chromatin accessibility"
+output: 
+  BiocStyle::html_document: 
+    fig_width: 10
+    fig_height: 8
+---
+
+```{r load_modules, echo=FALSE, include=FALSE}
+library(data.table)
+library(purrr)
+library(ggplot2)
+```
+
+<!-- Define I/O and options -->
+```{r define_options, echo=FALSE}
+source("/Users/ricard/gastrulation/metacc/profiles_neuroectoderm_enhancers/load_settings.R")
+```
+
+<!-- Load sample metadata -->
+```{r load_metadata}
+sample_metadata <- fread(io$sample.metadata) %>%
+  .[,c("sample","id_acc","id_met","id_rna","stage","lineage10x_2")] %>%
+  .[,stage_lineage:=paste(stage,lineage10x_2,sep=" ")] %>%
+  .[id_met%in%opts$met.cells | id_acc%in%opts$acc.cells]
+```
+
+<!-- Merge E5.5 and E6.5 epiblast -->
+```{r}
+# sample_metadata %>% 
+  # .[,stage_lineage:=ifelse(stage_lineage=="E5.5_Epiblast","E6.5_Epiblast",stage_lineage)]
+```
+
+<!-- (ONLY FOR TESTING) Subset cells to reduce memory burden -->
+```{r}
+# opts$ncells <- 3
+# opts$filt.cells <- sample_metadata[,head(unique(sample),n=opts$ncells),by="stage_lineage"] %>% .$V1
+# 
+# sample_metadata <- sample_metadata[sample %in% opts$filt.cells]
+# opts$met.cells <- sample_metadata$id_met
+# opts$acc.cells <- sample_metadata$id_acc
+```
+
+<!-- Load genomic contexts -->
+```{r load_data, echo=FALSE}
+source("/Users/ricard/gastrulation/metacc/pseudobulk_profiles/load_annotations.R")
+```
+
+<!-- Load data -->
+```{r load_data, echo=FALSE}
+anno_df.met <- anno_df
+anno_df.acc <- anno_df
+source("/Users/ricard/gastrulation/metacc/pseudobulk_profiles/load_data.R")
+```
+
+<!-- Merge DNA methylation and chromatin acessibility data -->
+```{r}
+data <- rbind(
+  met[,c("sample","stage","stage_lineage","id","anno","dist","rate","context")],
+  acc[,c("sample","stage","stage_lineage","id","anno","dist","rate","context")]
+)
+data[,rate:=rate*100]
+```
+
+<!-- Rename genomic contexts -->
+```{r}
+data[,anno:=stringr::str_replace_all(anno,opts$annos)]
+```
+
+```{r}
+# saveRDS(data, "/Users/ricard/data/gastrulation/metacc/profiles_neuroectoderm_enhancers/data.rds")
+data <- readRDS("/Users/ricard/data/gastrulation/metacc/profiles_neuroectoderm_enhancers/data.rds")
+```
+
+<!-- Load genome-wide global methylation and accessibility rates -->
+```{r}
+met.stats <- fread(io$met.stats) %>% .[,c("id_met","mean")] %>%
+  merge(sample_metadata[,.(sample,id_met)], by="id_met") %>% .[,context:="CG"]
+
+acc.stats <- fread(io$acc.stats) %>% .[,c("id_acc","mean")] %>%
+  merge(sample_metadata[,.(sample,id_acc)], by="id_acc") %>% .[,context:="GC"]
+
+stats <- rbind(
+  met.stats[,c("sample","mean","context")],
+  acc.stats[,c("sample","mean","context")]
+) %>% merge(sample_metadata[,c("sample","stage","stage_lineage")],by="sample") %>%
+  .[,.(mean=mean(mean)),by=c("stage_lineage","context")]
+```
+
+<!-- Split ectoderm enhancers into Midbrain or Pluripotency -->
+```{r}
+tmp <- fread(io$esc_vs_brain) %>% 
+  .[,c("chr","start","end","class","id")] %>%
+  .[,class:=stringr::str_replace_all(class,"brain","Neuroectoderm enhancers")] %>%
+  .[,class:=stringr::str_replace_all(class,"esc","Pluripotency enhancers")]
+
+data.1 <- data[anno!="Ectoderm enhancers"]
+data.2 <- data[anno=="Ectoderm enhancers"] %>% merge(tmp[,c("id","class")], by="id") %>% 
+  .[,anno:=class] %>% .[,class:=NULL]
+
+data <- rbind(data.1,data.2)
+
+rm(data.1,data.2)
+```
+
+```{r}
+data[,dist:=dist/1000]
+data[,stage_lineage:=stringr::str_replace_all(stage_lineage,"_"," ")]
+stats[,stage_lineage:=stringr::str_replace_all(stage_lineage,"_"," ")]
+```
+
+
+<!-- Plot joint methylation and accessibility profiles -->
+
+Per stage_lineage, genomic contexts side by side
+```{r}
+p_list <- list()
+
+for (i in opts$stage_lineage) {
+  print(i)
+  
+  tmp <- data[stage_lineage==i]
+  
+  p_list[[i]] <- ggplot(tmp, aes(x=dist, y=rate, group=context, fill=context, color=context)) +
+    facet_wrap(~anno, nrow=1, scales="fixed") +
+    stat_summary(geom="ribbon", fun.data="mean_se", alpha=1) +
+    stat_summary(geom="line", fun.data="mean_se") +
+    geom_hline(yintercept=stats[context=="CG" & stage_lineage==i,median(mean,na.rm=T)], color="#F37A71", linetype="dashed", alpha=0.75, size=0.75) +
+    geom_hline(yintercept=stats[context=="GC" & stage_lineage==i,median(mean,na.rm=T)], color="#00BFC4", linetype="dashed", alpha=0.75, size=0.75) +
+    labs(x="Distance from center (bp)", y="Met/Acc levels (%)") +
+    # coord_cartesian(ylim=c(0,100)) +
+    scale_x_continuous(breaks=c(-1,0,1)) +
+    xlim(-opts$window_size, opts$window_size) +
+    guides(fill=FALSE, color=FALSE, linetype=FALSE) +
+    theme_classic() +
+    theme(
+      axis.text.x = element_text(size=rel(0.8), colour="black"),
+      axis.text.y = element_text(size=rel(1.2), colour="black")
+    )
+  # print(p_list[[i]])
+
+  # pdf(file=sprintf("%s/%s.pdf",io$pdfdir,i), width=8.5, height=5)
+  # print(p_list[[i]])
+  # dev.off()
+}
+```
+
+```{r}
+p <- cowplot::plot_grid(plotlist=p_list)
+
+# pdf(file=sprintf("%s/all.pdf",io$pdfdir), width=12, height=8)
+print(p)
+# dev.off()
+```
+
+Per genomic_context, stage_lineage side by side
+```{r}
+p_list <- list()
+
+for (i in unique(data$anno)) {
+
+  p_list[[i]] <- ggplot(data[anno==i], aes(x=dist, y=rate, group=context, fill=context, color=context)) +
+    ggtitle(i) +
+    facet_wrap(~stage_lineage, nrow=1, scales="fixed") +
+    stat_summary(geom="ribbon", alpha=0.10, fun.data="mean_se") +
+    stat_summary(geom="line", fun.data="mean_se") +
+    # geom_hline(yintercept=stats[context=="CG" & stage_lineage==i,median(mean,na.rm=T)], color="#F37A71", linetype="dashed", alpha=0.75, size=0.75) +
+    # geom_hline(yintercept=stats[context=="GC" & stage_lineage==i,median(mean,na.rm=T)], color="#00BFC4", linetype="dashed", alpha=0.75, size=0.75) +
+    geom_hline(aes(yintercept = V1), data=stats[context=="GC",median(mean,na.rm=T),by="stage_lineage"], color="#00BFC4", linetype="dashed", alpha=0.75, size=0.75) +
+    geom_hline(aes(yintercept = V1), data=stats[context=="CG",median(mean,na.rm=T),by="stage_lineage"], color="#F37A71", linetype="dashed", alpha=0.75, size=0.75) +
+  labs(x="Distance from center (bp)", y="Met / Acc levels (%)") +
+    coord_cartesian(ylim=c(5,95)) +
+    scale_x_continuous(breaks=c(-1,0,1)) +
+    # xlim(-opts$window_size/1000, opts$window_size/1000) +
+    guides(fill=FALSE, color=FALSE, linetype=FALSE) +
+    theme_classic() +
+    theme(
+      axis.text.x = element_text(size=rel(0.9), colour="black"),
+      axis.text.y = element_text(size=rel(1.2), colour="black")
+    )
+  # print(p_list[[i]])
+
+  # pdf(file=sprintf("%s/%s.pdf",io$pdfdir,i), width=8.5, height=5)
+  # print(p_list[[i]])
+  # dev.off()
+}
+```
+
+```{r}
+p <- cowplot::plot_grid(plotlist=p_list, nrow=3)
+
+pdf(file=sprintf("%s/all.pdf",io$pdfdir), width=6, height=8)
+print(p)
+dev.off()
+```
+

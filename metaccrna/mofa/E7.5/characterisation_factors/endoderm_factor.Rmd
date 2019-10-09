@@ -1,0 +1,222 @@
+<!-- Characterisation of the Endoderm formation factor -->
+
+```{r}
+factor <- 1
+```
+
+```{r}
+anno_df_j <- data.frame(
+  row.names = sample_metadata_filt$sample,
+  lineage = sample_metadata_filt$lineage10x_2
+  # factor <- getFactors(model,"Factor 2")
+)
+annotation_colors=list(
+  lineage=opts$colors[unique(sample_metadata_filt$lineage10x_2)]
+)
+```
+
+Plot variance explained in each omic
+```{r}
+# foo <- fvar_mk["Factor 2",] %>% as.data.table(keep.rownames=T) %>%
+#   setnames(c("view","r2")) %>%
+#   setorder("r2") %>%
+#   .[,view:=factor(view,levels=view)]
+# 
+# p <- ggplot(foo, aes(x=view, y=r2)) +
+#   geom_bar(stat="identity", color="black", fill="grey") +
+#   theme_bw() +
+#   labs(x="", y="Variance explained by Factor 1") +
+#   theme(
+#     axis.text.x = element_text(size=rel(1.0), color="black", angle=50, vjust=1, hjust=1),
+#     axis.text.y = element_text(size=rel(1.0), color="black"),
+#     axis.title.y = element_text(size=rel(1.0), color="black")
+#   )
+# 
+# pdf(paste0(io$outdir,"/pdf/endoderm/varExplained.pdf"), width=5, height=4)
+# print(p)
+# dev.off()
+```
+
+Scatterplot
+```{r}
+p <- plotFactorScatter(model, 
+  factors=c("Factor 1","Factor 2"), 
+  color_by=as.character(sample_metadata_filt$lineage10x_2)
+) + scale_color_manual(values=opts$colors)
+p <- p + theme(legend.position = "none")
+
+# pdf(paste0(io$outdir,"/pdf/endoderm/scatterplot.pdf"), useDingbats = F, onefile = F, width=5.5, height=4.5)
+# print(p)
+# dev.off()
+```
+
+Top RNA loadings
+```{r}
+p <- plotWeights(model, view="RNA expression", factor=factor, abs=F, nfeatures = 15, scale=T)
+
+pdf(paste0(io$outdir,"/pdf/endoderm/loadings.pdf"), useDingbats = F, width=5.5, height=4)
+print(p)
+dev.off()
+```
+
+RNA heatmap
+```{r}
+pdf(paste0(io$outdir,"/pdf/endoderm/endoderm_heatmap_rna.pdf"), useDingbats = F, onefile = F, width=5.5, height=4.3)
+plotDataHeatmap(
+  model, view="RNA expression", factor="Factor 2", features=15,
+  cluster_rows=F, cluster_cols=T,
+  show_rownames=F,show_colnames=T,
+  color=colorRampPalette(brewer.pal(n = 9, name="Greens"))(100),
+  annotation_row=anno_df_j, annotation_colors=annotation_colors,
+  legend=F, annotation_legend=F
+)
+dev.off()
+```
+
+Top Methylation loadings
+```{r}
+# p <- plotWeights(model, 
+#   view="Endoderm Enhancers (met)",
+#   # view="Ectoderm Enhancers (met)", 
+#   factor="Factor 2", 
+#   nfeatures=5,
+#   abs=F, scale=F
+# )
+# # pdf(paste0(io$outdir,"/pdf/endoderm/weights_met.pdf"), useDingbats=F, width=6, height=3.5)
+# print(p)
+# # dev.off()
+```
+
+Methylation heatmap
+```{r}
+# pdf(paste0(io$outdir,"/pdf/endoderm/endoderm_heatmap_met.pdf"), useDingbats = F, onefile = F, width=6, height=4)
+# plotDataHeatmap(
+#   model_imputed, view="Met End H3K27ac", factor="Factor 2", features=25,
+#   cluster_rows=F, cluster_cols=T,
+#   show_rownames=F, show_colnames=F,
+#   color=colorRampPalette(brewer.pal(n = 9, name="OrRd"))(100),
+#   annotation_row=anno_df_j, annotation_colors=annotation_colors,
+#   imputed = T
+# )
+# dev.off()
+```
+
+Accessibility heatmap
+```{r}
+# pdf(paste0(io$outdir,"/pdf/endoderm/endoderm_heatmap_acc.pdf"), useDingbats = F, onefile = F, width=6, height=4)
+# plotDataHeatmap(
+#   model_imputed, view="Acc End H3K27ac", factor="Factor 2", features=50,
+#   cluster_rows=F, cluster_cols=T,
+#   show_rownames=F, show_colnames=F,
+#   color = colorRampPalette(rev(brewer.pal(n = 7, name="Blues")))(50),
+#   annotation_row=anno_df_j, annotation_colors=annotation_colors,
+#   imputed = T
+# )
+# dev.off()
+```
+
+Scatterplot with gene expression markers
+```{r}
+# p <- plotFactorScatter(model,
+#   factors=c("Factor 2","Factor 1"),
+#   color_by="Cer1"
+# )
+# p <- p + scale_colour_gradientn(colours=brewer.pal(n = 5, name="Greens"))
+# 
+# pdf(paste0(io$outdir,"/pdf/endoderm/endoderm_scatterplot_Cer1.pdf"), useDingbats = F, onefile = F, width=5, height=3.5)
+# print(p)
+# dev.off()
+```
+
+<!-- Impute missing observations (only for visualisation) -->
+```{r}
+model <- impute(model)
+```
+
+<!-- Scatterplot with mean chromatin accessibility levels -->
+```{r}
+view <- "Endoderm Enhancers (acc)"
+
+tmp <- names(tail(sort(abs(getWeights(model, views=view, factor=factor)[[1]][,1])), n=50))
+if (length(model@ImputedData)>0) {
+  acc <- colMeans(model@ImputedData[[view]][tmp,], na.rm=T)
+} else {
+  acc <- colMeans(model@TrainData[[view]][tmp,], na.rm=T)
+}
+
+acc <- 100*2**acc/(1+2**acc) # Convert M-values to B-values
+
+p <- plotFactorScatter(model, factors=c("Factor2","Factor1"), color_by=acc, showMissing=F) +
+  scale_colour_gradientn(colours = rev(brewer.pal(9, "Blues"))) +
+  theme(legend.position = "none")
+
+pdf(paste0(io$outdir,"/pdf/endoderm/scatterplot_acc.pdf"), useDingbats = F, onefile = F, width=5, height=4.5)
+print(p)
+dev.off()
+```
+
+<!-- Scatterplot with mean DNA methylation levels -->
+```{r}
+view <- "Endoderm Enhancers (met)"
+
+tmp <- names(tail(sort(abs(getWeights(model, views=view, factor=factor)[[1]][,1])), n=50))
+if (length(model@ImputedData)>0) {
+  met <- colMeans(model@ImputedData[[view]][tmp,], na.rm=T)
+} else {
+  met <- colMeans(model@TrainData[[view]][tmp,], na.rm=T)
+}
+
+met <- 100*2**met/(1+2**met) # Convert M-values to B-values
+
+p <- plotFactorScatter(model, factors=c("Factor2","Factor1"), color_by=met, showMissing=F) +
+  scale_colour_gradientn(colours = brewer.pal(9, "OrRd")) +
+  theme(legend.position = "none")
+
+pdf(paste0(io$outdir,"/pdf/endoderm/scatterplot_met.pdf"), useDingbats = F, onefile = F, width=5, height=4.5)
+print(p)
+dev.off()
+```
+
+STOP
+
+
+
+
+
+Scatterplot with chromatin accessibility levels
+```{r}
+# Select top enhancers with highest loading
+tmp <- names(tail(sort(abs(getWeights(model, views="Endoderm Enhancers (acc)", factor="Factor 2")[[1]][,1])), n=100))
+acc <- colMeans(model@ImputedData$`Endoderm Enhancers (acc)`[tmp,], na.rm=T)
+
+
+
+p <- plotFactorScatter(model, factors=c("Factor 1","Factor 2"), color_by=acc, showMissing=F) +
+  scale_colour_gradientn(colours = rev(brewer.pal(9, "Blues")))
+
+pdf(paste0(io$outdir,"/pdf/endoderm/endoderm_scatterplot_acc.pdf"), useDingbats = F, onefile = F, width=5, height=3.5)
+print(p)
+dev.off()
+```
+
+Scatterplot with mean DNA methylation levels
+```{r}
+view <- "Endoderm Enhancers (met)"
+
+tmp <- names(tail(sort(abs(getWeights(model, views=view, factor="Factor 2")[[1]][,1])), n=100))
+# met <- colMeans(model@TrainData[[view]][tmp,], na.rm=T)
+met <- colMeans(model@ImputedData[[view]][tmp,])
+
+min_met <- (-1.5)
+max_met <- 4.5
+met[met<(min_met)] <- min_met
+met[met>(max_met)] <- max_met
+
+p <- plotFactorScatter(model, factors=c("Factor 1","Factor 2"), color_by=met, showMissing=T) +
+  scale_colour_gradientn(colours = brewer.pal(9, "OrRd"))
+
+pdf(paste0(io$outdir,"/pdf/endoderm/endoderm_scatterplot_met.pdf"), useDingbats = F, onefile = F, width=5, height=3.5)
+print(p)
+dev.off()
+```
+

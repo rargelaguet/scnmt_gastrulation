@@ -1,0 +1,1 @@
+rmarkdown::render('mofa.Rmd', output_format='BiocStyle::html_document')

@@ -1,0 +1,274 @@
+---
+title: 'QC: sequencing depth'
+author: "Stephen Clark"
+date: "04/23/2019"
+output: html_document
+---
+
+```{r}
+library(data.table)
+library(purrr)
+library(SingleCellExperiment)
+library(ggplot2)
+library(cowplot)
+library(ggpubr)
+
+io <- list()
+io$data_dir <- "/bi/scratch/Stephen_Clark/gastrulation_data"
+io$sample_meta <-  paste0(io$data_dir, "/sample_metadata.txt")
+io$raw_met <- paste0(io$data_dir, "/met/raw/scNMT")
+io$raw_acc <- paste0(io$data_dir, "/acc/raw/scNMT")
+io$rna_sce <- paste0(io$data_dir, "/rna/parsed/SingleCellExperiment.rds")
+io$bismark_reports <- paste0(io$data_dir, "/metacc/bismark_reports")
+io$file_name_key <- "/bi/scratch/Stephen_Clark/gastrulation_geo/april_2019/bs_files.tsv"
+io$rna_sierra <- c(4165:4167, 4363, 4648, 4682, 4738, 4741, 4753)
+io$rna_stats <- "/bi/scratch/Stephen_Clark/gastrulation_data/rna/stats/out/rna_stats.txt"
+io$rna_counts <- "/bi/scratch/Stephen_Clark/gastrulation_data/rna/counts/counts.txt.gz"
+
+io$outdir <- paste0(io$data_dir, "/metaccrna/QC")
+
+dir.create(io$outdir, recursive = TRUE)
+```
+
+```{r functions}
+
+find_cell_name <- function(filename){
+  sp <- strsplit(filename, "_")
+  end <- map_int(sp, ~grep("L00", .))
+  map2(sp, end,  ~.x[3:(.y-1)]) %>%
+    map(paste, collapse = "_") %>%
+    gsub("E4_5", "E4.5", .) %>%
+    gsub("E5_5", "E5.5", .) %>%
+    gsub("E6_5", "E6.5", .) %>%
+    gsub("E6_75", "E6.75", .) %>%
+    gsub("E7_5", "E7.5", .) %>%
+    gsub("_cell_[0-9]+", "", .) 
+}
+
+
+
+fread_gz <- function(filename, ...){
+  f <- file(filename)
+  type <- summary(f)$class
+  close.connection(f)
+  if (type == "gzfile") {
+    filename <- paste("zcat", filename)
+    return(fread(cmd = filename, ...))
+  }
+  fread(filename, ...)
+}
+
+# count_rows <- function(file){
+#   system(paste("wc -l", file))
+# }
+
+count_rows <- function(file){
+  fread_gz(file, select = 1) %>%
+    .[,.N]
+}
+
+fwrite_tsv <- partial(fwrite, sep = "\t", na = "NA")
+
+```
+
+
+```{r}
+meta <- fread(io$sample_meta) %>%
+  .[, .(sample, id_rna, plate, stage, pass_rnaQC, pass_accQC, pass_metQC)]
+
+bs_files <- fread(io$file_name_key) %>%
+  setnames(c("sample", "sierra_loc", "id_met")) %>%
+  merge(meta, by = "sample")
+
+
+total_reads <- map(bs_files[, unique(sierra_loc)], ~{
+  tr_files <- strsplit(., "_") %>% 
+    map_chr(~paste0(.[1], "_", .[2])) %>%
+    dir("/bi/sequencing", pattern = ., full = TRUE) %>%
+    dir(pattern = "_trimming_report.txt", recursive = TRUE, full = TRUE)
+  
+  map(tr_files, ~{
+    tr <- readLines(.)
+    raw <- tr[tr %like% "Total reads processed"] %>%
+      .[1] %>%
+      strsplit(" ") %>%
+      unlist() %>%
+      gsub(",", "", .) %>%
+      as.numeric() %>%
+      .[!is.na(.)] %>%
+      .[1]
+
+    id_met <- tr[tr %like% "Input filename"] %>%
+      .[1] %>%
+      gsub("Input filename: ", "", .) %>%
+      gsub("_L001.*", "", .)
+    
+    data.table(id_met = id_met, raw_reads_bs = raw)
+
+  }) %>%
+    rbindlist()
+}) %>%
+  rbindlist() %>%
+  .[, read := c("raw_bs_r1", "raw_bs_r2")] %>%
+  dcast(id_met ~ read, value.var = "raw_reads_bs")
+
+
+
+bismark <- dir(io$bismark_reports, full = TRUE, pattern = ".txt$") %>%
+  map(fread) %>%
+  rbindlist() %>%
+  setnames(colnames(.), make.names(colnames(.)) %>% tolower() %>% gsub("\\.", "_", .) %>% gsub("__", "_", .) %>% gsub("_$", "", .)) %>%
+  .[, id_met := gsub("_L001.*", "", file)] %>%
+#   .[, sample := find_cell_name(file)] %>%
+  .[, map(.SD, sum), id_met, .SDcol = c("total_reads", "aligned_reads", "unique_reads_remaining", "methylated_cpgs", "unmethylated_cpgs")] %>%
+  .[, mapping_rate := aligned_reads / total_reads] %>%
+  .[, deduplicated_mapping_rate := unique_reads_remaining / total_reads] %>%
+  .[, n_cpgs_bismark := methylated_cpgs + unmethylated_cpgs]
+
+
+walk(list(bs_files, bismark), setkey, id_met)
+bs_files[!bismark]
+bismark[!bs_files]
+
+
+(seq_meta <- merge(bs_files, bismark, by = "id_met"))
+
+
+
+# now add in CpG / GpC coverage per cell
+
+met_files <- dir(io$raw_met, full = TRUE, recursive = TRUE, pattern = ".tsv.gz$") %>%
+  as.data.table() %>%
+  setnames("met_file") %>%
+  .[, sample := basename(met_file) %>% gsub(".tsv.gz", "", .)] %>%
+  .[, met_coverage := map_int(met_file, count_rows)]
+
+acc_files <- dir(io$raw_acc, full = TRUE, recursive = TRUE, pattern = ".tsv.gz$") %>%
+  as.data.table() %>%
+  setnames("acc_file") %>%
+  .[, sample := basename(acc_file) %>% gsub(".tsv.gz", "", .)] %>%
+  .[, acc_coverage := map_int(acc_file, count_rows)]
+
+
+merged <- purrr::reduce(list(seq_meta,
+                             met_files[, .(sample, met_coverage)],
+                             acc_files[, .(sample, acc_coverage)]),
+                        merge, by = "sample", all = TRUE)
+
+
+
+out_file <- paste0(io$bismark_reports, "/sequencing_filenames_and_QC.tsv")
+fwrite(merged, out_file, sep = "\t", na = "NA")
+
+bs_stats_table <- merge(merged, total_reads, by = "id_met")
+
+out_file <- paste0(io$outdir, "/bs_sequencing_stats.tsv")
+fwrite_tsv(bs_stats_table, out_file)
+```
+
+
+```{r RNA}
+
+
+# now add RNAseq QC
+
+
+
+rna_qc <- paste0("Sample_", io$rna_sierra) %>%
+  map_chr(~dir("/bi/sequencing", pattern = ., full = TRUE)) %>%
+  dir(pattern = "clusterFlow.txt", recursive = TRUE, full = TRUE) %>%
+  map(~{
+    cf <- readLines(.)
+    raw <- cf[cf %like% "Total reads processed"] %>%
+      .[1] %>%
+      strsplit(" ") %>%
+      unlist() %>%
+      gsub(",", "", .) %>%
+      as.numeric() %>%
+      .[!is.na(.)] %>%
+      .[1]
+    
+    #cf[cf %like% "Total number of sequences analysed:"]
+    
+    aligned <- cf[cf %like% "aligned concordantly exactly 1 time"]%>%
+      .[1] %>%
+      strsplit(" ") %>%
+      unlist() %>%
+      gsub(",", "", .) %>%
+      as.numeric() %>%
+      .[!is.na(.)] %>%
+      .[1]
+    
+    if (is.na(aligned)) {
+      aligned <- cf[cf %like% "aligned exactly 1 time"]%>%
+      .[1] %>%
+      strsplit(" ") %>%
+      unlist() %>%
+      gsub(",", "", .) %>%
+      as.numeric() %>%
+      .[!is.na(.)] %>%
+      .[1]
+    }
+    
+    id_rna <- cf[cf %like% "Run File"] %>%
+      .[1] %>%
+      gsub("\t|Run File:", "", .) %>%
+      gsub("_L001.*", "", .)
+    
+    data.table(id_rna = id_rna, raw_rna_reads = raw, aligned_rna_reads = aligned)
+
+  }) %>%
+  rbindlist() %>%
+  .[, sample := id_rna  %>% 
+      gsub("E7_5", "E7.5", .) %>% 
+      gsub("E6_5", "E6.5", .) %>% 
+      gsub("E5_5", "E5.5", .) %>% 
+      gsub("E4_5", "E4.5", .) %>% 
+      gsub("E7_5", "E7.5", .) ]
+
+# rna_stats <- readRDS(io$rna_sce) %>%
+#   colData() %>%
+#   as.data.frame() %>%
+#   setDT()
+
+rna_stats <- fread_gz(io$rna_counts) %>%
+  melt(id.vars = "ens_id", value.name = "counts", variable.name = "id_rna") %>%
+  .[, .(total_counts = sum(counts),
+        num_genes = sum(counts>0)), id_rna] %>%
+  merge(meta[, .(sample, id_rna, stage, pass_rnaQC)], by = "id_rna") %>%
+  .[, id_rna := gsub("_L001.*", "", id_rna)]
+
+  
+ggplot(rna_stats, aes(stage, total_counts, fill = stage)) +
+  geom_boxplot()
+
+p <- ggplot(rna_stats_table[pass_rnaQC==TRUE], aes(total_counts, num_genes)) +
+  geom_point(alpha = 1, colour = "#3CB54E") +
+  facet_wrap(~stage, nrow=1) +
+#   theme(strip.background = element_rect(fill = NA)) +
+  geom_smooth(method = "lm", colour = "black", fill = "#3CB54E", size = 0.5, alpha = 0.5) +
+  stat_cor(method = "pearson") +
+  scale_x_log10() +
+  labs(x = "RNA-seq read depth", y = "Number of genes detected")
+
+p
+save_plot(paste0(io$outdir, "/rna_reads_vs_genes.pdf"), p, base_width = 14)
+# rna_stats[, log2_total_counts := log2(total_counts)]
+# 
+# ggscatter(rna_stats_table[pass_rnaQC == TRUE], 
+#           x = "log2_total_counts", 
+#           y = "num_genes",
+#           color = "#3CB54E",
+#           add = "reg.line") +
+#   stat_cor(method = "pearson")
+
+rna_stats_table <- merge(rna_stats, rna_qc[, .(id_rna, raw_rna_reads, aligned_rna_reads)], by = "id_rna", all = TRUE)
+
+
+out_file <- paste0(io$outdir, "/rna_sequencing_stats.tsv")
+fwrite_tsv(rna_stats_table, out_file)
+
+```
+
+
+

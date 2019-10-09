@@ -1,0 +1,135 @@
+
+```{r}
+factor <- "Factor6"
+```
+
+Load cell cycle information
+```{r}
+cell.cycle <- fread("/Users/ricard/gastrulation/rna/cell_cycle/out/cell_cycle.txt") %>%
+  merge(sample_metadata[,c("sample","id_rna")], by="id_rna")
+
+opts$cellcycle.colors <- c(
+  "G1S" = "#00AFBB",
+  "G2M" ="#E7B800"
+)
+```
+
+
+<!-- Characterisation of the cell cycle factor -->
+
+```{r}
+anno_df <- data.frame(
+  row.names = sample_metadata_filt$sample, 
+  lineage = sample_metadata_filt$lineage10x_2,
+  factor = getFactors(model,factor)
+)
+annotation_colors=list(
+  lineage=opts$colors[unique(sample_metadata_filt$lineage10x_2)]
+)
+```
+
+
+Beeswarmplot
+```{r}
+p <- plotFactorBeeswarm(model, 
+  factors=c(factor), 
+  color_by=as.character(sample_metadata_filt$lineage10x_2)
+) + scale_color_manual(values=opts$colors) + facet_wrap(~color_by, scales="fixed")
+
+p <- p + theme(
+  axis.text = element_text(size=rel(0.5)),
+  axis.ticks = element_line(size=rel(0.5)),
+  legend.position = "none",
+  strip.background = element_blank(),
+  strip.text = element_text(size=rel(1.2), color="black")
+)
+
+pdf(paste0(io$outdir,"/pdf/cell_cycle/beeswarmplot_cellcycle.pdf"), useDingbats = F, width=6, height=5)
+print(p)
+dev.off()
+```
+
+Plot top weights
+```{r}
+p <- plotWeights(model, view="RNA expression", factor=factor, abs=F, nfeatures = 15, scale=T)
+
+pdf(paste0(io$outdir,"/pdf/weights_rna.pdf"), useDingbats = F, onefile = F, width=6, height=3)
+print(p)
+dev.off()
+```
+
+Plot GO enrichment
+```{r}
+pdf(paste0(io$outdir,"/pdf/cell_cycle/cellcycle_GO.pdf"), useDingbats = F, onefile = F, width=8, height=4)
+plotEnrichment(model, fsea.out, factor = factor, max.pathways = 12)
+dev.off()
+```
+
+RNA heatmap
+```{r}
+pdf(paste0(io$outdir,"/pdf/cell_cycle/cellcycle_heatmap_rna.pdf"), useDingbats = F, onefile = F, width=6, height=4)
+plotDataHeatmap(
+  model, view="RNA expression", factor="Factor 5", features=15,
+  cluster_rows=F, cluster_cols=T,
+  show_rownames=F,show_colnames=T,
+  color=colorRampPalette(brewer.pal(n = 9, name="Greens"))(100),
+  annotation_row=anno_df, annotation_colors=annotation_colors
+)
+dev.off()
+```
+
+
+<!-- Correlate cell cycle factors with lineaging factors -->
+
+```{r}
+Z <- getFactors(model, factors=c(1,2,6), as.data.frame=F) %>% as.data.frame %>% 
+  tibble::rownames_to_column("sample") %>% as.data.table %>%
+  merge(sample_metadata, by="sample") %>%
+  merge(cell.cycle, by="id_rna", all.x=T)
+```
+
+```{r}
+p <- ggplot(Z[phase2!="unknown"], aes_string(y=factor, x="lineage10x_2", color="phase2")) +
+  facet_wrap(~lineage10x_2, scales="free_x") +
+  ggbeeswarm::geom_quasirandom() +
+  # labs(x="Factor 2", y="Factor 6") +
+  scale_colour_manual(values=opts$cellcycle.colors) +
+  theme_classic() +
+  theme(
+    axis.title = element_text(size=rel(1.2)),
+    strip.background = element_blank(),
+    strip.text = element_blank(),
+    legend.position = "right"
+  )
+
+pdf(paste0(io$outdir,"/pdf/cell_cycle/cellcycle_beeswarmplot.pdf"), useDingbats = F, onefile = F, width=8, height=4)
+p
+dev.off()
+```
+
+```{r}
+Z <- getFactors(model, factors=c(1,2,6), as.data.frame=F) %>% as.data.frame %>% 
+  tibble::rownames_to_column("sample") %>% as.data.table %>%
+  merge(sample_metadata, by="sample") %>%
+  merge(cell.cycle, by="sample", all.x=T)
+
+p <- ggscatter(Z, x="Factor1", y=factor, color="lineage10x_2", shape="phase2",
+add="reg.line", add.params = list(color="black", fill="lightgray"), conf.int=TRUE) +
+# stat_cor(method = "pearson", label.x = 2.2, label.y = 2.2) +
+stat_cor(method = "pearson", label.x = 0.85, label.y = 2.6) +
+labs(x="Factor 1", y="Factor 6") +
+scale_colour_manual(values=opts$colors) +
+theme(
+  axis.title = element_text(size=rel(1.2)),
+  legend.position = "right"
+)
+
+pdf(paste0(io$outdir,"/pdf/cell_cycle/cellcycle_scatterplot_Factor1.pdf"), useDingbats = F, onefile = F, width=8, height=4)
+p
+dev.off()
+```
+
+```{r}
+plotFactorCor(model)
+```
+

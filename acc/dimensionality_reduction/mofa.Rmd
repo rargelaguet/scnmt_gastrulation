@@ -1,0 +1,261 @@
+---
+title: "Gastrulation: dimensionality reduction on accessibility data using MOFA"
+output:
+  BiocStyle::html_document: 
+    fig_width: 10
+    fig_height: 8
+---
+
+```{r load_modules, echo=FALSE, include=FALSE}
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(ggpubr) 
+library(RColorBrewer)
+library(MOFA)
+library(umap)
+library(Rtsne)
+```
+
+```{r define_opts, echo=FALSE, include=FALSE}
+if (grepl("ricard",Sys.info()['nodename'])) {
+  source("/Users/ricard/gastrulation/acc/dimensionality_reduction/load_settings.R")
+} else {
+  source("/homes/ricard/gastrulation/acc/dimensionality_reduction/load_settings.R")
+}
+```
+
+<!-- Load accessibility data -->
+```{r}
+if (grepl("tmp",io$data.dir)) {
+  acc_dt <- lapply(names(opts$annos), function(n)
+    lapply(opts$cells, function(i)
+      fread(cmd=sprintf("zcat < %s/%s_%s.gz",io$data.dir,i,n), stringsAsFactors=T, showProgress=F, select=c(1,2,3,5,6)) %>% 
+         setnames(c("id_acc","id","anno","N","rate")) %>% .[N>=opts$min.GpCs] %>% .[,N:=NULL]) %>% rbindlist
+  ) %>% rbindlist
+} else {
+  acc_dt <- lapply(names(opts$annos), function(n) 
+    fread(cmd=sprintf("zcat < %s/%s.tsv.gz",io$data.dir,n), stringsAsFactors=T, showProgress=F, select=c(1,2,3,5,6)) %>% 
+      setnames(c("id_acc","id","anno","N","rate")) %>% .[N>=opts$min.GpCs] %>% .[,N:=NULL]
+    ) %>% rbindlist 
+}
+```
+
+<!-- Merge accessibility data with sample metadata -->
+```{r}
+acc_dt <- acc_dt %>% merge(sample_metadata, by="id_acc") %>% droplevels()
+```
+
+<!-- Calculate M value from Beta value -->
+```{r}
+acc_dt[,m:=log2(((rate/100)+0.01)/(1-(rate/100)+0.01))]
+```
+
+<!-- Filter data -->
+```{r}
+# Filter features by minimum number of GpC sites
+acc_dt <- acc_dt
+
+# Filter features by coverage
+nsamples <- length(unique(acc_dt$id_acc))
+acc_dt <- acc_dt[,cov:=.N/nsamples,by=c("id","anno")] %>% .[cov>=opts$min.coverage] %>% .[,c("cov"):=NULL]
+```
+
+<!-- Regress out covariates -->
+Global accessibility rate
+```{r}
+foo <- acc_dt[,.(mean=mean(m)),by=c("id_acc","anno")]
+acc_dt <- acc_dt %>% merge(foo, by=c("id_acc","anno")) %>%
+  .[,m:=mean(m)+lm(formula=m~mean)[["residuals"]], by=c("id","anno","stage_lineage")] %>%
+  .[,mean:=NULL]
+```
+
+<!-- Filter data -->
+```{r}
+# Filter features by variance
+keep_hv_sites <- acc_dt %>% split(.$anno) %>% map(~ .[,.(var = var(rate)), by="id"] %>% .[var>0] %>% setorder(-var) %>% head(n=opts$nfeatures) %>% .$id)
+acc_dt <- acc_dt %>% split(.$anno) %>% map2(.,names(.), function(x,y) x[id %in% keep_hv_sites[[y]]]) %>% rbindlist
+```
+
+<!-- Create matrix from the data.table -->
+```{r}
+dmatrix_list <- acc_dt %>% split(.$anno) %>% 
+  map(~
+    dcast(.[,c("id_acc","id","m")], formula=id_acc~id, value.var="m") %>% as.data.frame %>% 
+      tibble::column_to_rownames("id_acc") %>% as.matrix %>% t
+     )
+lapply(dmatrix_list,dim)
+```
+
+<!-- Fit MOFA model -->
+```{r, echo=FALSE}
+MOFAobject <- createMOFAobject(dmatrix_list)
+
+# Set options
+ModelOptions <- getDefaultModelOptions(MOFAobject)
+ModelOptions$numFactors <- 5
+
+TrainOptions <- getDefaultTrainOptions()
+TrainOptions$maxiter <- 1000
+TrainOptions$tolerance <- 0.10
+TrainOptions$DropFactorThreshold <- 0.00
+TrainOptions$seed <- 42
+
+# Prepare
+MOFAmodel <- prepareMOFA(
+  MOFAobject,
+  ModelOptions = ModelOptions, 
+  TrainOptions = TrainOptions
+)
+
+# Train the model
+model <- runMOFA(MOFAmodel, io$outfile)
+```
+
+```{r}
+stop()
+```
+
+<!-- Load pretrained model -->
+```{r}
+model <- loadModel(io$outfile)
+```
+
+```{r}
+sample_metadata_filt <- sample_metadata %>% setkey(id_acc) %>% 
+  .[MOFA::sampleNames(model)] %>%
+  .[,stage_lineage:=stringr::str_replace_all(stage_lineage, "_"," ")]
+```
+
+<!-- Classify cells as embryonic or extra-embryonic -->
+```{r}
+ExE <- c("Visceral_endoderm","Primitive_endoderm")
+sample_metadata_filt %>%
+  .[,embryonic:=ifelse(lineage10x_2%in%ExE,"ExE","Embryonic")]
+```
+
+```{r}
+r2 <- calculateVarianceExplained(model)$R2PerFactor
+```
+
+```{r}
+# plotVarianceExplained(model)
+```
+
+<!-- Rotate a factor -->
+```{r}
+# model@Expectations$Z[,1] <- -model@Expectations$Z[,1]
+```
+
+<!-- Plot combinations of Factors -->
+```{r}
+p <- plotFactorScatter(
+  model, 
+  factors=c(1,2),
+  color_by=sample_metadata_filt$lineage10x_2
+)
+
+p <- p + 
+  scale_colour_manual(values=opts$colors) +
+  labs(x=sprintf("Factor 1 (%.2f%%)",r2["LF1",]*100), y=sprintf("Factor 2 (%.2f%%)",r2["LF2",]*100)) +
+  theme(
+    axis.title = element_text(size=rel(1.2)),
+    legend.position = "none"
+    # legend.position = "top",
+    # legend.direction = "horizontal"
+  )
+
+pdf(sprintf("%s/pdf/mofa_acc_%s_%s.pdf",io$outdir,paste(names(opts$annos), collapse="_"), paste(opts$stage_lineage, collapse="_")), useDingbats = F, width=6, height=6)
+print(p)
+dev.off()
+```
+
+<!-- Non-linear dimensionality reduction from MOFA factors -->
+```{r}
+# Define settings
+algorithms <- c("umap")
+
+# Fetch factors
+Z <- getFactors(model)
+
+for (algorithm in algorithms) {
+
+  set.seed(1)
+  if (algorithm=="tsne") {
+    tsne <- Rtsne::Rtsne(Z, check_duplicates=FALSE, pca=FALSE, theta=0.5, dims=2)
+    Z.out <- tsne$Y
+  } else if (algorithm=="umap") {
+    umap.defaults$n_neighbors <- 20
+    umap.defaults$min_dist <- 0.7
+    umap.out <- umap(Z, config = umap.defaults)
+    Z.out <- umap.out$layout
+  }
+
+  to.plot <- Z.out %>% as.data.table %>% .[,id_acc:=rownames(Z)] %>%
+      merge(sample_metadata, by="id_acc")
+
+  p <- ggplot(to.plot, aes(x=V1, y=V2, color=lineage10x_2)) +
+    geom_point(alpha=1.0, size=1.25) +
+    scale_color_manual(values=opts$colors) +
+    guides(colour = guide_legend(override.aes = list(size=3))) +
+    labs(x="Dimension 1", y="Dimension 2") +
+    theme_classic() +
+    theme(
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      legend.position = "none"
+    )
+
+pdf(sprintf("%s/pdf/mofa+umap_acc_%s_%s.pdf",io$outdir,paste(names(opts$annos), collapse="_"), paste(opts$stage_lineage10x, collapse="_")), useDingbats = F, onefile = F, width=6, height=6)
+print(p)
+dev.off()
+}
+```
+
+
+
+<!-- Correlate Factor 1 with global accessiblity differences -->
+```{r}
+# foo <- fread(io$acc.stats) %>% .[,c("id_acc","mean")] %>% 
+#   merge(sample_metadata_filt, by="id_acc") %>%
+#   setnames("id_acc","sample") %>%# .[,mean:=100*mean] %>%
+#   setkey(sample) %>% .[MOFA::sampleNames(model)] 
+# 
+# Z <- getFactors(model, 1, as.data.frame=T) %>% 
+#   as.data.table %>% merge(foo, by="sample") 
+# 
+#  p <- ggscatter(Z, x="value", y="mean", color="embryonic",
+#   add="reg.line", add.params = list(color="black", fill="lightgray"), conf.int=TRUE) +
+#   stat_cor(method = "pearson", label.x = 1.5, label.y = 40) +
+#   labs(x="Factor 1", y="Global accessibility rate") +
+#   scale_colour_manual(values=opts$colors) +
+#   theme(
+#     axis.title = element_text(size=rel(1.2)),
+#     legend.position = "none"
+#   )
+#  
+# pdf(sprintf("%s/pdf/mofa_acc_CORRELATION.pdf",io$outdir), useDingbats = F, width=6, height=6)
+# print(p)
+# dev.off()
+```
+
+```{r}
+# p <- plotFactorScatter(
+#   model, 
+#   factors=c("LF1","LF2"), 
+#   color_by=foo$mean
+# )
+# 
+# p <- p + 
+#   scale_colour_gradientn(colours = brewer.pal(9, "Blues")) +
+#   labs(x=sprintf("Factor 1 (%.2f%%)",r2["LF1",]*100), y=sprintf("Factor 2 (%.2f%%)",r2["LF2",]*100)) +
+#   theme(
+#     axis.title = element_text(size=rel(1.2)),
+#     legend.position = "none"
+#   )
+# 
+# pdf(sprintf("%s/pdf/mofa_acc_COLORBYMEAN.pdf",io$outdir), useDingbats = F, width=6, height=6)
+# print(p)
+# dev.off()
+```
+

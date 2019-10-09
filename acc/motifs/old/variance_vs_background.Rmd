@@ -1,0 +1,104 @@
+---
+title: "Variance versus background"
+author: "Stephen Clark"
+date: "05/14/2018"
+output: html_document
+---
+
+```{r load_modules, echo=FALSE, include=FALSE}
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(cowplot)
+
+source("/bi/group/reik/Stephen/gastrulation/fread_gz.R")
+```
+
+```{r}
+io <- list()
+io$data_dir <- "/bi/scratch/Stephen_Clark/gastrulation_data"
+io$base_dir <- "/bi/group/reik/Stephen/github/gastrulation"
+io$sample_meta <- paste0(io$data_dir, "/sample_metadata.txt")
+io$anno_dir <- paste0(io$data_dir, "/features/sjc/motifs/motifdb/filt")
+io$parsed_acc <- paste0(io$data_dir, "/acc/parsed/motifs")
+io$raw_acc <- paste0(io$data_dir, "/acc/raw")
+io$out_dir <- paste0(io$base_dir, "/acc/motifs/out")
+
+opts <- list()
+opts$min_weight <- 5 
+opts$stages <- c("E4.5", "E5.5", "E6.5_late", "E6.75", "E7.5")
+opts$lineages <- "all" # either "all" or vector of lineages
+opts$KO_3b <- c("not")
+
+
+```
+
+```{r}
+meta <- fread(io$sample_meta) %>%
+  .[pass_accQC==TRUE & stage %in% opts$stages & KO_3b %in% opts$KO_3b]
+
+if (opts$lineages != "all") meta <- meta[lineage %in% opts$lineages]
+
+opts$cells <- meta[, id_acc]
+
+acc_var <- dir(io$parsed_acc, full=TRUE, pattern=".tsv.gz") %>% 
+  # filter for small file size (some annotations contain zero data)
+  .[file.size(.)>100] %>%
+  paste("zcat", .) %>%
+   # map(~fread(.) %>% .[, .(var=wtd.var(rate, weight), type="tfs"), .(id, anno)]
+  map(~fread(.) %>% 
+        setnames(c("sample", "id", "anno", "rate", "met_reads", "weight")) %>%
+        .[sample %in% opts$cells & weight>=opts$min_weight, .(var=var(rate, na.rm=TRUE), 
+                                                               mean=mean(rate, na.rm=TRUE),
+                                                              .N,
+                                                              type="tfs"), .(id, anno)]
+    ) %>%
+  rbindlist()
+
+# all loci are 100bp in size so background should be x sites of 100bp
+
+background_anno <- dir(io$anno_dir, full=TRUE, pattern=".bed") %>% 
+  map(fread) %>%
+  rbindlist() %>% 
+  setkey(id, anno) %>%
+  .[acc_var[, .(id)]] %>%
+  .[, c("min", "max") := .(min(start), max(end)), chr] %>% 
+  .[, .(start = runif(1, min, max)), .(id, anno, chr)] %>% 
+  .[, end := start+100]
+
+acc_files <- dir(io$raw_acc, full=TRUE, pattern=".tsv.gz") 
+
+back_var <- map(opts$cells, ~{
+  cell <- .
+  print(cell)
+  file <- paste0(cell, ".tsv.gz")
+  file <- acc_files[grep(file, acc_files)] %>% paste("zcat", .)
+  dt=fread(file) %>% 
+    .[, c("start", "end", "pos") := .(pos, pos, NULL)] %>% 
+    setkey(chr, start, end) %>% 
+    foverlaps(background_anno %>% setkey(chr, start, end), nomatch=0L) %>% 
+    .[, .(rate=round(mean(rate*100)), weight=.N, sample=cell), .(id, anno)] %>%
+    .[weight>=opts$min_weight]
+}) %>% 
+    rbindlist() %>%
+        .[weight>=opts$min_weight, .(var=var(rate, na.rm=TRUE), 
+                                     mean=mean(rate, na.rm=TRUE),
+                                     .N,
+                                     type="background"), .(id, anno)]
+
+
+vars <-rbind(acc_var, back_var)
+
+# save
+fwrite(vars, paste0(io$out_dir, "/motif_variance.csv"))
+
+
+ggplot(vars, aes(anno, var, fill=type)) +
+    geom_boxplot(outlier.shape=NA)+
+    geom_point(position=position_jitterdodge(jitter.width = 0.2))
+
+top_var <- vars[, .(var=mean(var)), .(id, anno, type)] %>% 
+    dcast(id+anno~type, value.var="var")
+
+```
+

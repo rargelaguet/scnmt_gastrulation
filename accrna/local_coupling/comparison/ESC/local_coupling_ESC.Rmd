@@ -1,0 +1,171 @@
+---
+title: "Gastrulation: local correlation between chromatin accessibility and RNA expression in ESC"
+output: 
+  BiocStyle::html_document: 
+    fig_width: 12
+    fig_height: 8
+---
+
+```{r echo=FALSE, include=FALSE}
+suppressPackageStartupMessages(library(scater))
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(purrr))
+suppressPackageStartupMessages(library(ggplot2))
+```
+
+<!-- Define functions -->
+```{r definefuncs, echo=FALSE}
+loadMultipleAccData <- function(indir, cells, annotation=NULL) {
+  data_list <- list()
+  for (cell in cells) {
+    if (file.exists(sprintf("%s/%s.tsv.gz",indir,cell))) {
+      # print(sprintf("Loading %s...",cell))
+      data_list[[cell]] <- fread(sprintf("zcat < %s/%s.tsv.gz",indir,cell), sep="\t", stringsAsFactors=T) %>%
+        setnames(c("chr","pos","rate")) %>%
+        .[,sample:=cell] %>% .[,c("start","end"):=list(pos,pos)] %>% 
+        setkey("chr","start","end") %>%
+        foverlaps(annotation, nomatch=0) %>% 
+        .[,dist:=ifelse(strand %in% c("+","*"),pos-TSS,TSS-pos)] %>% 
+        .[,c("sample","ens_id","dist","rate")]
+    }
+  }
+  return(rbindlist(data_list))
+}
+```
+
+<!-- Define I/O and options -->
+```{r define_opts, echo=FALSE, include=FALSE}
+
+## Define I/O ##
+io <- list()
+io$basedir   <- "/Users/ricard/data/NMT-seq_ESC"
+io$outdir <- "/Users/ricard/gastrulation/accrna/local_coupling/comparison/ESC/out"
+io$tss <- "/Users/ricard/data/mm10_regulation/promoters/TSS.bed"
+io$in.sample_metadata <- paste0(io$basedir,"/sample_metadata.txt")
+io$acc.indir <- paste(io$basedir,"acc/raw",sep="/")
+io$rna.infile <- paste(io$basedir,"rna/parsed/sce.rds",sep="/")
+
+## Define options ##
+opts <- list()
+
+# Define window options
+opts$up <- 2500
+opts$window <- 150
+opts$slide <- 50
+opts$down <- 2500
+
+# Define colors for the conditions
+opts$colors <- c("2i"="#FFD700", "Serum"="#CD853F")
+
+# Define which cells to use
+opts$cells <- fread(io$in.sample_metadata) %>% 
+  .[pass_accQC==T & pass_rnaQC==T & culture%in%c("Serum","2i"),sample] 
+```
+
+<!-- Load gene metadata -->
+```{r}
+# All promoters
+tss <- fread(io$tss,stringsAsFactors=TRUE)[,c(1,2,3,6,4)] %>%
+  setnames(c("chr","start","end","strand","ens_id")) %>%
+  .[,chr:=as.factor(sub("chr","",chr))] %>%
+  .[,TSS:=start] %>%
+  .[,c("start","end"):=.(start-opts$up,end+opts$down)] %>%
+  setkey(chr,start,end)
+```
+
+<!-- Load sample metadata and define which cells to use -->
+```{r}
+sample_metadata <- fread(io$in.sample_metadata, stringsAsFactors=T) %>% 
+  .[,c("sample","culture")] %>%
+  .[sample%in%opts$cells]
+```
+
+<!-- Load accessibility data -->
+```{r load_data, echo=FALSE, include=FALSE}
+acc_dt <- loadMultipleAccData(io$acc.indir, opts$cells, tss)
+```
+
+<!-- Load RNA expression data -->
+```{r}
+# Load SCE object
+sce <- readRDS(file=io$rna.infile) %>% toSingleCellExperiment()
+sce <- sce[,colnames(sce) %in% opts$cells]
+
+# Convert to data.table
+rna_dt <- exprs(sce) %>% t %>% as.data.table(keep.rownames="sample") %>% 
+  melt(id.vars="sample", value.name="expr", variable.name="gene") %>%
+  merge(rowData(sce) %>% as.data.frame(row.names=rownames(sce)) %>% tibble::rownames_to_column("symbol") %>%
+          .[,c("ens_id","symbol")] %>% as.data.table %>% setnames(c("symbol"),c("gene")),
+        by=c("gene")
+        )
+rna_dt[,c("ens_id","gene"):=list(as.factor(ens_id),as.factor(gene))]
+```
+
+<!-- Merge data and sample metadata -->
+```{r}
+acc_dt <- acc_dt %>% merge(sample_metadata[,c("sample","culture")], by="sample")
+rna_dt <- rna_dt %>% merge(sample_metadata[,c("sample","culture")], by="sample")
+```
+
+<!-- Merge accessibility and RNA expression data -->
+```{r}
+accrna <- merge(acc_dt, rna_dt, by=c("sample","ens_id","culture"))
+rm(acc_dt,rna_dt)
+```
+
+<!-- Overlap data with windows -->
+```{r, echo=FALSE}
+tmp <- seq(from=0-opts$up, to=0+opts$down-opts$window, by=opts$slide)
+foo <- data.table(window_center=tmp+(opts$window/2), rel_start=tmp, rel_end=tmp+opts$window)
+
+bar <- foverlaps(x=foo %>% setkey(rel_start,rel_end),
+                 y=accrna[,c("rel_start","rel_end"):=dist ] %>% setkey(rel_start,rel_end)) %>%
+  .[,c("i.rel_start","i.rel_end","rel_start","rel_end"):=NULL] %>%
+  .[,.(rate=mean(rate), N=.N), by=c("sample","ens_id","gene","window_center","expr","culture")]
+rm(tmp,foo,accrna)
+```
+  
+<!-- Compute local correlations -->
+```{r}
+cor <- bar %>% 
+  .[,.(r=cor(x=rate, y=expr, method="pearson", use="pairwise.complete.obs")),
+    by=c("sample","window_center","culture")]
+```
+
+<!-- Plot -->
+```{r}
+p <- ggplot(cor,aes(x=window_center, y=r, fill=culture, color=culture)) +
+  stat_summary(fun.data="mean_se", geom="ribbon", alpha=0.25) +
+  stat_summary(geom="line") +
+  geom_hline(yintercept=0, linetype="dashed", color="black", size=0.5) +
+  geom_vline(xintercept=0, linetype="dashed", color="black", size=0.5) +
+  scale_fill_manual(values=opts$colors) +
+  scale_color_manual(values=opts$colors) +
+  guides(fill=FALSE, color=FALSE) +
+  ylab("Acc/RNA Correlation") + xlab("Genomic distance from TSS (bp)") +
+  scale_x_continuous(limits=c(-opts$up,opts$down)) +
+  theme(
+    axis.text.x = element_text(size=rel(1.1),colour="black"),
+    axis.text.y = element_text(size=rel(1.1), colour="black"),
+    axis.title.x = element_text(size=rel(1.2)),
+    axis.title.y = element_text(size=rel(1.2)),
+    legend.key = element_blank(),
+    legend.position = "top",
+    legend.direction = "horizontal",
+    legend.justification = "center",
+    legend.key.width = unit(2.0,"line"),
+    legend.key.height = unit(2.0,"line"),
+    legend.title = element_blank(),
+    legend.text = element_text(size=rel(1.3)),
+    panel.border = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank()
+  )
+p
+
+pdf(file=paste0(io$outdir,"/accrna_localcoupling_ESC.pdf"), width=5, height=3.5)
+print(p)
+dev.off()
+```
+

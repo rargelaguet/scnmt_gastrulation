@@ -1,0 +1,243 @@
+---
+title: "Gastrulation: Copuling between chromatin accessibility and DNA methylation"
+output: 
+  BiocStyle::html_document: 
+    fig_width: 12
+    fig_height: 8
+---
+
+```{r echo=FALSE, include=FALSE}
+suppressPackageStartupMessages(library(purrr))
+suppressPackageStartupMessages(library(weights))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(cowplot))
+suppressPackageStartupMessages(library(data.table))
+```
+
+<!-- User-defined functions -->
+```{r echo=FALSE, include=FALSE}
+source("/Users/ricard/NMT-seq_ESC/correlations/utils.R")
+```
+
+<!-- # Parse and filter data -->
+```{r echo=FALSE, include=FALSE}
+# I/O
+io <- list()
+io$base_dir   <- "/Users/ricard/data/gastrulation"
+io$annos_dir  <- paste0(io$base_dir, "/features/filt")
+io$in.sample_metadata <- paste0(io$base_dir,"/sample_metadata_scNMT.txt")
+io$met_dir <- paste(io$base_dir,"met/parsed",sep="/")
+io$acc_dir <- paste(io$base_dir,"acc/parsed",sep="/")
+io$outdir <- "/Users/ricard/gastrulation/metacc/coupling/out"
+
+# Filtering parameters
+opts <- list()
+opts$met.min.CpGs <- 3      # minimum weight per feature (met)
+opts$acc.min.GpCs <- 3      # minimum weight per feature (acc)
+
+# Correlation type options
+opts$method <- "pearson"      # correlation type
+opts$weight <- FALSE           # weighted correlation?
+
+# Multiple testing options
+opts$threshold_fdr <- 0.10   # pvalue threshold for significance in FDR
+
+# Permutation test options
+opts$permutation <- TRUE   # do permutation test?
+opts$n_perms <- 10          # Number of random permutations
+
+# Define genomic contexts
+opts$annos <- c(
+  "genebody",
+  # "prom_2000_2000_cgi",
+  # "prom_2000_2000_noncgi",
+  "prom_2000_2000",
+  "CGI",
+  # "H3K27ac_distal_E7.5_union",
+  # "H3K27ac_promoter_E7.5_union",
+  # "H3K4me3_E7.5_union",
+  "LINE"="LINE",
+  "LTR"="LTR"
+)
+
+# Define stages and lineages
+opts$stage_lineage <- c(
+  "E4.5_EPI",# "E4.5_PE",
+  "E5.5_EPI",# "E5.5_PE",
+  "E6.5_EPI","E6.5_PS",# "E6.5_VE",
+  "E7.5_Ectoderm","E7.5_Endoderm","E7.5_Mesoderm"
+)
+
+# Define plotting colors
+opts$colors <- c(E4.5="#F8766D", E5.5="#7CAE00", E6.5="#00BFC4", E7.5="#C77CFF")
+
+# cells 
+foo <- fread(io$in.sample_metadata) %>% 
+  .[,stage_lineage:=paste(stage,lineage,sep="_")] %>%
+  .[pass_metQC==T & pass_accQC==T & stage_lineage %in% opts$stage_lineage]
+opts$acc.cells <- foo$id_acc
+opts$met.cells <- foo$id_met
+```
+
+<!-- Load sample metadata -->
+```{r}
+sample_metadata <- fread(io$in.sample_metadata, stringsAsFactors=T) %>% 
+  .[,c("sample","id_met","id_acc","stage","lineage")] %>%
+  .[,stage_lineage:=as.factor(paste(stage,lineage,sep="_"))] %>%
+  .[sample%in%foo$sample]
+```
+
+<!-- Load methylation and accessibility data -->
+```{r load_data, echo=FALSE, include=FALSE}
+# Load methylation data
+met_dt <- lapply(opts$annos, function(n) {
+  data <- fread(sprintf("zcat < %s/%s.tsv.gz",io$met_dir,n), showProgress=F, stringsAsFactors=T, sep="\t", quote="") %>%
+  .[V1%in%opts$met.cells]
+}) %>% rbindlist
+colnames(met_dt) <- c("id_met","id","anno","Nmet","N","rate")
+
+# Load accessibility data
+acc_dt <- lapply(opts$annos, function(n) {
+  data <- fread(sprintf("zcat < %s/%s.tsv.gz",io$acc_dir,n), showProgress=F, stringsAsFactors=T, sep="\t", quote="") %>%
+  .[V1%in%opts$acc.cells]
+}) %>% rbindlist
+colnames(acc_dt) <- c("id_acc","id","anno","Nmet","N","rate")
+```
+
+<!-- Merge data with metadata -->
+```{r}
+met_dt <- merge(met_dt, sample_metadata[,c("sample","id_met","stage","stage_lineage")], by="id_met")
+acc_dt <- merge(acc_dt, sample_metadata[,c("sample","id_acc","stage","stage_lineage")], by="id_acc")
+```
+
+<!-- Combine the two data sets -->
+```{r}
+metacc_dt <- merge(
+  met_dt[,c("sample","id","anno","rate","Nmet","N")] %>% setnames(c("rate","Nmet","N"), c("met_rate","met_Nmet","met_N")),
+  acc_dt[,c("sample","id","anno","rate","Nmet","N")] %>% setnames(c("rate","Nmet","N"), c("acc_rate","acc_Nmet","acc_N")),
+  by=c("sample","id","anno")
+)
+rm(met_dt,acc_dt)
+```
+
+<!-- Parse and filter data -->
+```{r filter, echo=FALSE}
+# Filter by mininum number of CpGs per feature
+metacc_dt <- metacc_dt[met_N >= opts$met.min.CpGs]
+metacc_dt <- metacc_dt[acc_N >= opts$acc.min.GpCs]
+```
+
+<!-- Compute coupling  -->
+```{r cor_rate, echo=FALSE, include=FALSE}
+
+# Weighted correlation
+if (opts$weight == TRUE){
+  if (opts$method != "pearson") { print("Weighted correlation only supported for pearson"); stop() }
+  cor <- metacc_dt[, wtd.cor(met_rate, acc_rate, met_weight)[, c("correlation", "t.value", "p.value")], by = c("sample", "anno")]
+# Non-weighted correlation
+} else {
+  cor <- metacc_dt[, .(V1 = unlist(cor.test(met_rate, acc_rate, alternative = "two.sided", method = opts$method)[c("estimate", "statistic", "p.value")])), by = c("sample", "anno")]
+}
+
+# Compute adjusted p-values across genes (both FDR and Bonferroni)
+cor <- cor %>% .[,para := c("r", "t", "p")] %>% dcast(sample + anno ~ para, value.var = "V1") %>% 
+      .[, c("padj_fdr", "padj_bonf") := list(p.adjust(p, method = "fdr"), p.adjust(p, method = "bonferroni")), by = anno] %>%
+      .[, c("log_padj_fdr", "log_padj_bonf") := list(-log10(padj_fdr), -log10(padj_bonf))] %>%
+      .[, sig := padj_fdr <= opts$threshold_fdr] %>% setorder(padj_fdr)
+```
+
+<!-- Save results -->
+```{r}
+fwrite(cor, paste0(io$outdir,"/metacc_coupling.txt"), sep="\t")
+cor <- fread(paste0(io$outdir,"/metacc_coupling.txt"))
+```
+
+<!-- Plot coupling results -->
+
+Boxplots
+```{r}
+
+subset_annos <- c(
+  "prom_2000_2000"="Promoters",
+  "genebody"="Gene\nbodies",
+  # "H3K27ac_distal_E7.5_common_500"="Distal\nH3K27ac",
+  # "H3K27ac_promoter_E7.5_common_500"="Proximal\nH3K27ac",
+  # "H3K27ac_distal_E7.5_union_500"="E7.5 Distal\nH3K27ac",
+  # "H3K27ac_promoter_E7.5_union_500"="E7.5 Proximal\nH3K27ac",
+  # "H3K4me3_E7.5_common"="H3K4me3",
+  # "H3K4me3_E7.5_union"="E7.5\nH3K4me3",
+  # "ESC_p300"="p300 ChIP-seq (ESCs)",
+  # "ESC_CTCF"="CTCF ChIP-seq (ESCs)",
+  "CGI"="CpG\nislands",
+  "LINE"="LINE",
+  "LTR"="LTR"
+)
+  
+
+tmp <- merge(cor, sample_metadata[,c("sample","stage","stage_lineage")], by="sample") %>%
+  .[anno%in%names(subset_annos)] %>%
+  .[,anno:=stringr::str_replace_all(anno, subset_annos)] %>%
+  .[,anno:=factor(anno,levels=subset_annos)]
+
+
+# p <- ggplot(tmp, aes(x=anno, y=r, fill=stage)) +
+p <- ggplot(tmp, aes(x=anno, y=r, fill=stage)) +
+  geom_boxplot(alpha=0.8, outlier.shape=NA) +
+  geom_hline(yintercept=0, colour="black", linetype="dashed") +
+  scale_fill_manual(values=opts$colors) +
+  # coord_cartesian(ylim=c(-0.15,0.15)) +
+  labs(title="", x="", y="Met/RNA correlation") +
+  boxplot_theme() +
+  # scale_fill_brewer(palette = "Accent") +
+  theme(
+    legend.position=c(0.3,1.05),
+    axis.text.x = element_text(color="black", size=11)
+  )
+print(p)
+
+pdf(paste0(io$outdir,"/metacc_coupling_boxplots.pdf"), width=9, height=5, useDingbats = F)
+print(p)
+dev.off()
+```
+
+<!-- Run permutation test -->
+```{r}
+if (opts$permutation) {
+  pp_vals <- vector(mode = "numeric", length = length(cor$p))
+  for (k in 1:opts$n_perms){
+    print(k)
+    metacc_dt_perm <- copy(metacc_dt)
+    
+    # Permute gene expression levels and methylation rates
+    metacc_dt_perm[, c("rate","expr") := list(sample(acc_rate),sample(met_rate)), by = c("sample","anno")]
+    
+    # Compute coupling
+    cor_perm <- metacc_dt_perm[, .(p = cor.test(met_rate, acc_rate, method=opts$method)[["p.value"]]), by = c("sample","anno")]
+    
+    # For each annotation sort by p-value and store them
+    cor_perm <- cor_perm %>% split(.$anno) %>% map(~ .[,.(anno = anno, p = sort(p))]) %>% rbindlist
+    pp_vals <- pp_vals + cor_perm %>% .[, p]
+  }
+  # Compute the average p-values across all permutations
+  pp_vals <- pp_vals / opts$n_perms
+  cor_perm <- cor_perm[, p := pp_vals]
+}
+```
+
+<!-- QQplots of true vs permuted signal -->
+```{r, echo=FALSE}
+if (opts$permutation) {
+  pp <- qq <- list()
+  for (n in unique(cor$anno)) {
+    
+    # Generate permutation plot
+    qq[[n]] <- gg_qqplot(cor[anno == n, ], cor_perm[anno == n]$p, title = "")
+    
+    # Combine and save
+    pdf(file=paste0(io$outdir,"/permutation_", n, ".pdf"), height=4, width=6, useDingbats = FALSE)
+    print(qq[[n]])
+    dev.off()
+    
+  }
+}
+```

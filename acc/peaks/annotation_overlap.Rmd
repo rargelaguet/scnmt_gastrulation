@@ -1,0 +1,119 @@
+---
+title: "Overlap between lineage associated sites and genomic features"
+author: "Stephen Clark"
+date: "06/28/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(data.table)
+library(purrr)
+library(dplyr)
+library(tibble)
+library(ggplot2)
+library(pcaMethods)
+library(Rtsne)
+library(pheatmap)
+library(cowplot)
+library(limma)
+
+
+# in/out
+io <- list()
+io$data_dir <- "/bi/scratch/Stephen_Clark/gastrulation_data"
+
+io$sig_sites <- paste0(io$data_dir, "/features/sjc/unbiased_sig_acc")
+io$anno <- paste0(io$data_dir, "/features/filt")
+
+
+# options
+opts <- list()
+opts$sites_regex <- "sig_p0.001_dif20"
+opts$anno_regex <- c("prom_2000_2000|CGI|genebody|LINE|K27")
+opts$p_cutoff <- 0.0001
+opts$dif_cutoff <- 20
+opts$high_or_low <- "low" # defaults to high
+
+
+# functions
+source("/bi/home/clarks/fread_gz.R")
+
+```
+
+
+
+```{r}
+anno_files <- dir(io$sig_sites, pattern = ".csv", full = TRUE) %>%
+  .[grep(opts$sites_regex, .)]
+anno_names <- basename(anno_files) %>% gsub(".csv", "", .)
+
+anno <- map(anno_files, fread) %>%
+  map(setkey, chr, start, end) %>% 
+  bind_rows() 
+
+if (opts$high_or_low == "low") {
+  anno <- anno[p < opts$p_cutoff & (mean_y - mean_x) > opts$dif_cutoff] %>%
+    setkey(chr, start, end)
+} else {
+  anno <- anno[p < opts$p_cutoff & (mean_x - mean_y) > opts$dif_cutoff] %>%
+    setkey(chr, start, end)
+}
+  
+background <- copy(anno) %>% 
+  .[, len := end-start] %>%
+  .[, c("min", "max") := .(min(start), max(start)), chr] %>%
+  .[, .(start = runif(1, min = min, max = max)), .(chr, id, lineage, len)] %>%
+  .[, end := start + len] %>%
+  .[, .(chr, start, end, id, lineage)] %>%
+    setkey(chr, start, end)
+```
+
+
+Do these sites overlap with ChiP-seq peaks and other annotations?
+
+```{r}
+features <- dir(io$anno, pattern = ".bed", full = TRUE) %>%
+  .[grep(opts$anno_regex, .)] %>%
+  map(fread, colClasses = list(character = 1)) %>%
+  bind_rows() %>%
+  setnames(c("chr", "start", "end", "strand", "id", "anno")) %>%
+  setkey(chr, start, end)
+
+# background <- copy(features) %>% 
+#   .[, len := end-start] %>%
+#   .[, c("min", "max") := .(min(start), max(start)), chr] %>%
+#   .[, .(start = runif(1, min = min, max = max)), .(chr, id, anno, len)] %>%
+#   .[, end := start + len] %>%
+#   .[, .(chr, start, end, id, anno)]
+
+
+
+
+
+overlap <- list(anno, background) %>%
+  map(setkey, chr, start, end) %>%
+  map(foverlaps, features, nomatch =0L)
+
+
+
+
+
+numb_overlap <- map(overlap, ~.[, .N, .(lineage, anno)]) %>%
+  purrr::reduce(merge, by = c("lineage", "anno")) %>%
+  .[, fold_enrichment := N.x/N.y]
+
+
+title <- paste0("Overlap between lineage specific accessible (", opts$high_or_low  ,") sites and genomic features")
+
+ggplot(numb_overlap, aes(anno, fold_enrichment, fill = anno)) +
+  geom_bar(stat = "identity") +
+  ggtitle(title) +
+  ylab("Fold increase over background (log10 scale)") +
+  coord_flip() +
+  scale_y_log10() +
+  guides(fill = FALSE) +
+  facet_wrap(~lineage)
+
+```

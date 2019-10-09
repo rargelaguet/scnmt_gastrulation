@@ -1,0 +1,192 @@
+---
+title: "Gastrulation: Understand cell-to-cell differences in coupling between RNA expression and DNA methylation"
+output: 
+  BiocStyle::html_document: 
+    fig_width: 12
+    fig_height: 8
+---
+
+```{r echo=FALSE, include=FALSE}
+# suppressPackageStartupMessages(library(scater))
+# suppressPackageStartupMessages(library(purrr))
+# suppressPackageStartupMessages(library(weights))
+# suppressPackageStartupMessages(library(ggplot2))
+# suppressPackageStartupMessages(library(cowplot))
+# suppressPackageStartupMessages(library(gridExtra))
+# suppressPackageStartupMessages(library(data.table))
+```
+
+<!-- Define functions -->
+```{r echo=FALSE, include=FALSE}
+# source("/Users/ricard/NMT-seq_ESC/correlations/utils.R")
+```
+
+<!-- Define I/O and options -->
+```{r echo=TRUE, include=FALSE}
+
+## I/O ##
+io   <- list()
+io$base_dir   <- "/Users/ricard/data/gastrulation"
+io$in.sample_metadata <- paste0(io$base_dir,"/sample_metadata_scNMT.txt")
+# io$annos_dir  <- paste0(io$base_dir, "/features/filt")
+io$rna_file   <- paste0(io$base_dir, "/rna/parsed/sceset_scNMT.rds")
+# io$met_dir   <- paste0(io$base_dir, "/met/parsed")
+io$outdir <- "/Users/ricard/gastrulation/metrna/coupling/out"
+
+## Options ##
+opts <- list()
+# Define genomic contexts
+opts$annos <- c(
+  "genebody"="Gene body",
+  "prom_2000_2000_cgi"="CGI promoters",
+  "prom_2000_2000_noncgi"="non-CGI promoters",
+  # "prom_2000_2000"="Promoters"
+  "CGI"="CpG islands",
+  # "exons"="Exons",
+  # "introns"="Introns",
+  # "E3.5_Distal_H3K27ac"="E3.5 Distal H3K27ac",
+  "E6.5_Distal_H3K27ac"="E6.5 Distal H3K27ac",
+  # "Wei_Distal_K27ac_intersect"="E7.5 Distal H3K27ac",
+  # "Wei_Distal_K27ac"="E7.5 Enhancers",
+  "LINE"="LINE"
+  # "LTR"="LTR"
+)
+
+# Define stage and lineages
+opts$stage_lineage <- c(
+  # "E4.5_EPI",
+  "E5.5_EPI",
+  "E6.5_EPI","E6.5_PS",
+  "E7.5_Ectoderm","E7.5_Mesoderm","E7.5_Endoderm"
+)
+
+# Define which cells to use
+opts$cells <- fread(io$in.sample_metadata) %>% 
+  .[,stage_lineage:=paste(stage,lineage,sep="_")] %>%
+  .[pass_metQC==T & pass_rnaQC==T & stage_lineage%in%opts$stage_lineage & KO_3b=="not",sample] 
+```
+
+<!-- Load sample metadata -->
+```{r}
+sample_metadata <- fread(io$in.sample_metadata) %>% 
+  .[,stage_lineage:=paste(stage,lineage,sep="_")] %>%
+  .[sample%in%opts$cells]
+```
+
+<!-- Load coupling results -->
+```{r}
+coupling <- fread("/Users/ricard/gastrulation/metrna/coupling/out/coupling.txt") %>%
+  .[anno%in%names(opts$annos)]
+```
+
+
+<!-- Relationship to methylation statistics -->
+
+Load methylation statistics
+```{r}
+met.sample_stats <- fread("/Users/ricard/gastrulation/met/stats/samples/out/sample_stats.txt") %>%
+  merge(sample_metadata[,c("id_met","sample")])
+```
+
+Mean metylation rate
+```{r}
+tmp <- coupling[,c("sample","anno","r")] %>% 
+  merge(met.sample_stats, by=c("sample","anno")) %>%
+  merge(sample_metadata[,c("sample","stage","stage_lineage")], by=c("sample"))
+
+for (i in unique(tmp$anno)) {
+  p <- ggplot(tmp[anno==i], aes(x=mean, y=r, color=stage)) +
+    geom_point(alpha=0.3) +
+    geom_smooth(method="lm", alpha=0.5) +
+    facet_wrap(~stage, scales="free", nrow=1) +
+    labs(title="", x="Mean methylation rate", y="Met/RNA correlation") +
+    guides(color=guide_legend(override.aes=list(fill=NA))) +
+    theme(
+      # plot.background=element_rect(fill="white",colour=NA),
+      # panel.background=element_rect(fill="white",colour=NA),
+      axis.text = element_text(size=rel(0.8), color='black'),
+      axis.title = element_text(size=rel(1.1), color='black'),
+      legend.position = "top",
+      legend.direction = "horizontal",
+      legend.text = element_text(size=rel(1.3)),
+      legend.title = element_blank(),
+      legend.justification = "center",
+      # legend.key = element_rect(fill = "transparent", colour = "transparent"),
+      strip.text = element_text(size=rel(1.1))
+    )
+  
+  pdf(file=paste0(io$outdir,"/coupling_celltocell_",i,".pdf"), width = 8, height = 3.5, useDingbats = FALSE)
+  print(p)
+  dev.off()
+}
+```
+
+
+
+<!-- Relationship with RNA statistics -->
+
+Load RNA data
+```{r}
+sce <- readRDS(io$rna_file)
+sce <- sce[,sce$sample %in% opts$cells]
+```
+
+Calculate RNA statistics
+```{r}
+# Number of expressed genes
+rna.sample_stats <- data.table(
+  sample = sce$sample,
+  ngenes = colSums(exprs(sce)>0)
+)
+```
+
+Load Pseudotime statistics
+```{r}
+pseudotime <- rbind(
+  fread("/Users/ricard/gastrulation/rna/pseudotime/out/destiny_E4.5_scNMT.tsv"),
+  fread("/Users/ricard/gastrulation/rna/pseudotime/out/destiny_E5.5_scNMT.tsv"),
+  fread("/Users/ricard/gastrulation/rna/pseudotime/out/destiny_E6.5E6.75_scNMT.tsv")
+) %>% setnames("sample","id_rna") %>% merge(sample_metadata[,c("id_rna","sample")])
+```
+
+Plot relationship between coupling and number of expressed genes
+```{r}
+
+```
+
+Plot relationship between coupling and Pseudotime components
+```{r}
+tmp <- coupling[,c("sample","anno","r")] %>% 
+  merge(pseudotime, by=c("sample")) %>%
+  merge(sample_metadata[,c("sample","stage","stage_lineage","embryo")], by="sample") %>%
+  melt(measure.vars=c("DC1","DC2","DC3","DC4","DC5"), variable.name="DC", value.name="value")
+
+# For every stage, select the DC component that predicts better the differences in coupling
+to-do..
+
+p <- ggplot(tmp[anno=="genebody"], aes(x=r, y=value, color=embryo)) +
+  geom_point(alpha=0.3) +
+  # geom_smooth(method="lm") +
+  facet_wrap(~DC, scales="free") +
+  # labs(title="", x="Met/Acc correlation", y="Density") +
+  theme_bw()
+print(p)
+```
+
+Plot relationship between coupling and the expression of single genes
+```{r}
+
+# fFilter lowly expresed genes
+  
+# tmp <- cor[,c("sample","anno","r")] %>% 
+#   merge(rna_dt[,c("sample","expr","gene")], by="sample", allow.cartesian=T) %>%
+#   merge(sample_metadata[,c("sample","stage","stage_lineage")], by="sample")
+# 
+# foo <- tmp[,.(r=cor(expr,r)),by=c("gene","anno","stage")]
+# 
+# bar <- foo[stage=="E6.5"] %>% setorder(V1)
+```
+
+
+
+

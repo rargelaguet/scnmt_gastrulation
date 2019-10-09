@@ -1,0 +1,420 @@
+---
+title: "Gastrulation: joint characterisation of DNA methylation and RNA expression changes in the late methylation wave (E6.5 to E7.5)"
+output:
+  BiocStyle::html_document: 
+    fig_width: 10
+    fig_height: 8
+---
+
+
+```{r load_modules, echo=FALSE, include=FALSE}
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(scater)
+```
+
+<!-- User-defined functions -->
+```{r funcs, echo=FALSE}
+```
+
+<!-- Define I/O and options -->
+```{r define_opts, echo=FALSE, include=FALSE}
+io <- list()
+opts <- list()
+
+## Define I/O ##
+io$base.dir <- "/Users/ricard/data/gastrulation"
+io$sample.metadata <- paste0(io$base.dir,"/sample_metadata_scNMT.txt")
+io$met.dir <- paste0(io$base.dir, "/met/parsed")
+io$rna.file <- paste0(io$base.dir, "/rna/parsed/sceset_scNMT.rds")
+io$features.dir <- paste0(io$base.dir, "/features/filt")
+io$gene.metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
+io$outdir <- "/Users/ricard/gastrulation/metrna/methylation_wave/out"
+
+## Define options ##
+
+# Define which annotations to look at
+opts$annos <- c(
+  "genebody"="Gene body",
+  # "prom_2000_2000_cgi"="CGI promoters",
+  "prom_2000_2000_noncgi"="non-CGI promoters"
+  # "prom_2000_2000"="Promoters"
+  # "CGI"="CpG islands"
+  # "exons"="Exons",
+  # "introns"="Introns",
+  # "E3.5_Distal_H3K27ac"="E3.5 enhancers",
+  # "E6.5_Distal_H3K27ac"="E6.5 enhancers",
+  # "E3.5_H3K27ac"="E3.5 H3K27ac",
+  # "E6.5_H3K27ac"="E6.5 H3K27ac",
+  # "LINE"="LINE",
+  # "LTR"="LTR"
+)
+
+# Define which stage and lineages to look at 
+opts$stage_lineage <- c(
+  "E6.5_EPI","E6.5_PS",
+  "E7.5_Ectoderm","E7.5_Mesoderm","E7.5_Endoderm"
+)
+
+# Filtering criteria
+opts$min.cpgs <- 1          # Minimum number of observed CpG sites (per feature)
+opts$min.cells <- 10         # Minimum number of observed cells per stage_lineage (per feature)
+
+# Load sample metadata and define which cells to use
+sample_metadata  <- fread(io$sample.metadata, stringsAsFactors=TRUE) %>% 
+  .[,stage_lineage:=paste(stage,lineage,sep="_")] %>%
+  .[pass_metQC==T & pass_rnaQC==T & stage_lineage%in%opts$stage_lineage & KO_3b=="not"]
+sample_metadata[stage=="E6.75",stage:="E6.5"] %>% .[,stage_lineage:=as.factor(paste(stage,lineage,sep="_"))]
+
+opts$rna.cells <- sample_metadata[,id_rna] %>% as.character()
+opts$met.cells <- sample_metadata[,id_met] %>% as.character()
+```
+
+<!-- Load methylation data -->
+```{r load_data, echo=FALSE, include=FALSE}
+met_dt <- lapply(names(opts$annos), function(n) fread(sprintf("zcat < %s/%s.tsv.gz",io$met.dir,n), showProgress=F, stringsAsFactors =T)) %>% rbindlist
+colnames(met_dt) <- c("id_met","id","anno","rate","Nmet","N")
+```
+
+<!-- Load RNA expression data -->
+```{r}
+# Load expression as SCE object
+sceset <- readRDS(file = io$rna.file)
+
+# Subset cells
+sceset <- sceset[,opts$rna.cells]
+
+# Create data.table
+rna_dt <- exprs(sceset) %>% t %>% as.data.table(keep.rownames="id_rna") %>% 
+  melt(id.vars="id_rna", value.name="expr", variable.name="id") %>%
+  merge(rowData(sceset) %>% as.data.frame(row.names=rownames(sceset)) %>% tibble::rownames_to_column("ens_id") %>%
+          .[,c("symbol","ens_id")] %>% as.data.table %>% setnames(c("ens_id","symbol"),c("id","gene")),
+        by=c("id")
+        )
+rna_dt[,c("id","gene"):=list(as.factor(id),as.factor(gene))]
+```
+
+<!-- Merge data with metadata -->
+```{r}
+met_dt <- merge(met_dt, sample_metadata[id_met%in%opts$met.cells,c("sample","id_met","stage","stage_lineage")], by="id_met") %>%
+  droplevels()
+rna_dt <- merge(rna_dt, sample_metadata[id_rna%in%opts$rna.cells,c("sample","id_rna","stage","stage_lineage")], by="id_rna") %>%
+  droplevels()
+```
+
+<!-- Load RNA differential analysis results -->
+```{r}
+diffrna <- fread("/Users/ricard/gastrulation/rna/differential/out/E4.5EPI_vs_E5.5EPI.tsv")
+```
+
+<!-- Load differential methylation results -->
+```{r}
+io$diffmet.dir <- "/Users/ricard/gastrulation/met/differential/feature_level/out"
+diffmet <- fread(sprintf("zcat < %s/E6.5EPIPS_vs_E7.5EctMesEnd.tsv.gz",io$diffmet.dir)) %>% .[anno%in%names(opts$annos)]
+```
+
+<!-- Load methylation pseudobulked statistics -->
+```{r}
+metstats <- fread("/Users/ricard/gastrulation/met/stats/samples/out/sample_stats.txt") %>%
+  .[anno=="all"] %>% .[,c("coverage"):=NULL] %>% merge(sample_metadata[,c("id_met","sample")]) %>%
+  setnames("mean","rate")
+```
+
+<!-- Parse RNA expression data -->
+```{r}
+# Keep only differentially expressed genes between E4.5 and E5.5
+# rna_dt <- rna_dt[id%in%diffrna[sig==TRUE,id]]
+```
+
+
+<!-- Parse DNA methylation data -->
+```{r transform_data}
+# Merge methylation data and sample metadata
+# met_dt <- met_dt %>% merge(sample_metadata[,c("id_met","sample","stage","stage_lineage")], by="id_met") %>% setkey(anno)
+
+# Convert beta value to M value
+# data[,m:=log2(((rate/100)+0.01)/(1-(rate/100)+0.01))]
+```
+
+<!-- Filter methylation data -->
+```{r filter_data, echo=FALSE, include=FALSE}
+# Filter features by minimum number of observed CpG sites
+# met_dt <- met_dt[N>=opts$min.cpgs]
+
+# Filter features by minimum number of observed cells
+# for (sl in unique(met_dt$stage)) {
+#   met_dt[stage==sl,Ntotal:=sample_metadata[stage==sl,.N]]
+# }
+# keep_cov_sites <- met_dt %>% split(.$stage) %>% map(~ .[, cov:=.N, by=c("id","anno")] %>% .[cov >= opts$min.cells] %>% .[,id_anno:=paste(id,anno,sep="_")] %>% .$id_anno)
+# met_dt <- met_dt %>% .[,id_anno:=paste(id,anno,sep="_")] %>% .[id_anno%in%Reduce("intersect",keep_cov_sites)] %>% 
+#   .[,c("Ntotal","id_anno"):=NULL]
+```
+
+
+<!-- Relate differential methylation changes to differential expression changes -->
+
+Select differentially methylated genes
+```{r}
+diffmet_filt <- diffmet %>% copy %>% .[,met.sig:=(p.value<0.00001 & abs(propdiff)>0.25)] %>% .[,c("id","anno","met.sig","propdiff")] %>%
+  setnames(c("propdiff"),c("met.diff"))
+# diffmet_filt[,mean(sig),by="anno"]
+```
+
+Select differentially expressed genes
+```{r}
+diffrna_filt <- diffrna %>% copy %>%
+  setnames(c("sig","logFC"),c("rna.sig","rna.diff")) %>% 
+  .[,c("id","symbol","rna.sig","rna.diff")]
+```
+
+```{r}
+foo <- merge(
+  diffmet_filt,
+  diffrna_filt,
+  by=c("id")
+) %>% .[complete.cases(.)]
+```
+
+How many genes are upregulated or downregulated?
+```{r}
+# Roughly 50% of the genes are upregulated and the other 50% are downregulated
+# Note: we have filtered out all non-expressed genes
+mean(diffrna_filt[rna.sig==TRUE,rna.diff]>0)
+```
+
+Among the differentially expressed genes, what fraction of them show significant changes in methylation?
+```{r}
+# All differentially expressed genes
+# for (i in unique(foo$anno)) {
+#   print(i)
+#   foo[rna.sig==T & anno==i, mean(met.sig)] %>% print()
+#   cat("\n")
+# }
+
+# Repressed genes
+foo1 <- foo[rna.sig==T & rna.diff<0, mean(met.sig), by="anno"] %>% .[,type:="Repressed"]
+
+# Activated genes
+foo2 <- foo[rna.sig==T & rna.diff>0, mean(met.sig), by="anno"] %>% .[,type:="Activated"]
+
+# No changes
+foo3 <- foo[rna.sig==F, mean(met.sig), by="anno"] %>% .[,type:="No change"]
+
+bar <- rbind(foo1,foo2,foo3)
+
+ggplot(bar, aes(x=anno, y=V1, fill=type)) +
+  geom_bar(stat="identity", position="dodge") +
+  theme_bw()
+```
+
+Among the non-differentially expressed genes, what fraction of them show significant changes in methylation?
+```{r}
+for (i in unique(foo$anno)) {
+  print(i)
+  foo[rna.sig==F & anno==i, mean(met.sig)] %>% print()
+  cat("\n")
+}
+```
+
+
+
+
+
+STOP HERE
+
+
+<!-- Correlate RNA expression with mean methylation rate per cell -->
+```{r}
+# bar <- rna_dt %>% copy %>% .[,c("id_rna","id"):=NULL]
+# 
+# # Merge methylation and expression data
+# foobar <- merge(
+#   metstats,
+#   bar,
+#   by="sample",
+#   allow.cartesian=T
+# )
+# 
+# # Compute correlation
+# cor <- foobar[, .(V1 = unlist(cor.test(rate, expr, alternative="two.sided")[c("estimate","statistic","p.value")])), 
+#                 by = c("anno","gene")]
+# 
+# # Compute adjusted p-values (both FDR and Bonferroni)
+# opts$threshold_fdr <- 0.01
+# cor <- cor %>% .[,para := c("r", "t", "p")] %>% dcast(gene+anno~para, value.var = "V1") %>% 
+#       .[, c("padj_fdr", "padj_bonf") := list(p.adjust(p, method = "fdr"), p.adjust(p, method = "bonferroni")), by = anno] %>%
+#       .[, c("log_padj_fdr", "log_padj_bonf") := list(-log10(padj_fdr), -log10(padj_bonf))] %>%
+#       .[, sig := padj_fdr <= opts$threshold_fdr] %>% setorder(padj_fdr)
+```
+
+Volcano plot of top hits
+```{r}
+# for (i in opts$annos) {
+#   cor_filt <- cor[complete.cases(cor) & anno==i]
+#   foo <- cor_filt[sig == TRUE & anno==i] %>% setkey(padj_fdr) %>% head(n=20)  
+#   p <- ggplot(cor_filt, aes(x=r, y=-log10(p))) +
+#     labs(title="", x="Pearson correlation", y=expression(paste("-log"[10],"(",plain(p),")"))) +
+#     # geom_hline(yintercept = -log10(opts$threshold_fdr), color="blue") +
+#     geom_segment(aes(x=0, xend=0, y=0, yend=8.1), color="orange") +
+#     geom_point(aes(color=sig), size=2) +
+#     
+#     scale_color_manual(values=c("black","red")) +
+#     scale_x_continuous(limits=c(-1,1)) +
+#     # scale_y_continuous(limits=c(0,8.5)) +
+#     
+#     # annotate("text", x=0, y=8.47, size=7, label=sprintf("(%d)", all)) +
+#     # annotate("text", x=-0.5, y=8.47, size=7, label=sprintf("%d (-)",length(negative_hits))) +
+#     # annotate("text", x=0.5, y=8.47, size=7, label=sprintf("%d (+)",length(positive_hits))) +
+#     # geom_text(data=cor[sig == TRUE], aes(x=r, y=log_padj_fdr, label=gene), vjust=-0.0, hjust=-0.3) +
+#     
+#     ggrepel::geom_text_repel(data=foo, aes(x=r, y=-log10(p), label=gene), size=6, color="red") +
+#     
+#     theme(
+#       plot.title=element_text(size=20, face='bold', margin=margin(0,0,10,0), hjust=0.5),
+#       axis.text=element_text(size=rel(1.5), color='black'),
+#       axis.title=element_text(size=rel(1.5), color='black'),
+#       axis.title.y = element_text(margin=margin(0,10,0,0)),
+#       axis.title.x = element_text(margin=margin(10,0,0,0)),
+#       legend.position="none",
+#       panel.border=element_blank(),
+#       panel.grid.major = element_blank(),
+#       panel.grid.minor = element_blank(),
+#       panel.background = element_blank()
+#   )
+#   print(p)
+# }
+```
+
+Scatter plot
+```{r}
+# foo <- met_dt[,.(rate=sum(Nmet)/sum(N)),by=c("anno","stage")]
+# 
+# tmp <- merge(
+#   foo,
+#   diffrna[,c("symbol","diff")],
+#   by=""
+# )
+# 
+# tmp <- foobar[,.(
+#   diffmet = mean(.SD[stage=="E5.5",rate])-mean(.SD[stage=="E4.5",rate])
+#   ), by=c("anno","gene")]
+```
+
+
+<!-- Inspect DNA methyltransferases -->
+
+```{r}
+dnmts <- c("Dnmt3b","Dnmt3a","Dnmt3l","Dnmt1")
+```
+
+RNA expression
+```{r}
+sceset_filt <- sceset
+rownames(sceset_filt) <- rowData(sceset_filt)$symbol
+
+p <- plotExpression(sceset_filt, features=dnmts, x="stage", colour_by="stage")
+
+# pdf(paste0(io$outdir,"/dnmt3b_expr.pdf"), width=6, height=5, useDingbats = F)
+print(p)
+# dev.off()
+```
+
+
+Correlation between DNMTs RNA expression and mean methylation rate
+```{r}
+tmp <- merge(
+  metstats[,c("rate","sample")],
+  rna_dt[gene%in%dnmts] %>% .[,c("gene","sample","expr")],
+  by="sample"
+) %>% merge(sample_metadata[,c("stage","sample")])
+
+r <- tmp[,.(r=cor(expr,rate), pval=cor.test(expr,rate)[["p.value"]]),by="gene"] %>%
+  .[,r:=round(r,3)] %>%
+  .[,pval:=formatC(pval, format="e", digits=2)]
+
+p <- ggplot(tmp, aes(x=rate, y=expr)) +
+  geom_point(aes(colour=stage)) +
+  facet_wrap(~gene, scales="free", nrow=1) +
+  stat_smooth(method="lm", color="black", alpha=0.3, linetype="solid") +
+  # geom_text(x = 20, y = 3, label = lm_eqn(tmp), parse = TRUE) +
+  geom_text(data = r, aes(x=70, y=5, label = r)) +
+  geom_text(data = r, aes(x=70, y=6, label = pval)) +
+  labs(x="Methylation rate", y="RNA expression") +
+  theme_bw() +
+  theme(
+      axis.text = element_text(size=rel(1.0), color='black'),
+      axis.title = element_text(size=rel(1.4), color='black'),
+      legend.position = "top",
+      legend.direction = "horizontal",
+      legend.text = element_text(size=rel(1.5)),
+      legend.title = element_blank(),
+      strip.text = element_text(size=rel(1.3))
+  )
+p
+pdf(paste0(io$outdir,"/dnmt3b_cor.pdf"), width=10, height=3.5, useDingbats = F)
+print(p)
+dev.off()
+```
+
+
+
+
+STOP HERE
+
+<!-- Relate to changes in differential expression -->
+```{r}
+diffrna <- fread("/Users/ricard/gastrulation/rna/differential/out/E4.5_vs_E5.5.tsv") %>% 
+  setnames(c("symbol","diff","sig","padj_fdr"),c("gene","rna.diff","rna.sig","rna.pvalue"))
+
+
+foo <- data[,.(rate=sum(Nmet)/sum(N)), by=c("id","stage")]
+
+bar <- foo %>% dcast(id~stage, value.var="rate") %>% .[,diff:=E5.5-E4.5] %>%
+  .[,cluster:=cut(diff, breaks = c(0,0.05,0.25,1.0))] %>% .[,diff:=NULL] %>%
+  .[cluster!="(0.05,0.25]"] %>%
+  # .[,cluster:=ifelse(diff>0.25,"A","B")] %>% .[,cluster:=as.factor(cluster)] %>% .[,diff:=NULL] %>%
+  melt(id.vars=c("id","cluster"), variable.name="stage", value.name="rate")
+
+foo <- merge(
+  bar[,c("id","cluster")],
+  diffrna[,c("id","gene","rna.pvalue","rna.sig","rna.diff")],
+  by=c("id")
+) %>% .[complete.cases(.)]
+
+# diffrna[diff<1.0 & rna.sig==TRUE]
+
+# (Q) What is the fraction of differentially expressed genes that can be explained by changes in methylation?
+
+# Roughly 50% of the genes are upregulated and 50% are downregulated
+mean(diffrna[rna.sig==TRUE,rna.diff]>0)
+
+# For the upregulated genes, less than 5% can be explained by DNA methylation
+foo[rna.sig==TRUE & rna.diff>2, table(cluster)]
+
+# For the downregulated genes, more than 50% can be explained by changes in DNA methylation
+foo[rna.sig==TRUE & rna.diff<(-2), table(cluster)]
+
+##################
+
+# (Q) What fraction of differentially and non-differentially methylated genes (binarised) have an associated change in RNA expression?
+# (S) for non-differentially methylated genes around 25% have a change in RNA expression
+#     for the differentially methylated genes around 11% have a change in RNA expression
+# 
+#  (Q) Are te changes in RNA expression upregulation or downregulation?
+#  (S) For the diffentially methylated genes and the differentially expressed genes, 82% are downregulated
+ #     For the non-diffentially methylated genes and the differentially expressed genes, 61% are upregulated
+
+
+foo[,mean(rna.sig==TRUE),by="cluster"]
+foo[cluster=="(0.5,1]" & rna.sig==TRUE, mean(rna.diff>0),by="cluster"]
+foo[cluster=="(0,0.05]" & rna.sig==TRUE, mean(rna.diff>0),by="cluster"]
+
+p <- ggplot(bar, aes(x=cluster, y=rate, fill=stage)) +
+  geom_boxplot(alpha=1.0, outlier.shape = NA) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(colour="black",size=rel(1.5), angle=90, hjust=1, vjust=0.5)
+  )
+print(p)
+```

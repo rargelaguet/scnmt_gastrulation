@@ -1,0 +1,169 @@
+---
+title: "Accessibility heatmaps at motif sites: mean rate accross loci"
+author: "Stephen Clark"
+date: "05/21/2018"
+output: html_document
+---
+
+Accessibility data has been quantified at each loci then the mean taken for each TF motif. i.e. for every cell we have 1 data point for each TF motif.  
+
+```{r load_modules, echo=FALSE, include=FALSE}
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(pheatmap)
+library(doParallel)
+```
+
+
+
+```{r define_opts, echo=FALSE, include=FALSE}
+
+## Define I/O ##
+io <- list()
+io$data_dir <- "/bi/scratch/Stephen_Clark/gastrulation_data"
+io$base_dir <- "/bi/group/reik/Stephen/github/gastrulation"
+io$sample.metadata <- paste0(io$data_dir, "/sample_metadata.txt")
+io$in.data <- paste0(io$data_dir, "/acc/parsed/motifs/mean_accross_loci")
+
+
+## Define options ##
+opts <- list()
+
+# Define which stage and lineages to look at 
+# opts$stage_lineage <- c("E4.5_EPI","E5.5_EPI","E6.5_EPI")
+opts$stage <- c("E4.5", "E5.5","E6.5","E7.5")
+opts$KO_3b <- "not"
+opts$lineage <- c("EPI", "PE", "VE", "PS", "Mesoderm", "Ectoderm", "Endoderm")
+
+# Define which cells to use
+opts$cells <- fread(io$sample.metadata) %>% .[,stage_lineage:=paste(stage,lineage,sep="_")] %>% 
+  .[pass_accQC==T & stage%in%opts$stage & lineage %in% opts$lineage, id_acc]
+  # .[pass_accQC==T & stage_lineage%in%opts$stage_lineage,id_acc]
+
+# Define which chr to use
+# opts$chr <- as.character(1:19)
+# opts$chr <- paste0("chr",as.character(1:19))
+#opts$chr <- c("chr1","chr2","chr3")
+
+# Define filtering options
+# opts$min.weight <- 1
+# opts$min.coverage <- 0
+
+# Window size
+# opts$window_size <- 10000
+
+# adjust rates by global rate?
+opts$adjust <- FALSE
+io$global_rates <- paste0(io$data_dir, "/acc/output/global_rates/global_rates.csv")
+
+# impute missing values using the mean for that locus?
+opts$mean_impute <- FALSE
+
+# pick only the top variable sites based on beta binomial?
+opts$filter_by_bb <- FALSE
+opts$bb_cutoff <- 0.1 # include only the top x fraction
+io$bb_file <- paste0(io$base_dir, "/acc/motifs/betabinomial_model/out/all_stages_motifs.csv")
+
+
+# filter annotations?
+opts$filter_anno = FALSE
+opts$anno_select = c("HOCOMOCOv10-CRX_MOUSE.H10MO.A", "jaspar2016-Pou5f1::Sox2-MA0142")
+
+```
+
+<!-- load metadata -->
+```{r, include=FALSE}
+
+# Sample metadata
+# sample_metadata <- fread(io$sample.metadata) %>% .[id_met%in%opts$cells] %>% .[,stage_lineage:=paste(stage,lineage,sep="_")]
+sample_metadata <- fread(io$sample.metadata)[,c("id_acc","stage","lineage")] %>% .[id_acc%in%opts$cells] %>%
+  .[,stage_lineage:=paste(stage,lineage,sep="_")] %>% setnames("id_acc","sample")
+
+# Load genomic coordinates
+#mm10 <- fread("/Users/ricard/data/mm10_sequence/mm10.genome"); colnames(mm10) <- c("chr","length")
+# mm10 <- mm10 %>% .[,chr:=substr(chr,4,nchar(chr))] %>% .[chr %in% opts$chr]
+#mm10 <- mm10 %>% .[chr %in% opts$chr]
+
+```
+
+
+```{r, include=FALSE}
+files <- dir(io$in.data, pattern=".tsv.gz", full=TRUE)
+# remove empty files
+files <- files[file.size(files)>100]
+
+if (opts$filter_anno) files <- map(opts$anno_select, ~files[grep(., files)]) %>% unlist
+```
+
+
+<!-- Load, parse and filter data -->
+```{r, include=FALSE}
+if (opts$adjust) adj <- fread(io$global_rates) %>% setkey(sample) 
+
+if (opts$filter_by_bb) {
+  bb <- fread(io$bb_file) %>%
+    .[order(rank)] %>%
+    .[1:(.N*opts$bb_cutoff), id]
+}
+
+registerDoParallel(cores=detectCores())  
+data <- foreach(i=files) %dopar% {
+#data <- map(files, ~{
+  
+  dt <- fread(paste("zcat", i)) #%>%
+    #setnames(c("sample", "id", "anno", "rate", "Nmet", "N")) 
+      
+  
+  
+  if (dt[, .N]==0) return(NULL)
+  
+  if (opts$adjust) {
+    setkey(dt, sample)
+    dt <- dt[, rate := as.double(rate)] %>%
+      .[adj, rate := rate-i.global_rate]
+  }
+  
+  
+  
+  if (dt[, .N]==0) return(NULL)
+  
+  # dcast to matrix
+  dcast(dt, anno~sample, value.var="rate") %>%
+    as.data.frame() %>%
+    tibble::column_to_rownames("anno") %>%
+    as.matrix()
+  
+
+}
+
+  
+  
+  
+# }) %>%
+#   rbindlist()
+
+names(data) <- basename(files) %>% gsub(".tsv.gz", "", .)
+    
+
+
+```
+
+```{r}
+anno_cols <- sample_metadata[, .(sample, stage, lineage)] %>%
+  as.data.frame() %>%
+  tibble::column_to_rownames("sample")
+walk2(data, names(data), ~{
+  pheatmap(.x, annotation_col=anno_cols, show_rownames=FALSE, show_colnames=FALSE, main=.y)
+})
+```
+
+```{r}
+cor_mat <- map(data, cor)
+
+walk2(cor_mat, names(data), ~{
+  pheatmap(.x, annotation_col=anno_cols, show_rownames=FALSE, show_colnames=FALSE, main=.y)
+})
+```
+
+

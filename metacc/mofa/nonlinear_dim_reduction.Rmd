@@ -1,0 +1,140 @@
+```{r}
+library(umap)
+library(Rtsne)
+library(irlba)
+```
+
+```{r}
+theme_pub <- function() {
+  theme_bw() +
+  theme(
+    legend.position = "right",
+    legend.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank()
+  )
+}
+```
+
+```{r}
+algorithms <- c("umap")
+views <- views_names(model)
+samples <- unname(unlist(samples_names(model)))
+```
+
+<!-- Non-linear dimensionality reduction from MOFA factors -->
+```{r}
+# Fetch factors
+Z <- get_factors(model) %>% do.call("rbind",.) %>% .[,c(1,2,4)]
+
+for (algorithm in algorithms) {
+  
+  set.seed(1)
+  if (algorithm=="tsne") {
+    tsne <- Rtsne(Z, check_duplicates=FALSE, pca=FALSE, theta=0.5, dims=2)
+    Z.out <- tsne$Y
+  } else if (algorithm=="umap") {
+    
+    umap.defaults$n_neighbors <- 10
+    umap.defaults$min_dist <- 1.0
+    
+    umap.out <- umap(Z, config = umap.defaults)
+    Z.out <- umap.out$layout
+  }
+  
+  to.plot <- Z.out %>% as.data.table %>% .[,sample:=rownames(Z)] %>%
+      merge(sample_metadata_filt[,c("sample","stage_lineage")], by="sample")
+
+  p1 <- ggplot(to.plot, aes(x=V1, y=V2, color=stage_lineage)) +
+    geom_point(alpha=0.7, size=1.5) +
+    # scale_color_manual(values=opts$colors) +
+    guides(colour = guide_legend(override.aes = list(size=3))) +
+    labs(x="Dimension 1", y="Dimension 2") +
+    theme_pub()
+  
+  # pdf(sprintf("%s/MOFA_%s.pdf",io$pdfdir,algorithm), width=6, height=5.5, useDingbats = F)
+  print(p1)
+  # dev.off()
+}
+```
+
+Imputation
+```{r}
+
+model <- impute(model)
+```
+
+```{r}
+view <- "Met End Distal H3K27ac"
+factor <- 2
+
+tmp <- names(tail(sort(abs(get_weights(model, views=view, factor=factor)[[1]][,1])), n=50))
+if (length(model@imputed_data)>0) {
+  met <- colMeans(model@imputed_data[[view]][[1]][tmp,], na.rm=T)
+} else {
+  met <- colMeans(model@training_data[[view]][[1]][tmp,], na.rm=T)
+}
+
+if (view=="Met Ect Distal H3K27ac") {
+  min_met <- (-4.5)
+  max_met <- 4.5
+  met[met<(min_met)] <- min_met
+  met[met>(max_met)] <- max_met
+} else if (view=="Met Mes Distal H3K27ac") {
+  min_met <- (-8)
+  max_met <- 4.5
+  met[met<(min_met)] <- min_met
+  met[met>(max_met)] <- max_met
+}
+
+
+foo <- to.plot %>% merge(
+  data.table(sample = unname(unlist(samples_names(model))), met = met), by="sample"
+)
+
+p <- ggplot(foo, aes(x=V1, y=V2, color=met)) +
+  geom_point(alpha=0.7, size=1.5) +
+  scale_colour_gradientn(colours = brewer.pal(9, "OrRd")) +
+  labs(x="Dimension 1", y="Dimension 2") +
+  theme_pub() 
+print(p)
+```
+
+```{r}
+view <- "Acc Ect Distal H3K27ac"
+factor <- 1
+
+tmp <- names(tail(sort(abs(get_weights(model, views=view, factor=factor)[[1]][,1])), n=50))
+if (length(model@imputed_data)>0) {
+  acc <- colMeans(model@imputed_data[[view]][[1]][tmp,], na.rm=T)
+} else {
+  acc <- colMeans(model@training_data[[view]][[1]][tmp,], na.rm=T)
+}
+
+if (view=="Acc Ect Distal H3K27ac") {
+  min_acc <- (-2)
+  max_acc <- 2
+  acc[acc<(min_acc)] <- min_acc
+  acc[acc>(max_acc)] <- max_acc
+} else if (view=="Acc Mes Distal H3K27ac") {
+  min_acc <- (-1.5)
+  max_acc <- 1.5
+  acc[acc<(min_acc)] <- min_acc
+  acc[acc>(max_acc)] <- max_acc
+}
+
+
+foo <- to.plot %>% merge(
+  data.table(sample = unname(unlist(samples_names(model))), acc = acc), by="sample"
+)
+
+p <- ggplot(foo, aes(x=V1, y=V2, color=acc)) +
+  geom_point(alpha=0.7, size=1.5) +
+  scale_colour_gradientn(colours = rev(brewer.pal(9, "Blues"))) +
+  labs(x="Dimension 1", y="Dimension 2") +
+  theme_pub() 
+
+print(p)
+```
+
+

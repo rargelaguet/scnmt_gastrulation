@@ -1,0 +1,206 @@
+---
+title: "Bubble Plots of Motif Accessibility"
+author: "Stephen Clark"
+date: "09/26/2018"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(future.globals.maxSize =  2000 * 1024 ^ 2)
+
+library(data.table)
+library(purrr)
+library(furrr)
+library(ggplot2)
+library(cowplot)
+library(pheatmap)
+
+
+# in/out
+io <- list()
+io$data_dir <- "/bi/scratch/Stephen_Clark/gastrulation_data"
+io$sample_meta <- paste0(io$data_dir, "/sample_metadata_scNMT.txt")
+io$acc_motif_data <- paste0(io$data_dir, "/acc/parsed/fimo_motifs")
+io$rna_dt <- paste0(io$data_dir, "/rna/parsed/rna_dt.csv")
+io$dif_acc_dir <- paste0(io$data_dir, "/output/motif_dif_acc")
+io$dif_exp_dir <- paste0(io$data_dir, "/output/dif_exp")
+
+
+opts <- list()
+opts$stages <- "E7.5"#c("E4.5", "E5.5", "E6.5", "E7.5")
+opts$lineages <- c("EPI", "PS", "Ectoderm", "Mesoderm", "Endoderm")
+opts$motifs_regex <- ""
+opts$subset_to_dif_acc_sites <- TRUE
+opts$min_cells_expressed <- 20 # only include TFs expressed in at least this many cells
+opts$numb_tfs_to_plot <- 10
+
+# functions
+fread_gz <- function(file, ...){
+  paste("zcat", file) %>%
+    fread(...)
+}
+
+t_test <- function(x, y){
+  na_rtrn <- as.numeric(NA) %>%
+    list(p = ., mean_x = ., mean_y = .)
+  if (sum(!is.na(x)) <5 || sum(!is.na(y)) < 5 || var(x, na.rm = TRUE) == 0 || var(y, na.rm = TRUE) == 0) {
+    return(na_rtrn)
+    }
+  t <- t.test(x, y, alternative = "greater")
+  list(p = t$p.value, mean_x = t$estimate[[1]], mean_y = t$estimate[[2]])
+}
+
+```
+
+```{r}
+meta <- fread(io$sample_meta) %>%
+  .[stage == "E6.75", stage := "E6.5"] %>%
+  .[pass_accQC == TRUE] %>%
+  .[stage %in% opts$stages & lineage %in% opts$lineages & KO_3b == "not"]
+
+cells <- meta[, sample]
+
+exp <- fread(io$rna_dt) %>%
+  .[sample %in% cells]
+
+expressed_genes <-  exp[, .(ncells = sum(exp > 0)), gene] %>%
+  .[ncells > opts$min_cells_expressed, toupper(gene)]
+
+
+# find files and subset to only include transcribed TFs
+
+acc_files <- dir(io$acc_motif_data, pattern = ".tsv.gz", full = TRUE) %>%
+  .[grep(opts$motifs_regex, .)] %>%
+  data.table(file = ., tf = gsub(".tsv.gz|all_", "", basename(.))) %>%
+  tidyr::separate(tf, c("tf1", "tf2", "tf3", "tf4"), sep = "_", extra = "drop", fill = "right") %>%
+  melt(id.vars = "file", value.name = "tf", variable.name = "position") %>%
+  .[toupper(tf) %in% expressed_genes, file] %>%
+  unique()
+
+if (opts$subset_to_dif_acc_sites){
+  dif_acc <- dir(io$dif_acc_dir, pattern = "txt.gz", full = TRUE) %>%
+  setNames(gsub(".txt.gz", "", basename(.))) %>%
+  map2(names(.), ~fread_gz(.x)[sig == TRUE][, file := .y]) %>%
+  rbindlist()
+
+sites_select <- dif_acc[, .(id, anno)] %>%
+  setkey()
+}
+
+dif_exp <- dir(io$dif_exp_dir, pattern = ".tsv", full = TRUE) %>%
+  setNames(gsub(".tsv|E7.5", "", basename(.)) %>% strsplit("_") %>% map_chr(1) %>% paste0("oderm")) %>%
+  map(fread) %>%
+  map(~.[sig == TRUE & logFC < 0, toupper(symbol)])
+
+plan(multiprocess)
+acc <- future_map(acc_files, ~{
+  dt <- fread_gz(.) %>%
+    setkey(sample) %>%
+    .[sample %in% cells]
+  if (opts$subset_to_dif_acc_sites){
+    setkey(dt, id, anno)
+    dt <- merge(dt, sites_select)
+  }
+  dt
+}) %>%
+  rbindlist() %>%
+  setkey(sample) %>%
+  merge(meta[, .(sample, lineage)], by = "sample")
+
+
+lineages <- acc[, unique(lineage)]
+
+
+
+
+acc_mean <- acc[, .(rate = mean(rate)), .(sample, lineage, anno)]
+
+dif_acc_mean <- map(lineages, ~copy(acc_mean)[, lin := "lin2"][lineage == ., lin := "lin1"][, lineage := .])%>%
+  rbindlist() %>%
+  dcast(lineage + anno + sample ~ lin, value.var = "rate") %>%
+  .[, t_test(lin1, lin2), .(lineage, anno)] %>%
+  .[, padj := p.adjust(p, method = "fdr")] %>%
+  .[, logpadj := -log10(padj)] %>%
+  .[, sig := ifelse(padj < 0.05, TRUE, FALSE)] %>%
+  .[!is.na(p)] %>%
+  .[order(padj)]
+ 
+ggplot(dif_acc_mean, aes(mean_x - mean_y, logpadj, colour = sig, label = anno)) +
+  geom_point() +
+  ggrepel::geom_text_repel(data = dif_acc_mean[1:10]) +
+  scale_colour_manual(values = c("black", "red")) +
+  guides(colour = FALSE) +
+  facet_wrap(~lineage, ncol = 1, scales = "free") +
+  theme(strip.background = element_blank())
+
+```
+
+```{r}
+toplot <- split(dif_acc_mean[sig == TRUE], by = "lineage", keep.by = FALSE) %>%
+  map(merge, acc_mean[, .(rate = mean(rate)), .(anno, lineage)], by = "anno") %>%
+  map(~.[order(-rank(padj))] %>% 
+        .[, anno := factor(anno, levels = unique(anno)) %>% toupper()]) 
+
+# filter for diff exp
+toplot <- map2(toplot, dif_exp[names(toplot)], ~.x[anno %in% .y])
+
+tfs_select <- map(toplot, ~.[, rev(unique(anno))[1:opts$numb_tfs_to_plot]])
+
+toplot <- map2(toplot, tfs_select, ~.x[anno %in% .y]) 
+
+plots <- map2(toplot, names(toplot), ~{
+  title <- paste("Motifs with increased accessibility in", .y)
+  ggplot(.x, aes(lineage, toupper(anno))) +
+    geom_point(aes(colour = rate, size = rate)) +
+    xlab("Lineage") +
+    ylab("Transcription factor") +
+    ggtitle(title)
+    #theme(strip.background = element_blank())
+})
+
+
+plots$Ectoderm
+plots$Mesoderm
+plots$Endoderm
+
+plot_grid(plotlist = plots, ncol = 1)
+plot_grid(plotlist = plots, nrow = 1)
+```
+
+now inlcude mean expression of TF
+```{r}
+genes_select <- unlist(tfs_select) %>% 
+  as.character() %>% 
+  strsplit(split = "::") %>% 
+  unlist() %>% 
+  toupper()
+
+mean_exp <- exp[, .(tf = toupper(gene), sample, exp)] %>%
+  .[tf %in% genes_select] %>%
+  merge(meta[, .(sample, lineage)], by = "sample") %>%
+  .[, .(mean_exp = mean(exp)), .(tf, lineage)] %>%
+  .[, exp_ratio := mean_exp / mean(mean_exp), tf]
+
+toplot_exp <- map(toplot, ~tidyr::separate(., anno, c("tf", "other_tfs"), sep = "::", extra = "drop", fill = "right")) %>%
+  map(~.[, tf := toupper(tf)]) %>%
+  map(merge, mean_exp, by = c("tf", "lineage"))
+
+plots_exp <- map2(toplot_exp, names(toplot_exp), ~{
+  title <- paste("Motifs with increased accessibility in", .y)
+  ggplot(.x, aes(lineage, tf)) +
+    geom_point(aes(colour = exp_ratio, size = rate)) +
+    xlab("Lineage") +
+    ylab("Transcription factor") +
+    ggtitle(title)
+    #theme(strip.background = element_blank())
+})
+
+plots_exp$Ectoderm
+plots_exp$Mesoderm
+plots_exp$Endoderm
+
+plot_grid(plotlist = plots_exp, ncol = 1)
+
+```

@@ -1,0 +1,263 @@
+---
+title: "Gastrulation:"
+output: 
+  BiocStyle::html_document: 
+  fig_width: 10
+  fig_height: 8
+---
+  
+```{r load_modules, echo=FALSE, include=FALSE}
+library(data.table)
+library(purrr)
+library(scater)
+library(ggplot2)
+library(RColorBrewer)
+library(umap)
+```
+
+```{r funcs, echo=FALSE}
+matrix.please<-function(x) {
+    m<-as.matrix(x[,-1])
+    rownames(m)<-x[[1]]
+    m
+}
+
+theme_pub <- function() {
+  p <- theme(
+    axis.title = element_text(colour="black", size=rel(1.1)),
+    axis.text = element_blank(),
+    axis.line = element_line(colour="black", size=rel(0.9)),
+    axis.ticks = element_blank(),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    legend.position="right",
+    legend.text=element_text(size=15),
+    legend.key = element_blank(),
+    legend.title=element_blank(),
+    legend.background=element_blank(),
+    panel.border = element_blank()
+  )
+}
+```
+
+
+```{r define_opts, echo=FALSE}
+
+## Define I/O ##
+io <- list()
+io$path2atlas <- "/Users/ricard/data/gastrulation10x/processed"
+io$path2scNMT <- "/Users/ricard/data/gastrulation"
+io$outdir <- "/Users/ricard/gastrulation/rna/dimensionality_reduction/with_atlas/E7.5/out"
+
+## Define options ##
+opts <- list()
+
+# Define which cells to use
+# opts$lineage10x <- c(
+#   "Epiblast",
+#   "Rostral neurectoderm",
+#   "Surface ectoderm",
+#   "Embryonic endoderm",
+#   "Visceral endoderm",
+#   "Primitive Streak",
+#   "Nascent mesoderm",
+#   "Mature mesoderm"
+# )
+
+# Rename lineages from the atlas
+opts$lineage10x <- c(
+  "Epiblast" = "Epiblast",
+  "Gut" = "Endoderm",
+  "Def. endoderm" = "Endoderm",
+  "Notochord" = "Endoderm",
+  "Visceral endoderm" = "Endoderm",
+  "ExE endoderm" = "Endoderm",
+  "Pharyngeal mesoderm" = "Mesoderm",
+  "Paraxial mesoderm" = "Mesoderm",
+  "ExE mesoderm" = "Mesoderm",
+  "Mesenchyme" = "Mesoderm",
+  "Mixed mesoderm" = "Mesoderm",
+  "Haematoendothelial progenitors"  = "Mesoderm",
+  "Intermediate mesoderm" = "Mesoderm",
+  "Somitic mesoderm" = "Mesoderm",
+  "Caudal Mesoderm" = "Mesoderm",
+  # "Caudal epiblast" = "Primitive Streak",
+  "Primitive Streak" = "Primitive Streak",
+  "Anterior Primitive Streak" = "Primitive Streak",
+  "Rostral neurectoderm" = "Ectoderm",
+  "Surface ectoderm" = "Ectoderm"
+)
+
+
+opts$colors <- c(
+  "Epiblast"="grey70",
+  "Ectoderm"="steelblue",
+  "Primitive Streak"="sandybrown",
+  # "Nascent mesoderm"="#FF82AB",
+  # "Mature mesoderm"="#CD3278",
+  "Mesoderm"="#CD3278",
+  # "Embryonic endoderm"="#43CD80",
+  # "Visceral endoderm"="#2E8B57"
+  "Endoderm"="#43CD80"
+)
+```
+
+<!-- Load sample metadata -->
+
+scNMT-seq
+```{r}
+meta_query <- fread(paste0(io$path2scNMT,"/sample_metadata.txt")) %>%
+  # .[,lineage10x:=stringr::str_replace_all(lineage10x,"_"," ")] %>%
+  .[,lineage10x_2:=stringr::str_replace_all(lineage10x_2,"_"," ")] %>%
+  .[pass_rnaQC==T & stage=="E7.5" & lineage10x_2%in%opts$lineage10x] %>%
+  .[,c("id_rna","lineage10x_2","plate")]
+```
+
+Atlas
+```{r load_metadata, echo=FALSE}
+# Load atlas cell metadata
+meta_atlas <- readRDS(paste0(io$path2atlas, "/sample_metadata_atlas.rds")) %>% as.data.table %>%
+  .[stage%in%c("E7.25","E7.5","E7.75","E8.0")] %>%
+  .[,c("cell","celltype","sample")] %>%
+  .[celltype%in%names(opts$lineage10x)] %>%
+  .[,lineage:=as.factor(stringr::str_replace_all(celltype, opts$lineage10x))]
+```
+
+<!-- Load pre-computed data -->
+
+Query (scNMT-seq)
+```{r}
+# Load SingleCellExperiment object
+sce_query  <- readRDS(paste0(io$path2scNMT, "/rna/parsed/SingleCellExperiment.rds")) %>% .[,meta_query$id_rna]
+
+# Load precomputed mapping
+mapping <- readRDS("/Users/ricard/data/gastrulation/mapping_10x/mapping.rds")$mapping
+mapping.dt <- data.table(
+  id_rna            = mapping$cell, 
+  celltype.mapped = mapping$celltype.mapped,
+  stage.mapped    = mapping$stage.mapped,
+  closest.cell    = as.character(mapping$closest.cell)
+)
+```
+
+Atlas
+```{r}
+# Load SingleCellExperiment object
+sce_atlas  <- readRDS(paste0(io$path2atlas, "/SingleCellExperimentAtlas.rds")) %>% .[,meta_atlas$cell]
+
+# Load precomputed dimensionality reduction coordinates
+# atlas.coordinates <- fread("/Users/ricard/data/gastrulation_norsync_stuff/metaccrna/mofa/full/umap_coordinates.txt")
+atlas.coordinates <- readRDS("/Users/ricard/data/gastrulation10x/processed/umap_coordinates.rds") %>% 
+  as.data.frame() %>% tibble::rownames_to_column("cell") %>% as.data.table
+```
+
+```{r}
+sce_query  <- sce_query[!is.na(match(rownames(sce_query), rownames(sce_atlas))), ]
+sce_atlas <- sce_atlas[match(rownames(sce_query), rownames(sce_atlas)), ]
+
+rownames(sce_query) <- rowData(sce_query)$symbol
+rownames(sce_atlas) <- rowData(sce_query)$symbol
+```
+
+
+
+<!-- Load gene expression markers -->
+```{r}
+# io$rna.markers <- "/Users/ricard/data/gastrulation/rna/find_markers"
+# 
+# gene.markers <- map(unique(sample_metadata$stage_lineage), function(x) fread(sprintf("%s/%s.txt",io$rna.markers, x)) %>% .[,population:=x]) %>%
+#   rbindlist() %>%
+#   .[,.SD[1:10],by="population"]
+```
+
+<!-- Prepare data.frame to plot -->
+```{r}
+plot_df_atlas = atlas.coordinates %>% merge(meta_atlas, by=c("cell"))
+plot_df_query = mapping.dt %>% merge(meta_query, by=c("id_rna"))
+
+# index <- match(plot_df$id_rna, as.character(mapping$closest.cell) )
+# plot_df$mapped <- as.factor(!is.na(index))
+
+# index <- match(plot_df_query$id_rna, as.character(mapping$closest.cell) )
+# plot_df_query$mapped <- as.factor(!is.na(index))
+
+index <- match(plot_df_atlas$cell, plot_df_query$closest.cell )
+plot_df_atlas$mapped <- as.factor(!is.na(index))
+```
+
+```{r}
+p <- ggplot(plot_df_atlas, aes(x=V1,y=V2)) +
+  # geom_point(aes(color=lineage, shape=method), size=0.45) +
+  ggrastr::geom_point_rast(aes(color=lineage), size=0.15) +
+  scale_color_manual(values=opts$colors) +
+  labs(x="UMAP Dimension 1", y="UMAP Dimension 2") +
+  guides(colour = guide_legend(override.aes = list(size=3))) +
+  theme_pub() +
+  theme(legend.position = "none")
+# print(p)
+
+pdf(paste0(io$outdir,"/E7.5_umap.pdf"), width=5, height=4, useDingbats = F)
+print(p)
+dev.off()
+```
+
+```{r}
+p <- ggplot(data=plot_df_atlas, mapping=aes(x=V1, y=V2)) +
+  ggrastr::geom_point_rast(aes(colour=mapped, size=mapped, alpha=mapped)) +
+  scale_size_manual(values = c("TRUE"=0.75, "FALSE"=0.1)) +
+  scale_alpha_manual(values = c("TRUE"=1.0, "FALSE"=0.4)) +
+  labs(x="UMAP Dimension 1", y="UMAP Dimension 2") +
+  scale_colour_manual(values = c("TRUE"="red", "FALSE"="grey")) +
+  guides(colour = guide_legend(override.aes = list(size=6))) +
+  theme_classic() +
+  theme(
+    legend.position = "none",
+    axis.text = element_blank(),
+    axis.ticks = element_blank()
+  )
+
+pdf(paste0(io$outdir,"/E7.5_umap_mapped.pdf"), width=5, height=4, useDingbats = F)
+print(p)
+dev.off()
+```
+
+<!-- Plot marker genes -->
+```{r}
+marker_genes <- c(
+  # Epiblast
+  "Utf1","Slc7a3",
+  
+  # Mesoderm
+  "Mesp1", "Phlda2",
+    
+  # Primitive Streak
+  "T","Fst",
+  
+  # Endoderm
+  "Sox17", "Foxa2",
+  
+  # Ectoderm
+  "Irx3","Crabp2"
+)
+
+for (i in marker_genes) {
+  expr <- data.table(cell=colnames(sce_atlas), expr=exprs(sce_atlas[i,])[1,])
+  to.plot <- atlas.coordinates %>% merge(expr, by="cell")
+    
+  p <- ggplot(to.plot, aes(x=V1, y=V2)) +
+    ggrastr::geom_point_rast(aes(color=expr), size=0.20) +
+    labs(x="UMAP Dimension 1", y="UMAP Dimension 2", title=i) +
+    viridis::scale_color_viridis() +
+    guides(colour = guide_legend(override.aes = list(size=3))) +
+    theme_pub() +
+    theme(
+      axis.text = element_blank(),
+      legend.position = "none",
+      legend.direction = "horizontal"
+    )
+
+  pdf(sprintf("%s/E7.5_%s_umap.pdf",io$outdir,i), width=4.5, height=4, useDingbats = F)
+  print(p)
+  dev.off()
+}
+```

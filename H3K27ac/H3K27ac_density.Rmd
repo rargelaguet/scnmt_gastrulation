@@ -1,0 +1,102 @@
+---
+title: 'Gastrulation: H3K27ac bivariate density distribution plots'
+output: html_document
+---
+
+```{r echo=FALSE, include=FALSE}
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(ggpubr)
+```
+
+```{r}
+if (grepl("ricard",Sys.info()['nodename'])) {
+  source("/Users/ricard/gastrulation/H3K27ac/H3K27ac_load_settings.R")
+  source("/Users/ricard/gastrulation/H3K27ac/H3K27ac_load_data.R")  
+} else {
+  source("/Users/stapelc/Documents/Github/gastrulation/H3K27ac/H3K27ac_load_settings.R")
+  source("/Users/stapelc/Documents/Github/gastrulation/H3K27ac/H3K27ac_load_data.R")
+}
+
+theme_pub <- function() {
+  theme(
+    axis.text = element_text(size=rel(1.4), color='black'),
+    axis.title = element_text(size=rel(1.5), color='black'),
+    axis.line = element_line(color="black", size=rel(1.0)),
+    legend.position = "none",
+    strip.background = element_blank(),
+    panel.background = element_blank()
+  )
+}
+```
+
+<!-- Plot bivariate density distribution for pairs of enhancers -->
+
+Fixed axes
+
+```{r}
+# opts$xmin <- min(enh_marked_log$serum)
+opts$xmin <- 1.25
+opts$xmax <- max(enh_marked_log$serum) - 1.5
+opts$ymin <- min(enh_marked_log$E10.5_midbrain)
+opts$ymax <- max(enh_marked_log$E10.5_midbrain)
+```
+
+```{r}
+for (ann in unique(enh_marked_log$anno)) {
+  data.plot <- enh_marked_log[anno==ann]
+  
+  p <- ggplot(data.plot, aes(x=serum, y=E10.5_midbrain)) +
+    stat_density_2d(aes(fill = ..density..), geom = "raster", contour = F) +
+    geom_vline(xintercept=mean(data.plot$serum), linetype="dashed") +
+    geom_hline(yintercept = mean(data.plot$E10.5_midbrain), linetype="dashed") +
+    labs(x="H3K27ac levels in ESCs (log)", y="H3K27ac levels in E10.5 midbrain (log)") +
+    # scale_fill_distiller(palette = "Spectral") +
+    scale_fill_gradient(low="white", high="purple") +
+    stat_density2d(contour=T, size=0.2, alpha=0.8, color="black") +
+    # geom_segment(aes(x=opts$xmin, xend=opts$xmax, y=0, yend=0), size=0.25, color="black") +
+    # geom_segment(aes(x=0, xend=0, y=opts$xmin, yend=opts$xmax), size=0.25, color="black") +
+    coord_cartesian(xlim=c(opts$xmin,opts$xmax), ylim=c(opts$ymin,opts$ymax)) +
+    theme_pub()
+
+  pdf(file=paste0(io$outdir,"/H3K27ac_bivariateDensity",ann,".pdf"), width=6, height=6)
+  print(p)
+  dev.off()
+}
+```
+
+Free axes
+```{r}
+for (ann in unique(enh_marked_log$anno)) {
+  data.plot <- enh_marked_log[anno==ann]
+
+  p <- ggplot(data.plot, aes(x=serum, y=E10.5_midbrain)) +
+    stat_density_2d(aes(fill = ..density..), geom = "raster", contour = F) +
+    #geom_abline(linetype="dotted") +
+    geom_vline(xintercept=mean(data.plot$serum), linetype="dashed") +
+    geom_hline(yintercept = mean(data.plot$E10.5_midbrain), linetype="dashed") +
+    labs(x="H3K27ac levels in ESCs (log)", y="H3K27ac levels in E10.5 midbrain (log)") +
+
+    # scale_fill_distiller(palette = "Spectral") +
+    scale_fill_gradient(low="white", high="purple") +
+    
+    stat_density2d(contour=T, size=0.2, alpha=0.8, color="black") +
+  
+    coord_cartesian(xlim=c(opts$xmin,opts$xmax), ylim=c(opts$ymin,opts$ymax)) +
+    theme(
+      axis.text.x = element_text(size=rel(1.1), color='black'),
+      axis.text.y = element_text(size=rel(1.1), color='black'),
+      axis.title.x = element_text(size=rel(1.2), color='black'),
+      axis.title.y = element_text(size=rel(1.2), color='black'),
+      legend.position = "none",
+      strip.background = element_blank(),
+      panel.background = element_blank()
+      )
+  
+  #pdf(file=paste0(io$outdir,"/H3K27ac_bivariateDensityDistr_",ann,"_heart_midbrain_enhAxes.pdf"), width=6, height=6, useDingbats=F)
+  print(p)
+  #dev.off()
+}
+
+```

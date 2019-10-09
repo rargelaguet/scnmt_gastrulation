@@ -1,0 +1,127 @@
+---
+title: "Gastrulation: chromatin accessibility distributions"
+output:
+  BiocStyle::html_document: 
+    toc: false
+    fig_width: 10
+    fig_height: 8
+---
+
+```{r load_modules, echo=FALSE, include=FALSE}
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(ggpubr)
+```
+
+```{r define_opts, echo=FALSE}
+
+## Define I/O ##
+io <- list()
+io$sample.metadata <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
+io$data <- "/Users/ricard/data/gastrulation/acc/parsed"
+io$outdir <- "/Users/ricard/gastrulation/acc/distributions/feature_level/out"
+
+## Define options ##
+opts <- list()
+
+# Define which cells to use (use NULL for all cells)
+opts$stage_lineage10x <- c(
+  
+  # E4.5
+  "E4.5_Epiblast",
+  
+  # E5.5
+  "E5.5_Epiblast",
+  
+  # E6.5
+  "E6.5_Epiblast",
+  "E6.5_Primitive_Streak",
+  
+  # E7.5
+  "E7.5_Epiblast",
+  "E7.5_Primitive_Streak",
+  "E7.5_Endoderm",
+  "E7.5_Mesoderm",
+  "E7.5_Ectoderm"
+)
+# opts$stage_lineage10x <- NULL
+
+opts$annos <- c(
+  "prom_2000_2000"="Promoters",
+  "H3K27ac_distal_E7.5_Mes_intersect12"="Mesoderm enhancers",
+  "H3K27ac_distal_E7.5_Ect_intersect12"="Ectoderm enhancers",
+  "H3K27ac_distal_E7.5_End_intersect12"="Endoderm enhancers"
+)
+
+# Define which cells to use
+tmp <- fread(io$sample.metadata) %>% .[!is.na(id_acc)] 
+if (is.null(opts$stage_lineage10x)) {
+  opts$cells <- tmp[,id_acc]
+} else {
+  opts$cells <- tmp %>%
+    .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")] %>%
+    .[pass_accQC==T & stage_lineage%in%opts$stage_lineage,id_acc]
+}
+```
+
+<!-- Load sample metadata -->
+```{r}
+sample_metadata <- fread(io$sample.metadata,stringsAsFactors=F) %>% 
+  .[,c("id_acc","stage","lineage10x_2","plate")] %>%
+  .[id_acc%in%opts$cells] %>%
+  .[,stage_lineage:=as.factor(paste(stage,lineage10x_2,sep="_"))]
+```
+
+<!-- Load data  -->
+```{r}
+data <- lapply(names(opts$annos), function(n)
+  fread(cmd=sprintf("zcat < %s/%s.tsv.gz",io$data,n), showProgress=F) %>%
+  setnames(c("id_acc","id","anno","Nmet","Ntotal","rate"))
+) %>% rbindlist
+```
+
+<!-- Parse data -->
+```{r}
+# Merge with sample metadata
+data <- data %>% merge(sample_metadata, by="id_acc")
+
+# Convert beta value to M value
+# data[,m:=log2(((rate/100)+0.01)/(1-(rate/100)+0.01))]
+```
+
+```{r}
+data %>% .[,anno:=stringr::str_replace_all(anno,opts$annos)]
+```
+
+<!-- Plot histogram in pseudobulk stages -->
+```{r}
+data.pseudobulk <- data %>% 
+  .[,.(rate=100*(sum(Nmet)/sum(Ntotal))),by=c("stage","id","anno")]
+  
+p <- gghistogram(data.pseudobulk, x = "rate", y="..density..", fill = "#00BFC4", color = "black", alpha=0.75) +
+  facet_wrap(~stage+anno, nrow=4, scales="fixed") +
+  coord_cartesian(xlim=c(15,65)) +
+  theme(
+    axis.text.y = element_text(size=rel(0.9))
+    )
+
+pdf(sprintf("%s/distributions_acc.pdf",io$outdir), width=9, height=8)
+print(p)
+dev.off()
+```
+
+<!-- Plot histogram for every cell -->
+```{r}
+for (i in head(unique(data$id_acc),n=10)) {
+  p <- gghistogram(data[id_acc==i], x = "rate", y="..density..", fill = "#F37A71", color = "black", alpha=0.75) +
+    facet_wrap(~stage+anno, nrow=1, scales="fixed") +
+    theme(
+      axis.text.y = element_text(size=rel(0.9))
+    )
+  
+  pdf(sprintf("%s/distributions_acc_%s.pdf",io$outdir,i), width=9, height=8)
+  print(p)
+  dev.off()
+}
+```

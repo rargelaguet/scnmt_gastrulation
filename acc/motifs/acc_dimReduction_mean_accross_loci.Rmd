@@ -1,0 +1,208 @@
+---
+title: "Gastrulation: dimensionality reduction on accessibility data using putative transcription factor binding sites"
+
+---
+
+```{r load_modules, echo=FALSE, include=FALSE}
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(pcaMethods)
+library(doParallel)
+```
+
+
+
+```{r define_opts, echo=FALSE, include=FALSE}
+
+## Define I/O ##
+io <- list()
+io$data_dir <- "/bi/scratch/Stephen_Clark/gastrulation_data"
+io$base_dir <- "/bi/group/reik/Stephen/github/gastrulation"
+io$sample.metadata <- paste0(io$data_dir, "/sample_metadata.txt")
+io$in.data <- paste0(io$data_dir, "/acc/parsed/motifs/mean_accross_loci")
+
+
+## Define options ##
+opts <- list()
+
+# Define which stage and lineages to look at 
+# opts$stage_lineage <- c("E4.5_EPI","E5.5_EPI","E6.5_EPI")
+opts$stage <- c("E4.5", "E5.5","E6.5","E7.5")
+opts$KO_3b <- "not"
+
+# Define which cells to use
+opts$cells <- fread(io$sample.metadata) %>% .[,stage_lineage:=paste(stage,lineage,sep="_")] %>% 
+  .[pass_accQC==T & stage%in%opts$stage,id_acc]
+  # .[pass_accQC==T & stage_lineage%in%opts$stage_lineage,id_acc]
+
+# Define which chr to use
+# opts$chr <- as.character(1:19)
+# opts$chr <- paste0("chr",as.character(1:19))
+#opts$chr <- c("chr1","chr2","chr3")
+
+# Define filtering options
+# opts$min.weight <- 1
+# opts$min.coverage <- 0
+
+# Window size
+# opts$window_size <- 10000
+
+# adjust rates by global rate?
+opts$adjust <- FALSE
+io$global_rates <- paste0(io$data_dir, "/acc/output/global_rates/global_rates.csv")
+
+# impute missing values using the mean for that locus?
+opts$mean_impute <- FALSE
+
+# pick only the top variable sites based on beta binomial?
+opts$filter_by_bb <- FALSE
+opts$bb_cutoff <- 0.1 # include only the top x fraction
+io$bb_file <- paste0(io$data_dir, "/acc/output/betabinomial/all_stages_motifs.csv")
+
+
+# filter annotations?
+opts$filter_anno = FALSE
+opts$anno_select = c("HOCOMOCOv10-CRX_MOUSE.H10MO.A", "jaspar2016-Pou5f1::Sox2-MA0142")
+
+```
+
+<!-- load metadata -->
+```{r, include=FALSE}
+
+# Sample metadata
+# sample_metadata <- fread(io$sample.metadata) %>% .[id_met%in%opts$cells] %>% .[,stage_lineage:=paste(stage,lineage,sep="_")]
+sample_metadata <- fread(io$sample.metadata)[,c("id_acc","stage","lineage")] %>% .[id_acc%in%opts$cells] %>%
+  .[,stage_lineage:=paste(stage,lineage,sep="_")] %>% setnames("id_acc","sample")
+
+# Load genomic coordinates
+#mm10 <- fread("/Users/ricard/data/mm10_sequence/mm10.genome"); colnames(mm10) <- c("chr","length")
+# mm10 <- mm10 %>% .[,chr:=substr(chr,4,nchar(chr))] %>% .[chr %in% opts$chr]
+#mm10 <- mm10 %>% .[chr %in% opts$chr]
+
+```
+
+
+```{r, include=FALSE}
+files <- dir(io$in.data, pattern=".tsv.gz", full=TRUE)
+# remove empty files
+files <- files[file.size(files)>100]
+
+if (opts$filter_anno) files <- map(opts$anno_select, ~files[grep(., files)]) %>% unlist
+```
+
+
+<!-- Load, parse and filter data -->
+```{r, include=FALSE}
+if (opts$adjust) adj <- fread(io$global_rates) %>% setkey(sample) 
+
+if (opts$filter_by_bb) {
+  bb <- fread(io$bb_file) %>%
+    .[order(rank)] %>%
+    .[1:(.N*opts$bb_cutoff), id]
+}
+
+registerDoParallel(cores=detectCores())  
+data <- foreach(i=files) %dopar% {
+#data <- map(files, ~{
+  
+  dt <- fread(paste("zcat", i)) #%>%
+    #setnames(c("sample", "id", "anno", "rate", "Nmet", "N")) 
+      
+  anno <- dt[, unique(anno)]
+  
+  if (dt[, .N]==0) return(NULL)
+  
+  if (opts$adjust) {
+    setkey(dt, sample)
+    dt <- dt[, rate := as.double(rate)] %>%
+      .[adj, rate := rate-i.global_rate]
+  }
+  
+  total_cells <- dt[, length(unique(sample))]
+  
+  if (dt[, .N]==0) return(NULL)
+  
+
+  #Convert beta value to M value 
+  dt <- dt[,m:=log2(((rate)+0.01)/(100-(rate)+0.01))]
+  dt
+  }
+  
+  
+  
+# }) %>%
+#   rbindlist()
+
+names(data) <- basename(files) %>% gsub(".tsv.gz", "", .)
+    
+    
+# dcast to matrix
+data <- map(data, dcast, sample~anno, value.var="m") %>%
+  map(~as.data.frame(.) %>%
+        tibble::column_to_rownames("sample") %>%
+        as.matrix()
+      )
+
+```
+
+
+
+
+<!-- Fit PCA -->
+```{r pca, echo=FALSE}
+# pc.out <- pcaMethods::pca(dmatrix, method="nipals", center=TRUE, scale="none", nPcs=10)
+pc.out <- map(data, ~pcaMethods::pca(., method="svd", center=TRUE, scale="none", nPcs=5))
+
+# # Scree plot
+# tmp <- data.table(r2=pc.out@R2, pc=names(pc.out@R2)) %>% .[,pc:=factor(pc, levels = pc)]
+# p <- ggplot(tmp, aes(x=pc, y=r2)) +
+#   geom_bar(stat="identity") +
+#   theme_bw()
+# print(p)
+
+# Scatterplot
+tmp <- map(pc.out, ~{
+  .@scores %>%
+    as.data.frame() %>%
+    setDT(keep.rownames="sample") %>%
+    merge(sample_metadata,by="sample")
+})
+
+# tmp <- pc.out@scores %>% as.data.table %>% .[,sample:=rownames(dmatrix)] %>% merge(sample_metadata,by="sample")
+# p <- ggplot(tmp, aes(x=PC1, y=PC2, color=stage_lineage)) +
+map2(tmp, names(tmp), ~ggplot(.x, aes(x=PC1, y=PC2, color=stage)) +
+  geom_point(size=2.5) +
+    ggtitle(.y) +
+  theme_bw()
+  )
+
+map2(tmp, names(tmp), ~ggplot(.x, aes(x=PC1, y=PC2, color=stage_lineage)) +
+  geom_point(size=2.5) +
+    ggtitle(.y) +
+  theme_bw()
+  )
+
+
+# p <- ggplot(tmp, aes(x=PC1, y=PC3, color=stage)) +
+#   geom_point(size=2.5) +
+#   theme_bw()
+# print(p)
+```
+
+<!-- t-SNE -->
+```{r tsne, echo=FALSE}
+# # tsne <- tsne::tsne(asd_matrix_i) # Slow
+# tsne <- Rtsne::Rtsne(dmatrix_imputed, check_duplicates=FALSE, pca=TRUE, perplexity=15, theta=0.5, dims=2) # Fast
+# 
+# # Extract t-SNE components
+# to.plot <- tsne$Y %>% as.data.table %>% .[,sample:=rownames(dmatrix_imputed)] %>%
+#   merge(sample_metadata,by="sample")
+# 
+# # Plot
+# p2 <- ggplot(to.plot, aes(x=V1, y=V2, color=stage)) +
+#   geom_point(size=2.5) +
+#   xlab("t-SNE component 1") + ylab("t-SNE component 2") +
+#   theme_bw()
+# print(p2)
+```

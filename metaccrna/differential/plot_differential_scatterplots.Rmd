@@ -1,0 +1,353 @@
+---
+title: "Gastrulation: plot differential changes using the three omics"
+output: 
+  BiocStyle::html_document: 
+    fig_width: 12
+    fig_height: 8
+---
+
+```{r echo=FALSE, include=FALSE}
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(purrr))
+suppressPackageStartupMessages(library(ggplot2))
+```
+
+```{r define_opts, echo=FALSE, include=FALSE}
+
+## Define I/O ##
+io <- list()
+io$basedir <- "/Users/ricard/data/gastrulation"
+io$sample_metadata <- paste0(io$basedir,"/sample_metadata.txt")
+io$gene_metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
+io$annos_dir <- "/Users/ricard/data/gastrulation/features/filt"
+io$outdir <- "/Users/ricard/data/gastrulation_norsync_stuff/metaccrna/differential"
+
+io$diff.rna <- "/Users/ricard/data/gastrulation/rna/differential"
+io$diff.met <- "/Users/ricard/data/gastrulation/met/differential/feature_level"
+io$diff.acc <- "/Users/ricard/data/gastrulation/acc/differential/feature_level"
+
+## Define options ##
+opts <- list()
+
+# window length for the overlap between genes and features
+opts$gene_window <- 50000
+
+# Minimum log fold change in RNA expression
+opts$min.rna.diff <- 2
+
+# Minimum differential DNA methylation (%)
+opts$min.met.diff <- 10
+
+# Minimum differential chromatin accessibility (%)
+opts$min.acc.diff <- 10
+
+# How to select lineage-defining hits?
+#   Option 1 (more liberal): (lineage_A) vs (lineage_B+lineage_C)
+#   Option 2 (more conservative): (lineage_A vs lineage_B) AND (lineageA vs lineage_C)
+opts$diff.type <- 1
+
+# FDR threshold
+opts$min.fdr <- 0.10
+
+# Genomic annotations
+opts$annos <- c(
+  "H3K27ac_distal_E7.5_End_intersect12" = "Endoderm enhancers",
+  "H3K27ac_distal_E7.5_Mes_intersect12" = "Mesoderm enhancers",
+  "H3K27ac_distal_E7.5_Ect_intersect12" = "Ectoderm enhancers",
+  "prom_2000_2000" = "Promoters"
+)
+opts$met.annos <- opts$acc.annos <- opts$annos
+
+# Lineage colors
+opts$colors <- c(
+  Ectoderm = "steelblue", 
+  Endoderm = "#43CD80", 
+  Mesoderm = "violetred"
+)
+
+# Plotting properties
+opts$ymin <- -45
+opts$ymax <- 45
+opts$xmin <- -50
+opts$xmax <- 60
+opts$top_genes <- 25 
+```
+
+<!-- Load results from the differential analysis -->
+```{r load_data, echo=FALSE, include=FALSE}
+source("/Users/ricard/gastrulation/metaccrna/differential/load_data.R")
+diff.met <- diff.met[,c("id", "anno", "rateA", "rateB", "diff", "padj_fdr", "sig", "lineage")]
+diff.acc <- diff.acc[,c("id", "anno", "rateA", "rateB", "diff", "padj_fdr", "sig", "lineage")]
+
+diff.met[,diff:=-diff]
+diff.acc[,diff:=-diff]
+```
+
+```{r}
+# foo <- c(
+#   "^Mesoderm$" = "Mesoderm_vs_EctodermEndoderm",
+#   "^Endoderm$" = "Endoderm_vs_EctodermMesoderm",
+#   "^Ectoderm$" = "Ectoderm_vs_EndodermMesoderm"
+# )
+# diff.met[,lineage:=stringr::str_replace_all(lineage,foo)]
+# fwrite(diff.met, file="/Users/ricard/Downloads/diffmet.txt", sep="\t", row.names=F, col.names=T)
+# 
+# diff.acc[,lineage:=stringr::str_replace_all(lineage,foo)]
+# fwrite(diff.acc, file="/Users/ricard/Downloads/diffacc.txt", sep="\t", row.names=F, col.names=T)
+```
+
+<!-- Load annotation metadata -->
+```{r}
+# Load genomic context metadata
+feature_metadata <- lapply(names(opts$annos), function(anno) 
+  fread(sprintf("%s/%s.bed",io$annos_dir,anno))[,c(1,2,3,4,5,6)]) %>%
+  rbindlist %>% setnames(c("chr","start","end","strand","id","anno"))
+
+# Load gene metadata 
+gene_metadata <- fread(io$gene_metadata) %>% 
+  setnames(c("ens_id","symbol"),c("id","gene")) %>% 
+  .[,chr:=as.factor(sub("chr","",chr))]
+```
+
+<!-- Parse gene and feature metadata -->
+```{r}
+feature_metadata_filt <- feature_metadata %>% split(.$anno) %>% 
+  map2(.,names(.), function(x,y) x[id %in% c(diff.met[anno==y,id],diff.acc[anno==y,id])] ) %>%
+  rbindlist
+
+gene_metadata_filt <- gene_metadata %>% .[,c("chr","start","end","gene")] %>% 
+  # .[,c("start", "end") := list(start-opts$gene_window, end+opts$gene_window)] %>% 
+  setkey(chr,start,end)
+```
+
+<!-- Associate the non-genic contexts with overlapping genes -->
+
+Methylation
+```{r associate, echo=FALSE}
+met_list <- list()
+for (ann in unique(diff.met$anno)){
+
+  # Subset corresponding anno
+  met_tmp <- diff.met[anno == ann, ]
+
+  # Non gene-associated feature
+  if (all(grepl("ENSMUSG", unique(met_tmp$id)) == FALSE)) {
+
+    # Extract coordiantes for methylation sites and for genes
+    feature_metadata_tmp <- feature_metadata_filt[anno==ann, c("chr","start","end","id")] %>%
+      .[,c("start.window","end.window") := list(start - opts$gene_window, end + opts$gene_window)] %>%
+      setkey(chr,start.window,end.window)
+
+    # Do the overlap
+    ov1 <- foverlaps(gene_metadata_filt, feature_metadata_filt[anno==ann, c("chr","start","end","id")] %>% setkey(chr,start,end), nomatch=0) %>%
+      .[,c("gene","id")]
+    ov2 <- foverlaps(gene_metadata_filt, feature_metadata_tmp, nomatch=0) %>%
+      .[,.(start_dist=abs(end-i.start), end_dist=abs(start-i.end)),by=c("gene","id")] %>%
+      .[,dist:=ifelse(start_dist<end_dist,start_dist,end_dist)] %>%
+      # .[.[,.I[dist==min(dist)], by="id"]$V1] %>%
+      .[dist<=opts$gene_window] %>%
+      .[,c("gene","id")]
+    ov <- rbind(ov1,ov2) %>% unique(.)
+
+    # Merge with methylation data
+    met_list[[ann]] <- merge(met_tmp, ov, by="id", allow.cartesian=T)
+  }
+  # Gene-associated feature
+  else if (all(grepl("ENSMUSG", unique(met_tmp$id)) == TRUE)) {
+    met_list[[ann]] <- merge(met_tmp, gene_metadata[,c("id","gene")], by="id")
+  }
+}
+diff.met <- rbindlist(met_list)
+```
+
+Accessibility
+```{r associate, echo=FALSE}
+acc_list <- list()
+for (ann in unique(diff.acc$anno)){
+
+  # Subset corresponding anno
+  acc_tmp <- diff.acc[anno == ann, ]
+
+  # Non gene-associated feature
+  if (all(grepl("ENSMUSG", unique(acc_tmp$id)) == FALSE)) {
+
+    # Extract coordiantes for methylation sites and for genes
+    feature_metadata_tmp <- feature_metadata_filt[anno==ann, c("chr","start","end","id")] %>%
+      .[,c("start.window","end.window") := list(start - opts$gene_window, end + opts$gene_window)] %>%
+      setkey(chr,start.window,end.window)
+
+    # Do the overlap
+    ov1 <- foverlaps(gene_metadata_filt, feature_metadata_filt[anno==ann, c("chr","start","end","id")] %>% setkey(chr,start,end), nomatch=0) %>%
+      .[,c("gene","id")]
+    ov2 <- foverlaps(gene_metadata_filt, feature_metadata_tmp, nomatch=0) %>%
+      .[,.(start_dist=abs(end-i.start), end_dist=abs(start-i.end)),by=c("gene","id")] %>%
+      .[,dist:=ifelse(start_dist<end_dist,start_dist,end_dist)] %>%
+      # .[.[,.I[dist==min(dist)], by="id"]$V1] %>%
+      .[dist<=opts$gene_window] %>%
+      .[,c("gene","id")]
+    ov <- rbind(ov1,ov2) %>% unique(.)
+
+    # Merge with methylation data
+    acc_list[[ann]] <- merge(acc_tmp, ov, by="id", allow.cartesian=T)
+  }
+  # Gene-associated feature
+  else if (all(grepl("ENSMUSG", unique(acc_tmp$id)) == TRUE)) {
+    acc_list[[ann]] <- merge(acc_tmp, gene_metadata[,c("id","gene")], by="id")
+  }
+}
+diff.acc <- rbindlist(acc_list)
+```
+
+<!-- Merge methylation and accessibility results -->
+```{r}
+diff.met %>% .[,anno:=stringr::str_replace_all(anno,opts$annos)]
+diff.acc %>% .[,anno:=stringr::str_replace_all(anno,opts$annos)]
+```
+
+<!-- Parse results -->
+If a gene has multiple enhancer hits, just keep the most significant for visualisation
+```{r}
+# diff.acc <- diff.acc %>% split(.$anno) %>% map(~ .[,.SD[which.min(padj_fdr)], by=c("gene")]) %>% rbindlist
+# diff.met <- diff.met %>% split(.$anno) %>% map(~ .[,.SD[which.min(padj_fdr)], by=c("gene")]) %>% rbindlist
+```
+
+```{r}
+diff.metacc <- rbind(
+  diff.met[,type:="met"], 
+  diff.acc[,type:="acc"]
+# ) %>% dcast(gene+anno~type, value.var=c("padj_fdr","diff","sig")) %>% .[complete.cases(.)]
+) %>% dcast(id+gene+lineage+anno~type, value.var=c("diff","sig")) %>% .[complete.cases(.)]
+```
+
+<!-- Merge with RNA expression results -->
+```{r}
+diff.rna_filt <- diff.rna[,c("symbol","lineage","logFC","sig")] %>%
+  setnames(c("symbol","logFC","sig"),c("gene","rna_diff","rna_sig"))
+
+diff.metaccrna <- diff.metacc %>% merge(diff.rna_filt, by=c("gene","lineage"))
+```
+
+<!-- Filter -->
+```{r}
+diff.metaccrna.filt <- diff.metaccrna
+```
+
+<!-- Scatterplot of differential methylation versus differential accessibiliy -->
+```{r}
+to.plot <- diff.metaccrna.filt %>% copy %>% .[,sig:=as.factor((rna_sig) & (sig_met|sig_acc))]
+```
+
+Enhancers
+```{r}
+foo <- c(
+  "Ectoderm" = "Ectoderm enhancers",
+  "Endoderm" = "Endoderm enhancers",
+  "Mesoderm" = "Mesoderm enhancers"
+)
+
+for (i in unique(to.plot$lineage)) {
+  to.plot.i <- to.plot[lineage==i & anno==foo[[i]]] %>% setorder(sig, na.last=F)
+  to.label.i <- to.plot.i[sig==T] %>% setorder(rna_diff, na.last=T) %>% head(n=opts$top_genes)
+  
+  p <- ggplot(to.plot.i, aes(x=diff_met, y=diff_acc)) +
+    geom_point(size=0.8, data=to.plot.i[sig==T]) +
+    geom_point(size=0.5, data=to.plot.i[sig==F], alpha=0.2, color="grey") +
+    geom_segment(aes(x=opts$xmin, xend=opts$xmax, y=0, yend=0), size=0.25, color="orange") +
+    geom_segment(aes(x=0, xend=0, y=opts$ymin, yend=opts$ymax), size=0.25, color="orange") +
+    ggrepel::geom_text_repel(data=to.label.i, aes(x=diff_met, y=diff_acc, label=gene), size=5, color=opts$colors[i]) +
+    coord_cartesian(xlim=c(opts$xmin,opts$xmax), ylim=c(opts$ymin,opts$ymax)) +
+    labs(x="Differential methylation (%)", y="Differential accessibility (%)") +
+    theme_classic() +
+    theme(
+      axis.text = element_text(size=rel(1.1), color="black"),
+      axis.title = element_text(size=rel(1.2), color="black")
+    )
+  # print(p)
+  
+  pdf(sprintf("%s/diffmetaccrna_%s_enhancers.pdf",io$outdir,i), width=5, height=4, useDingbats = F)
+  print(p)
+  dev.off()
+}
+```
+
+Promoters
+```{r}
+foo <- c(
+  "Ectoderm" = "Promoters",
+  "Endoderm" = "Promoters",
+  "Mesoderm" = "Promoters"
+)
+
+plot_list <- list()
+for (i in unique(to.plot$lineage)) {
+  to.plot.i <- to.plot[lineage==i & anno==foo[[i]]] %>% setorder(sig, na.last=F)
+  to.label.i <- to.plot.i[sig==T] %>% setorder(rna_diff, na.last=T) %>% head(n=opts$top_genes)
+  
+  plot_list[[i]] <- ggplot(to.plot.i, aes(x=diff_met, y=diff_acc)) +
+    geom_point(size=0.8, data=to.plot.i[sig==T]) +
+    geom_point(size=0.5, data=to.plot.i[sig==F], alpha=0.2, color="grey") +
+    geom_segment(aes(x=opts$xmin, xend=opts$xmax, y=0, yend=0), size=0.25, color="orange") +
+    geom_segment(aes(x=0, xend=0, y=opts$ymin, yend=opts$ymax), size=0.25, color="orange") +
+    ggrepel::geom_text_repel(data=to.label.i, aes(x=diff_met, y=diff_acc, label=gene), size=5, color=opts$colors[i]) +
+    coord_cartesian(xlim=c(opts$xmin,opts$xmax), ylim=c(opts$ymin,opts$ymax)) +
+    labs(x="Differential methylation (%)", y="Differential accessibility (%)") +
+    theme_classic() +
+    theme(
+      axis.text = element_text(size=rel(1.1), color="black"),
+      axis.title = element_text(size=rel(1.2), color="black")
+    )
+  # print(p)
+  
+  # pdf(sprintf("%s/diffmetaccrna_%s_promoters.pdf",io$outdir,i), width=5, height=4, useDingbats = F)
+  # print(p)
+  # dev.off()
+}
+
+pdf(sprintf("%s/diffmetaccrna_promoters.pdf",io$outdir), width=12, height=4, useDingbats=F)
+cowplot::plot_grid(plotlist=plot_list, nrow=1)
+dev.off()
+```
+
+<!-- Bivariate density plots of differential methylation versus differential accessibiliy -->
+
+```{r}
+# foo <- c(
+#   "Ectoderm" = "Ectoderm enhancers",
+#   "Endoderm" = "Endoderm enhancers",
+#   "Mesoderm" = "Mesoderm enhancers"
+# )
+# 
+# plot_list <- list()
+# for (i in unique(to.plot$lineage)) {
+#   to.plot.i <- to.plot[lineage==i & anno==foo[[i]]] %>% setorder(sig, na.last=F)
+#   
+#   plot_list[[i]] <- ggplot(to.plot, aes(x=diff_met, y=diff_acc)) +
+#     stat_density_2d(aes(fill = ..density..), geom = "raster", contour = F) +
+#     scale_fill_distiller(palette = "Spectral") +
+#     
+#     stat_density2d(contour=T, size=0.2, alpha=0.8, color="black") +
+#     
+#     geom_segment(aes(x=opts$xmin, xend=opts$xmax, y=0, yend=0), size=0.25, color="black") +
+#     geom_segment(aes(x=0, xend=0, y=opts$ymin, yend=opts$ymax), size=0.25, color="black") +
+#     
+#     coord_cartesian(xlim=c(opts$xmin,opts$xmax), ylim=c(opts$ymin,opts$ymax)) +
+#     
+#     labs(x="Differential methylation (%)", y="Differential accessibility (%)") +
+#     
+#     theme(
+#       axis.text.x = element_text(size=rel(1.1), color='black'),
+#       axis.text.y = element_text(size=rel(1.1), color='black'),
+#       axis.title.x = element_text(size=rel(1.2), color='black'),
+#       axis.title.y = element_text(size=rel(1.2), color='black'),
+#       legend.position = "none",
+#       strip.background = element_blank(),
+#       panel.background = element_blank()
+#     )
+#   # print(p)
+# }
+# 
+# pdf(sprintf("%s/diffmetaccrna_density.pdf",io$outdir), width=12, height=4, useDingbats=F)
+# cowplot::plot_grid(plotlist=plot_list, nrow=1)
+# dev.off()
+```
+

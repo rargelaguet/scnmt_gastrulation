@@ -1,0 +1,66 @@
+---
+title: "Gastrulation: calculate CpG density per genomic context"
+output:
+  BiocStyle::html_document: 
+    fig_width: 10
+    fig_height: 8
+---
+
+```{r load_modules, echo=FALSE, include=FALSE}
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(BSgenome.Mmusculus.UCSC.mm10)
+library(Biostrings)
+```
+
+```{r define_opts, echo=FALSE, include=FALSE}
+io <- list()
+opts <- list()
+
+## Define I/O ##
+io$gene.metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
+io$features.dir <- "/Users/ricard/data/gastrulation/features/filt"
+io$outdir <- "/Users/ricard/gastrulation/met/stats/features/out"
+
+## Define options ##
+
+# Genomic contexts
+opts$anno <- c(
+  "prom_2000_2000_noncgi", 
+  "prom_2000_2000_cgi",
+  "genebody",
+  "LINE", 
+  "LTR",
+  "CGI"
+)
+```
+
+<!-- Load feature metadata -->
+```{r} 
+anno_dt <- lapply(opts$anno, function(i) fread(sprintf("%s/%s.bed",io$features.dir,i))) %>% 
+  rbindlist %>% setnames(c("chr","start","end","strand","id","anno")) %>%
+  .[,chr:=paste0("chr",chr)]
+```
+
+<!-- Calculate CpG density per feature -->
+```{r}
+seq <- getSeq(Mmusculus, anno_dt$chr, anno_dt$start, anno_dt$end+1)
+anno_dt$cpg_density <- dinucleotideFrequency(seq)[,"CG"] / width(seq)
+```
+
+<!-- Calculate average CpG density per genomic context -->
+```{r}
+tmp <- anno_dt[,.(
+  mean.cpg_density = round(mean(cpg_density),5), 
+  sd.cpg_density = round(sd(cpg_density),5)
+  ), by=c("anno")]
+```
+
+<!-- Save results -->
+```{r}
+fwrite(anno_dt, paste0(io$outdir,"/cpg_density_perfeature.txt"), col.names=T, quote=F, sep="\t")
+fwrite(tmp, paste0(io$outdir,"/cpg_density_peranno.txt"), col.names=T, quote=F, sep="\t")
+```
+
+

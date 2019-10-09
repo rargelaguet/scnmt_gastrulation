@@ -1,0 +1,336 @@
+---
+title: "Gastrulation: correlation per gene (across cells) between RNA expression and chromatin accessibility"
+output: 
+  BiocStyle::html_document: 
+    fig_width: 12
+    fig_height: 8
+---
+
+```{r echo=FALSE, include=FALSE}
+suppressPackageStartupMessages(library(scater))
+suppressPackageStartupMessages(library(purrr))
+suppressPackageStartupMessages(library(weights))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(grid))
+suppressPackageStartupMessages(library(gridExtra))
+suppressPackageStartupMessages(library(cowplot))
+suppressPackageStartupMessages(library(data.table))
+```
+
+<!-- Define functions -->
+```{r echo=FALSE, include=FALSE}
+source("/Users/ricard/gastrulation/accrna/cor/utils.R")
+```
+
+<!-- Define I/O and options -->
+```{r echo=TRUE, include=FALSE}
+
+## I/O ##
+io   <- list()
+io$base_dir   <- "/Users/ricard/data/gastrulation"
+io$in.sample_metadata <- paste0(io$base_dir,"/sample_metadata.txt")
+io$annos_dir  <- paste0(io$base_dir, "/features/filt")
+io$rna_file   <- paste0(io$base_dir, "/rna/parsed/SingleCellExperiment.rds")
+io$acc_dir   <- paste0(io$base_dir, "/acc/parsed")
+io$gene_metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
+io$outdir <- "/Users/ricard/data/gastrulation_norsync_stuff/accrna/cor"
+
+## Options ##
+opts <- list()
+
+# Filtering parameters
+opts$min.GpCs <- 5      # Minimum number of CpGs per feature
+opts$min.cells <- 50    # Minimum number of observed cells per feature with at least opts$min.GpCs
+opts$max.genes <- 5000  # Top N most variable genes and features
+
+# Window length for the overlap between genes and features
+opts$gene_window <- 50000  
+
+# Multiple testing correction options
+opts$threshold_fdr  <- 0.1 # pvalue threshold for significance in FDR
+
+# Correlation type options
+opts$method <- "pearson"      # correlation type (see ?cor)
+opts$weight <- FALSE          # weighted correlation (see ?wtd.cor) 
+
+# Regress out effects of global changes in accessibility
+opts$regress.mean <- FALSE
+
+# Permutation test options
+opts$permutation <- TRUE   # do permutation test?
+opts$n_perms <- 10          # Number of random permutations
+
+# Define genomic contexts
+opts$annos <- c(
+  "H3K27ac_distal_E7.5_Mes_intersect12"="Mes Distal H3K27ac",
+  "H3K27ac_distal_E7.5_End_intersect12"="End Distal H3K27ac",
+  "H3K27ac_distal_E7.5_Ect_intersect12"="Ect Distal H3K27ac"
+)
+
+# Define stage and lineages
+opts$stage_lineage10x <- c(
+
+  # E4.5
+  # "E4.5_Epiblast",
+
+  # E5.5
+  # "E5.5_Epiblast",
+  
+  # E6.5
+  "E6.5_Epiblast",
+  "E6.5_Primitive_Streak",
+  
+  # E7.5
+  "E7.5_Epiblast",
+  "E7.5_Ectoderm",
+  "E7.5_Primitive_Streak",
+  "E7.5_Endoderm",
+  "E7.5_Mesoderm"
+)
+
+# Define which cells to use
+tmp <- fread(io$in.sample_metadata, header=T) %>% 
+  .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")] %>%
+  .[pass_accQC==T & pass_rnaQC==T & stage_lineage%in%opts$stage_lineage] 
+opts$rna.cells <- tmp$id_rna
+opts$acc.cells <- tmp$id_acc
+```
+
+<!-- Load sample metadata -->
+```{r}
+sample_metadata <- fread(io$in.sample_metadata, header=T, stringsAsFactors=T) %>% 
+  .[,c("sample","id_rna","id_acc","stage","lineage10x_2")] %>%
+  .[,stage_lineage:=as.factor(paste(stage,lineage10x_2,sep="_"))] %>%
+  .[sample%in%tmp$sample]
+```
+
+<!-- Load RNA data -->
+```{r load_rna, echo=FALSE, include=FALSE}
+
+# Load SingleCellExperiment object
+sce <- readRDS(file=io$rna_file)[,opts$rna.cells]
+
+# Create data.table
+rna_dt <- exprs(sce) %>% t %>% as.data.table(keep.rownames="id_rna") %>% 
+  melt(id.vars="id_rna", value.name="expr", variable.name="id") %>%
+  merge(sample_metadata[,c("sample","id_rna")]) %>%
+  merge(rowData(sce) %>% as.data.frame(row.names=rownames(sce)) %>% tibble::rownames_to_column("ens_id") %>%
+          .[,c("symbol","ens_id")] %>% as.data.table %>% setnames(c("ens_id","symbol"),c("id","gene")),
+        by=c("id")
+        )
+rna_dt[,c("id","gene"):=list(as.factor(id),as.factor(gene))]
+```
+
+
+<!-- Filter RNA data -->
+```{r}
+# Remove genes with little variability
+rna_dt <- rna_dt[,var:=var(expr), by="gene"] %>% .[var>0.1] %>% .[,var:=NULL]
+```
+
+<!-- Load accessibility data -->
+```{r load_met, echo=FALSE, include=FALSE}
+acc_dt <- lapply(names(opts$annos), function(n) {
+  data <- fread(cmd=sprintf("zcat < %s/%s.tsv.gz",io$acc_dir,n), showProgress=F, stringsAsFactors=T) %>%
+  .[V1%in%opts$acc.cells]
+}) %>% rbindlist %>% setnames(c("sample","id","anno","Nacc","N","rate"))
+```
+
+<!-- Filter accessibility data -->
+```{r load_met, echo=FALSE, include=FALSE}
+# Filter by mininum number of CpGs per feature
+acc_dt <- acc_dt[N>=opts$min.GpCs]
+
+# Filter by coverage
+acc_dt <- acc_dt %>% .[,N:=.N, by=c("id","anno")] %>% .[N>=opts$min.cells] %>% .[,N:=NULL]
+
+# Filter by variance
+acc_dt <- acc_dt[,var:=var(rate), by=c("id","anno")] %>% .[var>0] %>% .[,var:=NULL]
+```
+
+<!-- Load genomic contexts -->
+```{r load_genomiccontexts}
+feature_metadata <- lapply(names(opts$annos), function(anno) 
+  fread(sprintf("%s/%s.bed",io$annos_dir,anno), stringsAsFactors=T)[,c(1,2,3,4,5,6)]) %>%
+  rbindlist %>% setnames(c("chr","start","end","strand","id","anno"))
+
+# Load gene metadata 
+gene_metadata <- fread(io$gene_metadata,stringsAsFactors=T) %>% 
+  setnames(c("ens_id","symbol"),c("id","gene")) %>% 
+  .[,chr:=stringr::str_replace_all(chr,"chr","")]
+```
+
+<!-- Parse gene and feature metadata -->
+```{r}
+feature_metadata_filt <- feature_metadata %>% split(.$anno) %>% 
+  map2(.,names(.), function(x,y) x[id %in% acc_dt[anno==y,id]] ) %>%
+  rbindlist
+
+gene_metadata_filt <- gene_metadata %>% .[,c("chr","start","end","gene")] %>% 
+  # .[,c("start", "end") := list(start-opts$gene_window, end+opts$gene_window)] %>% 
+  setkey(chr,start,end)
+```
+
+<!-- Associate enhancers with genes -->
+```{r associate, echo=FALSE}
+acc_list <- list()
+for (ann in unique(acc_dt$anno)){
+  
+  # Subset corresponding anno
+  acc_tmp <- acc_dt[anno == ann, ]
+  
+  # Extract coordiantes for accessibility sites and for genes
+  feature_metadata_tmp <- feature_metadata_filt[anno==ann, c("chr","start","end","id")] %>% 
+    .[,c("start.window","end.window") := list(start - opts$gene_window, end + opts$gene_window)] %>%
+    setkey(chr,start.window,end.window)
+  
+  # Do the overlap
+  ov <- foverlaps(gene_metadata_filt, feature_metadata_tmp, nomatch=0) %>%
+    .[,.(start_dist=abs(end-i.start), end_dist=abs(start-i.end)),by=c("gene","id")] %>%
+    .[,dist:=ifelse(start_dist<end_dist,start_dist,end_dist)] %>%
+    .[.[,.I[dist==min(dist)], by="id"]$V1] %>%
+    .[dist<=opts$gene_window] %>%
+    .[,c("gene","id")]
+  
+  # Merge with accessibility data
+  acc_list[[ann]] <- merge(acc_tmp, ov, by="id", allow.cartesian=T) 
+}
+acc_dt <- rbindlist(acc_list)
+```
+
+<!-- Merge DNA accessibility and RNA expression data -->
+```{r}
+accrna_dt <- merge(
+  acc_dt, 
+  rna_dt[,c("sample","gene","expr")], 
+  by=c("sample","gene")
+)
+```
+
+<!-- Filter data -->
+```{r filter_across_samples, echo=FALSE}
+# Filter by variance
+accrna_dt <- accrna_dt[,var:=var(rate), by=c("id","anno","gene")] %>% .[var>0] %>% .[,var:=NULL]
+accrna_dt <- accrna_dt[,var:=var(expr), by=c("id","anno","gene")] %>% .[var>0] %>% .[,var:=NULL]
+
+# Extract top N most variable genes
+keep_hv_genes <- accrna_dt %>% split(.$anno) %>% 
+  map(~ .[,.(var=var(expr)), by=c("gene","id")] %>% setorder(-var) %>% head(n=opts$max.genes) %>% .[,gene_id:=paste(gene,id,sep="_")] %>% .$gene_id %>% as.character())
+accrna_dt <- accrna_dt %>% .[,gene_id:=paste(gene,id,sep="_")] %>% split(.$anno) %>%
+  map2(.,names(.), function(x,y) x[gene_id %in% keep_hv_genes[[y]]]) %>% rbindlist %>% .[,gene_id:=NULL]
+
+accrna_dt <- accrna_dt %>% droplevels()
+```
+
+<!-- Regress out global mean accessibility effect -->
+```{r}
+# if (opts$regress.mean) {
+  
+#   # accstats <- fread("/Users/ricard/gastrulation/acc/stats/samples/out/sample_stats.txt") %>%
+#   # .[anno%in%names(opts$annos)] %>% .[,c("coverage"):=NULL] %>% merge(sample_metadata[,c("id_acc","sample")]) %>%
+#   # setnames("mean","covariate")
+#   # accrna_dt <- merge(accrna_dt,accstats[,c("anno","sample","covariate")])
+  
+#   # Covariate: mean accessibility rate per context and sample
+#   # accrna_dt[,covariate:=mean(rate),by=c("anno","sample")]
+#   accrna_dt[,covariate:=mean(rate),by=c("sample")]
+  
+#   # Fit the linear model and regress out the covariate effect
+#   accrna_dt[, c("coef","residual"):=.(
+#     lm(formula=rate~covariate)[["coefficients"]][2],
+#     lm(formula=rate~covariate)[["residuals"]]), by=c("gene","id","anno")] %>% 
+#     .[,c("rate","residual"):=.(round(rate,2),round(residual,2))] %>%
+#     .[,c("old_rate","rate"):=list(rate,residual)] %>% 
+#     .[,c("covariate","residual","coef"):=NULL]
+# }
+```
+
+<!-- Compute correlations and do multiple testing correction -->
+
+```{r}
+if (opts$weight) {
+  cor <- accrna_dt[, wtd.cor(rate, expr, N)[,c("correlation","t.value","p.value")], by = c("id","gene","anno")]
+} else {
+  cor <- accrna_dt[, .(V1 = unlist(cor.test(rate, expr, method = opts$method)[c("estimate", "statistic", "p.value")])), by = c("id","gene","anno")]
+}
+
+# Compute adjusted p-values (both FDR and Bonferroni)
+cor <- cor %>% .[, para := rep(c("r","t","p"), .N/3)] %>% data.table::dcast(id+gene+anno ~ para, value.var = "V1") %>%
+      .[, c("padj_fdr", "padj_bonf") := list(p.adjust(p, method="fdr"), p.adjust(p, method="bonferroni")), by="anno"] %>%
+      .[, c("log_padj_fdr","log_padj_bonf") := list(-log10(padj_fdr), -log10(padj_bonf))] %>%
+      .[, sig := padj_fdr <= opts$threshold_fdr] %>%  setorder(padj_fdr)
+```
+
+```{r}
+cor[,sum(sig,na.rm=T),by="anno"]
+```
+
+<!-- Save results -->
+```{r}
+fwrite(cor, paste0(io$outdir,"/accrna_cor_enhancers.txt"), quote=F, sep="\t")
+# cor <- fread(paste0(io$outdir,"/accrna_cor.txt"))
+```
+
+<!-- Run permutation test for the correlation across samples -->
+```{r perm_cor_rate, echo=FALSE, include=FALSE}
+if (opts$permutation) {
+  pp_vals <- vector(mode = "numeric", length = length(cor$p))
+  for (k in 1:opts$n_perms){
+    print(k)
+    accrna_dt_perm <- copy(accrna_dt)
+    
+    # Permute gene expression levels
+    accrna_dt_perm <- accrna_dt_perm[, expr:=sample(expr), by = c("id","gene","anno")]
+    
+    # Permute accessibility levels
+    accrna_dt_perm <- accrna_dt_perm[, rate:=sample(rate), by = c("id","gene","anno")]
+    
+    # Compute correlation across samples
+    if (opts$weight) {
+      cor_perm <- accrna_dt_perm[, .(p = wtd.cor(rate, expr, weight)[, c("p.value")]), by = c("id", "gene", "anno")]
+    } else {
+      cor_perm <- accrna_dt_perm[, .(p = cor.test(rate, expr, method=opts$method)[["p.value"]]), by = c("id","gene","anno")]
+    }
+    
+    # For each annotation sort by p-value and store the permuted p-values
+    cor_perm <- cor_perm %>% split(.$anno) %>% map(~ .[,.(anno = anno, p = sort(p))]) %>% rbindlist
+    pp_vals <- pp_vals + cor_perm$p
+  }
+  # Compute the average p-values
+  pp_vals <- pp_vals / opts$n_perms
+  # Store them in a data.table for later analysis
+  cor_perm <- cor_perm[, p := pp_vals]
+}
+```
+
+<!-- Volcano plot of p-values against Pearson's r and QQ-plot of p-values -->
+```{r, echo=FALSE}
+if (opts$permutation) {
+  pp <- qq <- list()
+  for (n in unique(cor$anno)) {
+    
+    # Compute positive and negative hits in terms of correlation
+    negative_hits <- cor[anno==n & sig==TRUE & r<0,id]
+    positive_hits <- cor[anno==n & sig==TRUE & r>0,id]
+    all <- nrow(cor[anno == n,])
+    
+    # Generate volcano plot  
+    tmp <- cor
+    tmp[log_padj_fdr>7,log_padj_fdr:=7]
+    pp[[n]] <- gg_volcano_plot(tmp[anno == n,], title = "", label=15)
+    
+    # Generate permutation plot
+    qq[[n]] <- gg_qqplot(cor[anno == n, ], cor_perm[anno == n]$p, title = "")
+    
+    # Plot volcano
+    # pdf(file=paste0(io$outdir,"/volcano_", n, ".pdf"), width = 6, height = 5, useDingbats = FALSE)
+    # print(pp[[n]])
+    # dev.off()
+    
+    # Plot volcano + qqplot
+    pdf(file=paste0(io$outdir,"/pdf/volcano_qq_", n, ".pdf"), width = 13, height = 5.5, useDingbats = FALSE)
+    grid.arrange(pp[[n]], qq[[n]], ncol=2, top = textGrob(n, gp=gpar(fontsize=29, fontface = "bold")), newpage = TRUE)
+    dev.off()
+  }
+}
+```
