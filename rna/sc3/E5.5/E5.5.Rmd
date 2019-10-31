@@ -1,5 +1,5 @@
 ---
-title: "Gastrulation: analysis of transcriptomics in E5.5 using SC3"
+title: "Gastrulation scNMT-seq: analysis of transcriptomics in E5.5 using SC3"
 output: 
   BiocStyle::html_document: 
   fig_width: 10
@@ -22,8 +22,8 @@ source("/Users/ricard/gastrulation/rna/sc3/utils.R")
 io <- list()
 io$basedir <- "/Users/ricard/data/gastrulation"
 io$sample_metadata <- paste0(io$basedir,"/sample_metadata.txt")
-io$rna <- paste(io$basedir,"rna/parsed/SingleCellExperiment.rds",sep="/")
-io$outdir <- "/Users/ricard/gastrulation/rna/sc3/E5.5/out"
+io$rna <- paste0(io$basedir,"/rna/parsed/SingleCellExperiment.rds")
+io$outdir <- paste0(io$basedir,"/rna/sc3/E5.5")
 
 ## Define options ##
 opts <- list()
@@ -38,10 +38,6 @@ opts$cells <- fread(io$sample_metadata) %>%
 sample_metadata <- fread(io$sample_metadata) %>% 
   .[id_rna%in%opts$cells] %>%
   .[,c("id_rna","stage","lineage10x")]
-```
-
-```{r}
-table(sample_metadata$lineage10x)
 ```
 
 <!-- Load data -->

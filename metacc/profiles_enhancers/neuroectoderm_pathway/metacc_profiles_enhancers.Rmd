@@ -14,7 +14,7 @@ library(ggplot2)
 
 <!-- Define I/O and options -->
 ```{r define_options, echo=FALSE}
-source("/Users/ricard/gastrulation_clean/metacc/profiles_enhancers/load_settings.R")
+source("/Users/ricard/gastrulation/metacc/profiles_neuroectoderm_enhancers/load_settings.R")
 ```
 
 <!-- Load sample metadata -->
@@ -27,8 +27,8 @@ sample_metadata <- fread(io$sample.metadata) %>%
 
 <!-- Merge E5.5 and E6.5 epiblast -->
 ```{r}
-sample_metadata %>% 
-  .[,stage_lineage:=ifelse(stage_lineage=="E5.5 Epiblast","E6.5 Epiblast",stage_lineage)]
+# sample_metadata %>% 
+  # .[,stage_lineage:=ifelse(stage_lineage=="E5.5_Epiblast","E6.5_Epiblast",stage_lineage)]
 ```
 
 <!-- (ONLY FOR TESTING) Subset cells to reduce memory burden -->
@@ -69,7 +69,7 @@ data[,anno:=stringr::str_replace_all(anno,opts$annos)]
 
 ```{r}
 # saveRDS(data, "/Users/ricard/data/gastrulation/metacc/profiles_neuroectoderm_enhancers/data.rds")
-# data <- readRDS("/Users/ricard/data/gastrulation/metacc/profiles_neuroectoderm_enhancers/data.rds")
+data <- readRDS("/Users/ricard/data/gastrulation/metacc/profiles_neuroectoderm_enhancers/data.rds")
 ```
 
 <!-- Load genome-wide global methylation and accessibility rates -->

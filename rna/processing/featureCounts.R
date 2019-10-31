@@ -3,42 +3,28 @@
 ##################################################
 
 # This script is used to create the gene count matrix from the raw BAM files
-# It performs step 1 of the following pipeline: 
-# (1) Generate raw read count expression matrix
-# (2) Normalise read count expression matrix
-# (3) Filter genes and samples
-
-# Input:
-# - directory with bam files
-# - metadata/annotation file in GTF or BED format
-
-# Output
-# - matrix of raw counts with dim (ngenes,nsamples)
 
 suppressMessages(library(Rsubread))
 
-####################
-## Define options ##
-####################
+################
+## Define I/O ##
+################
 
 ## I/O ##
 io <- list()
-
-# io$anno_infile <- "/hps/nobackup/stegle/users/ricard/ensembl/mouse/v87/GTF/mRNA/Mus_musculus.GRCm38.87.gtf"
-# io$anno_infile <- "/hps/nobackup/stegle/users/ricard/ensembl/mouse/v87/GTF/mRNA_ERCC/Mus_musculus_ERCC.GRCm38.87.gtf"
-# io$samples_indir <- "/hps/nobackup/stegle/users/ricard/gastrulation/rna/original/E7.5_scNMT_Plate1"
-# io$outfile <- "/hps/nobackup/stegle/users/ricard/gastrulation/rna/original/test/raw_counts.txt"
 
 io$anno_infile <- "/hps/nobackup2/research/stegle/users/ricard/ensembl/mouse/v87/GTF/mRNA/Mus_musculus.GRCm38.87.gtf"
 io$samples_indir <- "/hps/nobackup2/research/stegle/users/ricard/gastrulation_raw_data/rna/scNMT_symbolic"
 io$outfile <- "/homes/ricard/counts_v2.txt"
 
-
 # io$anno_infile <- "/bi/group/reik/Stephen/gastrulation/rna_preproc/Mus_musculus.GRCm38.87.gtf"
 # io$samples_indir <- "/bi/sequencing/Sample_4363_E4.5_E5.5_RNA/Lane_5998_E4.5_E5.5_RNA/Aligned"
 # io$outfile <- "/bi/group/reik/Stephen/gastrulation/rna_preproc/raw_counts_2018-02-20.txt"
 
-## Options ##
+####################
+## Define options ##
+####################
+
 opts <- list()
 
 # Number of cores to parallelise work
@@ -82,19 +68,6 @@ if (opts$isGTFAnnotationFile == FALSE) {
     io$anno_infile <- anno_saf
   }
 }
-
-
-####################
-## Filter samples ##
-####################
-
-# if(opts$filt_samples ==T) {
-#   samples_df <- subset(samples_df,keep=="yes")
-#   filenames = sub("^([^.]*).*", "\\1", basename(opts$in_files))
-#   opts$in_files <- opts$in_files[filenames %in% samples_df$bam_file]
-#   filenames_filt = sub("^([^.]*).*", "\\1", basename(opts$in_files))
-#   sample_names = samples_df[match(filenames_filt,samples_df$bam_file),"sample_name"]
-# }
 
 
 #######################

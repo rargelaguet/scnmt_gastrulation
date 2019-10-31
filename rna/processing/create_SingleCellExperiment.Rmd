@@ -1,5 +1,5 @@
 ---
-title: "Gastrulation: preprocessing and quality control on expression data"
+title: "Gastrulation scNMT-seq: preprocessing and quality control on expression data"
 output:
   BiocStyle::html_document: 
     fig_width: 15
@@ -13,45 +13,42 @@ library(purrr)
 library(scater)
 library(scran)
 library(ggplot2)
-source("/Users/ricard/NMT-seq_ESC/Rutils/stats_utils.R")
+# source("/Users/ricard/NMT-seq_ESC/Rutils/stats_utils.R")
+
+matrix.please <- function(x) {
+    m<-as.matrix(x[,-1])
+    rownames(m)<-x[[1]]
+    m
+}
 ```
 
+<!-- Define I/O -->
+```{r define_io, echo=FALSE, include=FALSE}
+io <- list()
+io$gene_metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
+io$sample_metadata <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
+io$raw_counts <- "/Users/ricard/data/gastrulation/rna/counts/counts.txt.gz"
+io$outfile <- "/Users/ricard/data/gastrulation/rna/parsed/SingleCellExperiment.rds"
+```
+
+<!-- Define Options -->
 ```{r define_opts, echo=FALSE, include=FALSE}
-
-## Options ##
 opts <- list()
-
-# Stringent thresholds
-# opts$coverage_threshold <- 2e5    # Minimum library size (coverage)
-# opts$features_threshold <- 1000   # Minimum number of expressed features
-# opts$top50_threshold <- 0.75      # Maximum fraction of reads accounting for the top 50 features
-
-# Lenient thresholds
 opts$coverage_threshold <- 1e5    # Minimum library size (coverage)
 opts$features_threshold <- 500   # Minimum number of expressed features
 opts$top50_threshold <- 0.75      # Maximum fraction of reads accounting for the top 50 features
-
 opts$MT_threshold <- 0.25         # Maximum fraction of reads mapping to mithocondrial genes
 
-## I/O ##
-io <- list()
-io$in.gene_metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
-io$in.sample_metadata <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
-io$in.raw_counts <- "/Users/ricard/data/gastrulation/rna/counts/counts.txt.gz"
-io$out.file <- "/Users/ricard/data/gastrulation/rna/parsed/SingleCellExperiment.rds"
-io$out.sample_metadata <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
 ```
 
-
+<!-- Load count matrix -->
 ```{r load_data, echo=FALSE}
-# counts <- read.table(sprintf("%s",io$in.raw_counts), header=T) 
-counts <- fread(cmd=sprintf("zcat < %s",io$in.raw_counts)) %>% matrix.please
+counts <- fread(sprintf("%s",io$raw_counts)) %>% matrix.please
 ```
 
-
+<!-- Load sample metadata -->
 ```{r load_sample_metadata, echo=FALSE}
-sample_metadata = fread(io$in.sample_metadata, header=T, stringsAsFactors = F) %>% 
-  setkey(id_rna)
+sample_metadata = fread(io$sample_metadata) %>% setkey(id_rna)
 ```
 
 <!-- Rename sample names in counts -->
@@ -61,7 +58,7 @@ counts <- counts[,sample_metadata$id_rna]
 ```
 
 ```{r load_feature_metadata, echo=FALSE}
-feature_metadata <- read.csv("/Users/ricard/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt", sep="\t", stringsAsFactors=FALSE, quote="", header=T)
+feature_metadata <- read.csv(io$gene.metadata, sep="\t", stringsAsFactors=FALSE, quote="", header=T)
 
 # Define mithocondrial genes
 mt <- feature_metadata$symbol[feature_metadata$chr == "chrMT"]
@@ -190,64 +187,22 @@ p3 <- barPlot(top50.drop_dt, ylabel="Fraction of reads accounting for the top 50
     axis.ticks.x = element_blank()
   )
 print(p3)
-
-# Samples with large proportion of mithocondrial genes
-# mt.drop <- sce$pct_counts_Mt > opts$MT_threshold*100
-# foo <- data.table(
-#   sample=colnames(sce),
-#   mt=sce$pct_counts_Mt,
-#   color=c("black","red")[as.numeric(mt.drop)+1]
-# ) %>% setkey(mt) %>% .[,col:=mt] %>% .[,sample:=factor(sample,levels=sample)]
-# p4 <- ggplot(foo, aes(x=sample, y=mt, fill=col)) +
-#   geom_bar(stat='identity', position="dodge") +
-#   geom_hline(yintercept=opts$MT_threshold*100, colour="blue", linetype="dashed") +
-#   scale_fill_gradient(low="green", high="red") +
-#   labs(y="Fraction of reads mapping to mithocondrial genes") +
-#   barplot_theme() +
-#   theme(
-#     legend.position = "none",
-#     # axis.text.x = element_text(colour="black", color=foo$color, angle=90, size=10, vjust=0.5, hjust=1.0)
-#     axis.text.x = element_blank(),
-#     axis.ticks.x = element_blank()
-#   )
-# print(p4)
-
-# Triples and Multiples
-# number.drop <- sce$number %in% c("triple","multiple")
-```
-
-```{r}
-# p12 <- cowplot::plot_grid(p1, p2, ncol=1, nrow=2)
-# pdf(file="/Users/ricard/gastrulation/qc_expr.pdf", width = 8, height = 5)
-# print(p12)
-# dev.off()
-
-# p34 <- cowplot::plot_grid(p3, p4, ncol=2, nrow=1)
-# pdf(file="/Users/ricard/data/gastrulation_NMT/qc_expr2.pdf", width = 15, height = 7)
-# print(p34)
-# dev.off()
 ```
 
 ```{r, echo=FALSE, include=TRUE}
 # Remove cells that do not pass QC
-# drop.samples <- colnames(sce)[( libsize.drop | feature.drop | mt.drop | top50.drop | number.drop )]
 drop.samples <- colnames(sce)[( libsize.drop | feature.drop | top50.drop )]
 
-# Exclude particular cells
-# drop.samples["lane6504_AGGCAGAA_AAGGAGTA_Plate11_E03_L001_R1_val_1_GRCm38_ERCC_hisat2"] == F
-
 # Update sample metadata
-sample_metadata[,pass_rnaQC:=ifelse(id_rna%in%drop.samples,FALSE,TRUE)]
-
-# Save updated metadata
-# fwrite(sample_metadata,io$out.sample_metadata, sep="\t", col.names=T, row.names=F, na="NA", quote=F)
+# sample_metadata[,pass_rnaQC:=ifelse(id_rna%in%drop.samples,FALSE,TRUE)]
+# fwrite(sample_metadata,io$sample_metadata, sep="\t", col.names=T, row.names=F, na="NA", quote=F)
 
 # Re-calculate QC statistics
 sce <- sce[,!colnames(sce) %in% drop.samples]
 sce <- calculateQCMetrics(sce)
 ```
 
-# Normalisation and log transformation
+<!-- Normalisation and log transformation -->
 Transcript counts are now normalised based on size factors using the convolution approach from the scran package.
 Lowly expressed genes are removed before normalisation but they are included afterwards, since they are interesting for some analysis.
 ```{r normalisation, echo=FALSE, warnings=FALSE, include=TRUE}
@@ -299,5 +254,5 @@ ggplot(foo, aes(x=mean, y=sd)) +
 
 <!-- Save SCESet object -->
 ```{r save, echo=FALSE, include=FALSE}
-saveRDS(sce,io$out.file)
+saveRDS(sce,io$outfile)
 ```

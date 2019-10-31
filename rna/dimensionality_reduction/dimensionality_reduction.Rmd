@@ -1,5 +1,5 @@
 ---
-title: "Gastrulation: dimensionality reduction on RNA data"
+title: "Gastrulation scNMT-seq: dimensionality reduction on RNA data"
 output: 
   BiocStyle::html_document: 
   fig_width: 10
@@ -15,21 +15,17 @@ library(RColorBrewer)
 library(umap)
 ```
 
-```{r funcs, echo=FALSE}
-source("/Users/ricard/gastrulation/rna/differential/utils.R")
+<!-- Define I/O -->
+```{r define_io, echo=FALSE}
+io <- list()
+io$basedir <- "/Users/ricard/data/gastrulation"
+io$sample_metadata <- paste0(io$basedir,"/sample_metadata.txt")
+io$rna <- paste0(io$basedir,"/rna/parsed/SingleCellExperiment.rds")
+io$outdir <- paste0(io$basedir,"/rna/dimensionality_reduction")
 ```
 
-
-```{r define_opts, echo=FALSE}
-
-## Define I/O ##
-io <- list()
-io$rna <- "/Users/ricard/data/gastrulation/rna/parsed/SingleCellExperiment.rds"
-io$metadata.file <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
-io$outdir <- "/Users/ricard/gastrulation/rna/dimensionality_reduction/out"
-# io$stats <- "/Users/ricard/gastrulation/metacc/stats/samples/out/sample_stats.txt"
-
-## Define options ##
+<!-- Define options -->
+```{r}
 opts <- list()
 
 # Define which cells to use
@@ -37,32 +33,21 @@ opts$stage_lineage <- c(
   
   # # E4.5
   "E4.5_Epiblast",
-  # "E4.5_Primitive_endoderm"
   
   # E5.5
   "E5.5_Epiblast",
-  # "E5.5_Visceral_endoderm"
 
   # 6.5
   "E6.5_Epiblast",
   "E6.5_Primitive_Streak",
-  "E6.5_Nascent_mesoderm",
-  # "E6.5_Visceral_endoderm"
+  "E6.5_Mesoderm",
 
-  # 7.5 Ectoderm
+  # E7.5
   "E7.5_Epiblast",
-  "E7.5_Caudal_epiblast",
-  "E7.5_Ectoderm",
-
-  # 7.5 Endoderm
-  "E7.5_Notochord",
-  "E7.5_Embryonic_endoderm",
-  # "E7.5_Visceral_endoderm",
-
-  # 7.5 Mesoderm
   "E7.5_Primitive_Streak",
-  "E7.5_Nascent_mesoderm",
-  "E7.5_Mature_mesoderm"
+  "E7.5_Ectoderm",
+  "E7.5_Endoderm",
+  "E7.5_Mesoderm"
 )
 
 # Stage-specific colors for RNA
@@ -74,7 +59,7 @@ opts$colors <- c(
 )
 
 # Define which cells to use
-tmp <- fread(io$metadata.file) %>% .[pass_rnaQC==T]
+tmp <- fread(io$sample_metadata) %>% .[pass_rnaQC==T]
 if (opts$stage_lineage[1] == "all") {
   opts$cells <- tmp[,id_rna]
 } else {
@@ -86,14 +71,10 @@ if (opts$stage_lineage[1] == "all") {
 
 <!-- Load sample metadata -->
 ```{r load_metadata, echo=FALSE}
-sample_metadata <- fread(io$metadata.file) %>% 
+sample_metadata <- fread(io$sample_metadata) %>% 
   .[id_rna %in% opts$cells] %>% 
-  .[,c("id_rna","stage","lineage10x","lineage10x_2","lineage10x_3")] %>%
-  .[,stage_lineage:=as.factor(paste(stage,lineage10x,sep="_"))]
-```
-
-```{r}
-# table(sample_metadata$stage_lineage)
+  .[,c("id_rna","stage","lineage10x","lineage10x_2")] %>%
+  .[,stage_lineage:=paste(stage,lineage10x,sep="_")]
 ```
 
 <!-- Load RNA expression data --> 
@@ -128,127 +109,41 @@ data <- scale(t(logcounts(sce_filt)), center = T, scale = F)
 # })
 ```
 
-<!-- PCA -->
+<!-- Run PCA -->
 ```{r}
-# sce_filt <- runPCA(sce_filt, scale_features = FALSE, ncomponents = 10, ntop=5000, rand_seed=1)
 sce_filt@reducedDims$PCA <- irlba::prcomp_irlba(data, n = 10)$x
-# plotPCA(sce_filt, colour_by="stage_lineage", ncomponents=3)
 ```
 
+<!-- Remove first PC as it usually corresponds to the number of expressed genes -->
 ```{r}
 sce_filt@reducedDims$PCA <- sce_filt@reducedDims$PCA[,2:ncol(sce_filt@reducedDims$PCA)]
 # sce_filt@reducedDims$PCA <- sce_filt@reducedDims$PCA
 ```
 
-
-<!-- Scater t-SNE -->
-```{r tsne, echo=FALSE}
-# pdf(paste0(io$outdir,"/rna_tsne_asd.pdf"), width=5, height=3, useDingbats = F)
-# plotTSNE(sce, colour_by="stage", run_args=list("ntop"=250, "rand_seed"=2), add_ticks=F)
-# dev.off()
+<!-- Run UMAP -->
+```{r}
+set.seed(1)
+sce_filt <- runUMAP(sce_filt, use_dimred="PCA", n_neighbors=20, min_dist=0.7)
 ```
 
-<!-- Scater UMAP -->
+<!-- Plot UMAP -->
 ```{r}
-umap.defaults$n_neighbors <- 20
-umap.defaults$min_dist <- 0.7
-
-sce_filt <- runUMAP(sce_filt, use_dimred="PCA", rand_seed=1, config=umap.defaults)
-
-# p <- plotUMAP(sce_filt, colour_by="stage", add_ticks=F) +
-#   geom_point(aes(color=colour_by), size=.9) +
-#   # scale_fill_manual(values=opts$colors)
-#   scale_color_manual(values=opts$colors)
-# # p + scale_colour_brewer(palette = "Dark2")
-# p
-
 to.plot <- sce_filt@reducedDims$UMAP %>% as.data.table %>% .[,id_rna:=colnames(sce_filt)] %>%
     merge(sample_metadata[,c("id_rna","stage")],by="id_rna")
 
 p <- ggplot(to.plot, aes(x=V1,y=V2)) +
-  # geom_point(aes(fill=stage), pch=21, color="black", alpha=0.9, size=1.0, stroke=0.15) +
-  # scale_fill_manual(values=opts$colors) +
   geom_point(aes(color=stage), alpha=0.9, size=1.0) +
   scale_color_manual(values=opts$colors) +
-  labs(x="UMAP Dimension 1", y="UMAP Dimension 2") +
-  guides(colour = guide_legend(override.aes = list(size=3))) +
+  theme_classic() +
   theme(
-    axis.title = element_text(colour="black", size=rel(1.1)),
-    # axis.text = element_text(colour="black",size=rel(1.0)),
+    axis.title = element_blank(),
     axis.text = element_blank(),
-    axis.line = element_line(colour="black", size=rel(0.9)),
-    axis.ticks = element_line(colour="black", size=rel(1.0)),
-    panel.background = element_blank(),
-    panel.grid = element_blank(),
+    axis.ticks = element_blank(),
     legend.position="right",
-    legend.text=element_text(size=15),
-    legend.key = element_blank(),
-    legend.title=element_blank(),
-    legend.background=element_blank(),
-    panel.border = element_blank()
+    legend.title=element_blank()
   )
 
-pdf(paste0(io$outdir,"/rna_umap.pdf"), width=5, height=3, useDingbats = F)
+# pdf(paste0(io$outdir,"/rna_umap.pdf"), width=5, height=3, useDingbats = F)
 print(p)
-dev.off()
-```
-
-
-## Rtsne t-SNE
-
-
-```{r}
-# Convert SCE to data table
-# rna <- exprs(sce) %>% t %>% as.data.table(keep.rownames = "sample") %>%
-#   melt(id.vars = "sample", value.name = "expr", variable.name = "gene") %>%
-#   merge(fData(sce) %>% tibble::rownames_to_column("gene") %>% .[,c("gene","ens_id")] %>% setnames("ens_id","id")) %>%
-#   merge(sample_metadata, by="sample")
-
-# Convert data.atble to matrix
-# rna_matrix <- rna[,c("sample","gene","expr")] %>% dcast(sample~gene, value.var="expr") %>% matrix.please
-
-# extract gene expression matrix from SCE
-rna_matrix <- exprs(sce)
-
-# Select top more variable genes
-keep_variable <- 1000
-rna_matrix_filt <- rna_matrix[names(tail(sort(apply(rna_matrix,1,var)), n=keep_variable)),]
-```
-
-```{r}
-# brewer.pal(n = 9, name = "YlGn")
-# brewer.pal(n = 12, name = "Set3")
-```
-
-```{r}
-
-# Slow version
-# tsne <- tsne::tsne(rna_matrix_filt)
-
-# Fast version
-set.seed(3)
-tsne <- Rtsne::Rtsne(t(rna_matrix_filt), check_duplicates=FALSE, pca=TRUE, theta=0.5, dims=2)
-
-to.plot <- tsne$Y %>% as.data.table %>% .[,id_rna:=colnames(rna_matrix_filt)] %>%
-    merge(sample_metadata[,c("id_rna","stage","stage_lineage")],by="id_rna")
-
-p <- ggplot(to.plot, aes(x=V1,y=V2)) +
-  geom_point(aes(color=stage), alpha=0.7, size=1.5) +
-  scale_color_manual(values=opts$colors) +
-  # scale_colour_brewer(palette="YlGn") +
-  labs(x="t-SNE Dimension 1", y="t-SNE Dimension 2") +
-  scatter_theme() +
-  guides(colour = guide_legend(override.aes = list(size=3)),
-         shape = guide_legend(override.aes = list(size=3))) +
-  theme(
-    legend.position = "right",
-    legend.title = element_blank()
-  )
-  # ggrepel::geom_text_repel(aes(label=sample))
-print(p)
-
-# pdf(paste0(io$outdir,"/rna_tsne_manual_v2.pdf"), width=5.5, height=5, useDingbats = F)
-# print(p)
 # dev.off()
-
 ```

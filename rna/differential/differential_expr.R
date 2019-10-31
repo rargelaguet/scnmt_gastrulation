@@ -1,3 +1,7 @@
+###########################################################
+## Script to do differential expression between lineages ##
+###########################################################
+
 suppressMessages(library(scater))
 suppressMessages(library(data.table))
 suppressMessages(library(purrr))
@@ -76,7 +80,7 @@ gene_metadata[,c("symbol","id"):=list(as.factor(symbol),as.factor(id))]
 ## Differential expression testing with edgeR ##
 ################################################
 
-out <- doDiffExpr(sce, sample_metadata) %>%
+out <- doDiffExpr(sce) %>%
   merge(gene_metadata, all.y=T, by=c("id")) %>% setorderv("padj_fdr", na.last=T)
 
 ##################

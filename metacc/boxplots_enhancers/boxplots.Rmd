@@ -38,23 +38,20 @@ sample_metadata <- fread(io$sample.metadata) %>%
   .[,c("sample","id_acc","id_met","id_rna","stage","lineage10x_2","plate")] %>%
   .[,lineage10x_2:=stringr::str_replace_all(lineage10x_2,"_"," ")] %>% 
   .[,stage_lineage:=paste(stage,lineage10x_2,sep=" ")] %>%
-  .[id_met%in%opts$met_cells | id_acc%in%opts$acc_cells] %>%
-  droplevels()
+  .[id_met%in%opts$met_cells | id_acc%in%opts$acc_cells]
 ```
 
 <!-- Load methylation data -->
 ```{r load_data, echo=FALSE, include=FALSE}
 met_dt <- lapply(names(opts$met.annos), function(n) {
-  data <- fread(cmd=sprintf("zcat < %s/%s.tsv.gz",io$met.dir,n), showProgress=F, quote="") %>%
-  .[V1%in%opts$met_cells]
+  data <- fread(sprintf("%s/%s.tsv.gz",io$met.dir,n)) %>% .[V1%in%opts$met_cells]
 }) %>% rbindlist %>% setnames(c("id_met","id","anno","Nmet","Ntotal","rate"))
 ```
 
 <!-- Load accessibility data -->
 ```{r load_data, echo=FALSE, include=FALSE}
 acc_dt <- lapply(names(opts$acc.annos), function(n) {
-  data <- fread(cmd=sprintf("zcat < %s/%s.tsv.gz",io$acc.dir,n), showProgress=F, quote="") %>%
-  .[V1%in%opts$acc_cells]
+  data <- fread(sprintf("%s/%s.tsv.gz",io$acc.dir,n)) %>% .[V1%in%opts$acc_cells]
 }) %>% rbindlist %>% setnames(c("id_acc","id","anno","Nmet","Ntotal","rate"))
 ```
 
@@ -100,8 +97,8 @@ acc_dt <- acc_dt %>% split(.$anno) %>%
 ```
 
 ```{r}
-fwrite(diff.met[sig==T], "/Users/ricard/data/gastrulation/met/differential/diffmet.txt", sep="\t")
-fwrite(diff.acc[sig==T], "/Users/ricard/data/gastrulation/met/differential/diffacc.txt", sep="\t")
+# fwrite(diff.met[sig==T], "/Users/ricard/data/gastrulation/met/differential/diffmet.txt", sep="\t")
+# fwrite(diff.acc[sig==T], "/Users/ricard/data/gastrulation/met/differential/diffacc.txt", sep="\t")
 ```
 
 <!-- Filter by minimum number of measurements per cell -->
@@ -143,9 +140,9 @@ p <- ggplot(foo.acc, aes(x=stage_lineage, y=rate)) +
   theme(strip.background = element_rect(fill="#00BFC4"))
 print(p)
 
-pdf(paste0(io$outdir,"/boxplots_acc2.pdf"), useDingbats = F, onefile = F, width=14, height=6)
-print(p)
-dev.off()
+# pdf(paste0(io$outdir,"/boxplots_acc2.pdf"), useDingbats = F, onefile = F, width=14, height=6)
+# print(p)
+# dev.off()
 ```
 
 <!-- Boxplots with methylation rate per genomic context and stage_lineage -->
@@ -170,42 +167,4 @@ print(p)
 # pdf(paste0(io$outdir,"/boxplots_met2.pdf"), useDingbats = F, onefile = F, width=14, height=6)
 # print(p)
 # dev.off()
-```
-
-
-
-Make a separate plot for every genomic context
-```{r}
-# for (i in unique(foo.met$anno)) {
-#   p <- ggplot(foo.met[anno==i], aes(x=stage_lineage, y=rate)) +
-#     geom_boxplot(aes(fill=stage_lineage), outlier.shape=NA) +
-#     # scale_fill_manual(values=opts$colors) +
-#     facet_wrap(~stage, nrow=2, scales="free_x") +
-#     labs(x="", y="Methylation rate", title=i) +
-#     coord_cartesian(ylim=c(0,90)) +
-#     guides(color=F, fill=F) +
-#     theme_bw() + theme_pb() +
-#     theme(strip.background = element_rect(fill="#F37A71"))
-#   print(p)
-#   
-#   # pdf(sprintf("%s/boxplots_met_%s.pdf",io$outdir,i), useDingbats = F, onefile = F, width=8, height=8)
-#   print(p)
-#   # dev.off()
-# }
-# 
-# for (i in unique(foo.acc$anno)) {
-#   p <- ggplot(foo.acc[anno==i], aes(x=stage_lineage, y=rate)) +
-#     geom_boxplot(aes(fill=stage_lineage), outlier.shape=NA) +
-#     # scale_fill_manual(values=opts$colors) +
-#     facet_wrap(~stage, nrow=2, scales="free_x") +
-#     labs(x="", y="Accessibility rate", title=i) +
-#     coord_cartesian(ylim=c(20,60)) +
-#     guides(color=F, fill=F) +
-#     theme_bw() + theme_pb() +
-#     theme(strip.background = element_rect(fill="#00BFC4"))
-# 
-#   # pdf(sprintf("%s/boxplots_acc_%s.pdf",io$outdir,i), useDingbats = F, onefile = F, width=8, height=8)
-#   print(p)
-#   # dev.off()
-# }
 ```

@@ -1,13 +1,12 @@
 
-#############################################################################
-## Script to plot the results from the differential methylation analysis ##
-#############################################################################
+##########################################################################
+## Script to do volcano plots from the differential expression analysis ##
+##########################################################################
 
 library(data.table)
 library(purrr)
 library(ggplot2)
 
-source("/Users/ricard/gastrulation/rna/differential/utils.R")
 
 #####################
 ## Define settings ##
@@ -15,8 +14,11 @@ source("/Users/ricard/gastrulation/rna/differential/utils.R")
 
 ## I/O ##
 io <- list()
-io$input.dir <- "/Users/ricard/data/gastrulation/rna/differential"
-io$outdir <- "/Users/ricard/data/gastrulation/rna/differential/pdf"
+if (grepl("ricard",Sys.info()['nodename'])) {
+	io$input.dir <- "/Users/ricard/data/gastrulation/rna/differential"
+	io$outdir <- "/Users/ricard/data/gastrulation/rna/differential/pdf"
+	source("/Users/ricard/gastrulation/rna/differential/utils.R")
+}
 
 ## Options ##
 opts <- list()

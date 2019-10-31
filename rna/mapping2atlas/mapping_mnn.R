@@ -1,45 +1,55 @@
+
+#####################################################################################
+## Script to map RNA expression profiles from the scNMT-seq cells to the 10x atlas ##
+#####################################################################################
+
 library(SingleCellExperiment)
 library(data.table)
 library(purrr)
 library(ggplot2)
 
-source("/Users/ricard/gastrulation/rna/mapping2atlas/Mapping2gastrulationAtlas.R")
+################
+## Define I/O ##
+################
 
-path2atlas <- "/Users/ricard/data/gastrulation10x/processed"
-path2scNMT <- "/Users/ricard/data/gastrulation"
+io <- list()
+if (grepl("ricard",Sys.info()['nodename'])) {
+source("/Users/ricard/gastrulation/rna/mapping2atlas/Mapping2gastrulationAtlas.R")
+	io$path2atlas <- "/Users/ricard/data/gastrulation10x/processed"
+	io$path2scNMT <- "/Users/ricard/data/gastrulation"
+	io$outfile <- "/Users/ricard/data/gastrulation/mapping_10x/out/mapping.rds"
+}
 
 ####################
 ## Load 10x atlas ##
 ####################
 
-sce_atlas  <- readRDS(paste0(path2atlas, "/SingleCellExperimentAtlas.rds"))
-meta_atlas <- readRDS(paste0(path2atlas, "/sample_metadata_atlas.rds"))
-
+sce_atlas  <- readRDS(paste0(io$path2atlas, "/SingleCellExperimentAtlas.rds"))
+meta_atlas <- readRDS(paste0(io$path2atlas, "/sample_metadata_atlas.rds"))
 
 ####################
 ## Load scNMT-seq ##
 ####################
 
-sce_nmt  <- readRDS(paste0(path2scNMT, "/rna/parsed/SingleCellExperiment.rds"))
-meta_nmt <- read.table(file = paste0(path2scNMT, "/sample_metadata.txt"), header = TRUE, sep = "\t", stringsAsFactors = F)
+sce_nmt  <- readRDS(paste0(io$path2scNMT, "/rna/parsed/SingleCellExperiment.rds"))
+meta_nmt <- read.table(file = paste0(io$path2scNMT, "/sample_metadata.txt"), header = TRUE, sep = "\t", stringsAsFactors = F)
 
 # Filter
 meta_nmt <- meta_nmt[meta_nmt$pass_rnaQC==T & meta_nmt$stage%in%c("E6.5","E7.5") ,]
 sce_nmt <- sce_nmt[,meta_nmt$id_rna] 
 
-meta_scnmt <- list()
-meta_scnmt$cell <- meta_nmt$id_rna[match(colnames(sce_nmt), meta_nmt$id_rna)]
-meta_scnmt$cells <- meta_nmt$id_rna[match(colnames(sce_nmt), meta_nmt$id_rna)]
-meta_scnmt$stage <- meta_nmt$stage[match(colnames(sce_nmt), meta_nmt$id_rna)]
-
-
 #############
 ## Prepare ## 
 #############
 
+# Match gene names between SingleCellExperiments
 sce_nmt  <- sce_nmt[!is.na(match(rownames(sce_nmt), rownames(sce_atlas))), ]
 sce_atlas <- sce_atlas[match(rownames(sce_nmt), rownames(sce_atlas)), ]
 
+meta_scnmt <- list()
+meta_scnmt$cell <- meta_nmt$id_rna[match(colnames(sce_nmt), meta_nmt$id_rna)]
+meta_scnmt$cells <- meta_nmt$id_rna[match(colnames(sce_nmt), meta_nmt$id_rna)]
+meta_scnmt$stage <- meta_nmt$stage[match(colnames(sce_nmt), meta_nmt$id_rna)]
 
 #########
 ## Map ##
@@ -56,4 +66,4 @@ mapping <- mapWrap(
 ## Save ##
 ##########
 
-saveRDS(mapping, "/Users/ricard/data/gastrulation/mapping_10x/out/mapping.rds")
+saveRDS(mapping, io$outfile)

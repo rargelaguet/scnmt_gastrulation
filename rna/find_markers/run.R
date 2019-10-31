@@ -21,21 +21,18 @@ opts <- list()
 
 opts$groups <- list(
   
-  # E4.5 markers
-  # E5.5 markers
-
   # E6.5 markers
   # "E6.5Epiblast" = list(c("E6.5_Epiblast"), c("E6.5_Visceral_endoderm","E6.5_Primitive_Streak","E6.5_Mesoderm")),
   # "E6.5Visceral_endoderm" = list(c("E6.5_Visceral_endoderm"), c("E6.5_Epiblast","E6.5_Primitive_Streak","E6.5_Mesoderm")),
-  "E6.5Mesoderm" = list(c("E6.5_Mesoderm"), c("E6.5_Epiblast","E6.5_Primitive_Streak","E6.5_Visceral_endoderm"))
+  # "E6.5Mesoderm" = list(c("E6.5_Mesoderm"), c("E6.5_Epiblast","E6.5_Primitive_Streak","E6.5_Visceral_endoderm"))
   # "E6.5Primitive_Streak" = list(c("E6.5_Primitive_Streak"), c("E6.5_Epiblast","E6.5_Mesoderm","E6.5_Visceral_endoderm")),
 
   # E7.5 markers
-  # "E7.5_Epiblast" = list(c("E7.5_Epiblast"), c("E7.5_Primitive_Streak","E7.5_Mesoderm","E7.5_Endoderm","E7.5_Ectoderm")),
-  # "E7.5_Ectoderm" = list(c("E7.5_Ectoderm"), c("E7.5_Primitive_Streak","E7.5_Mesoderm","E7.5_Endoderm","E7.5_Epiblast")),
-  # "E7.5_Primitive_Streak" = list(c("E7.5_Primitive_Streak"), c("E7.5_Ectoderm","E7.5_Mesoderm","E7.5_Endoderm","E7.5_Epiblast")),
-  # "E7.5_Mesoderm" = list(c("E7.5_Mesoderm"), c("E7.5_Ectoderm","E7.5_Primitive_Streak","E7.5_Endoderm","E7.5_Epiblast")),
-  # "E7.5_Endoderm" = list(c("E7.5_Endoderm"), c("E7.5_Ectoderm","E7.5_Primitive_Streak","E7.5_Mesoderm","E7.5_Epiblast"))
+  "E7.5_Epiblast" = list(c("E7.5_Epiblast"), c("E7.5_Primitive_Streak","E7.5_Mesoderm","E7.5_Endoderm","E7.5_Ectoderm")),
+  "E7.5_Ectoderm" = list(c("E7.5_Ectoderm"), c("E7.5_Primitive_Streak","E7.5_Mesoderm","E7.5_Endoderm","E7.5_Epiblast")),
+  "E7.5_Primitive_Streak" = list(c("E7.5_Primitive_Streak"), c("E7.5_Ectoderm","E7.5_Mesoderm","E7.5_Endoderm","E7.5_Epiblast")),
+  "E7.5_Mesoderm" = list(c("E7.5_Mesoderm"), c("E7.5_Ectoderm","E7.5_Primitive_Streak","E7.5_Endoderm","E7.5_Epiblast")),
+  "E7.5_Endoderm" = list(c("E7.5_Endoderm"), c("E7.5_Ectoderm","E7.5_Primitive_Streak","E7.5_Mesoderm","E7.5_Epiblast"))
 )
 
 

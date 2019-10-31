@@ -1,47 +1,31 @@
+#######################################
+## Script to plot mapping statistics ##
+#######################################
+
 library(data.table)
 library(purrr)
 
-sample_metadata <- fread("/Users/ricard/data/gastrulation/sample_metadata.txt") %>%
-  .[stage=="E7.5" & lineage10x=="Visceral_endoderm",lineage10x_2:="Visceral_endoderm"] %>%
+################
+## Define I/O ##
+################
+
+io <- list()
+io$sample_metadata <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
+io$mapping.results <- "/Users/ricard/data/gastrulation/rna/mapping_10x/mapping.rds"
+io$outdir <- "/Users/ricard/data/gastrulation/rna/mapping_10x/pdf"
+
+###################
+# Define options ##
+###################
+
+source("/Users/ricard/gastrulation_clean/rna/mapping2atlas/plot/utils.R")
+
+#########################
+# Load sample metadata ##
+#########################
+
+sample_metadata <- fread(io$sample_metadata) %>%
   .[!is.na(lineage10x_2) ]
-
-colors_lineage10x_2 <- c(
-  "Epiblast" = "grey50",
-  "Ectoderm" = "steelblue",
-  "ExE ectoderm" = "steelblue",
-  "Primitive Streak" = "sandybrown",
-  "Mesoderm" = "#CD3278",
-  "Primitive endoderm" = "#2E8B57",
-  "Visceral endoderm" = "#2E8B57",
-  "Endoderm" = "#43CD80"
-)
-
-colors_lineage10x <- c(
-  "Epiblast" = "grey50",
-  "Rostral neurectoderm" = "steelblue",
-  "Surface ectoderm" = "steelblue",
-  "ExE ectoderm" = "steelblue",
-  "Caudal epiblast" = "sandybrown",
-  "Anterior Primitive Streak" = "sandybrown",
-  "Primitive Streak" = "sandybrown",
-  "Nascent mesoderm" = "#FF82AB",
-  "Mixed mesoderm" = "#CD3278",
-  "Mature mesoderm" = "#CD3278",
-  "Intermediate mesoderm" = "#CD3278",
-  "Pharyngeal mesoderm" = "#CD3278",
-  "Paraxial mesoderm" = "#CD3278",
-  "Somitic mesoderm" = "#CD3278",
-  "Haematoendothelial progenitors" = "#CD3278",
-  "Caudal mesoderm" = "#CD3278",
-  "ExE mesoderm" = "#CD3278",
-  "Mesenchyme" = "#CD3278",
-  "Primitive endoderm" = "#2E8B57",
-  "Visceral endoderm" = "#2E8B57",
-  "Parietal endoderm" = "#2E8B57",
-  "Gut" = "#43CD80",
-  "Notochord" = "#43CD80",
-  "Embryonic endoderm" = "#43CD80"
-)
 
 
 to.plot <- sample_metadata[,.N, by=c("stage","lineage10x_2")] %>% 
@@ -65,6 +49,6 @@ p <- ggplot(to.plot, aes(x= lineage10x_2, y=N)) +
     axis.text.x = element_text(size=rel(1.1), color="black")
   )
 
-pdf("/Users/ricard/data/gastrulation/mapping_10x/mapping_stats/mapping_lineage10x_2.pdf", width=11, height=5)
+pdf(paste0(io$outdir,"/mapping_stats/mapping_stats.pdf"), width=11, height=5)
 print(p)
 dev.off()

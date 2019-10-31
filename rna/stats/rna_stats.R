@@ -1,14 +1,21 @@
+###########################################################
+## Gastrulation scNMT-seq: script to calculate RNA stats ##
+###########################################################
+
 library(data.table)
 library(purrr)
 library(scater)
 library(ggplot2)
 library(RColorBrewer)
 
+################
 ## Define I/O ##
+################
+
 io <- list()
 io$rna <- "/Users/ricard/data/gastrulation/rna/parsed/SingleCellExperiment.rds"
 io$metadata.file <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
-io$outdir <- "/Users/ricard/gastrulation/rna/stats/out"
+io$outdir <- "/Users/ricard/data/gastrulation/rna/stats"
 
 ## Define options ##
 opts <- list()
@@ -26,17 +33,20 @@ if (opts$stage_lineage[1] == "all") {
     .[pass_rnaQC==T & stage_lineage%in%opts$stage_lineage,id_rna]
 }
 
+###############
+## Load data ##
+###############
 
 # Load sample metadata
-sample_metadata <- fread(io$metadata.file) %>% .[id_rna %in% opts$cells]# %>% 
-  # .[,c("id_rna","stage","lineage10x")] %>%
-  # .[,stage_lineage:=paste(stage,lineage,sep="_")]
+sample_metadata <- fread(io$metadata.file) %>% .[id_rna %in% opts$cells]
 
-
-# Load RNA expression, SingleCellExperiment object
+# SingleCellExperiment object
 sce <- readRDS(io$rna)[,opts$cells]
 
-# Calculate RNA statistics
+##############################
+## Calculate RNA statistics ##
+##############################
+
 stats <- data.table(
   id_rna = colnames(sce), 
   total_counts = sce$total_counts, 

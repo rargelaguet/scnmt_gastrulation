@@ -1,7 +1,10 @@
+##################################################################
+## Script to find gene expression markers for specific lineages ##
+##################################################################
+
 suppressMessages(library(scater))
 suppressMessages(library(data.table))
 suppressMessages(library(purrr))
-suppressMessages(library(ggplot2))
 suppressMessages(library(edgeR))
 suppressMessages(library(argparse))
 
@@ -34,8 +37,8 @@ opts <- list()
 # Define stage and lineage
 opts$groupA <- args$stage_lineage1
 opts$groupB <- args$stage_lineage2
-opts$groupA <- "E6.5_Mesoderm"
-opts$groupB <- c("E6.5_Epiblast","E6.5_Primitive_Streak","E6.5_Visceral_endoderm")
+# opts$groupA <- "E6.5_Mesoderm"
+# opts$groupB <- c("E6.5_Epiblast","E6.5_Primitive_Streak","E6.5_Visceral_endoderm")
 
 # Define FDR threshold
 opts$threshold_fdr <- 0.1
@@ -53,7 +56,7 @@ opts$cells <- fread(io$sample_metadata) %>%
 ###############
 
 # Load sample metadata
-sample_metadata <- fread(io$sample_metadata, stringsAsFactors=F) %>% 
+sample_metadata <- fread(io$sample_metadata) %>% 
   .[id_rna %in% opts$cells] %>% 
   .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")]
 
