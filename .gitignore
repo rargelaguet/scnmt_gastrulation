@@ -1,12 +1,12 @@
 # Resilio Sync
-.sync
+*.sync
 
 # MAC
 *Icon*
-.DS_Store
+*.DS_Store
 
 # R stuff
-.Rhistory
+*.Rhistory
 *.rds
 
 # Images
@@ -28,4 +28,4 @@
 
 # Ignore local folders
 **/local-data
-.Rproj.user
+*.Rproj.user
