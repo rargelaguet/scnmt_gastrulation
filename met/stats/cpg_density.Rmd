@@ -1,5 +1,5 @@
 ---
-title: "Gastrulation: calculate CpG density per genomic context"
+title: "Gastrulation scNMT-seq: script calculate CpG density per genomic context"
 output:
   BiocStyle::html_document: 
     fig_width: 10
@@ -37,7 +37,7 @@ opts$anno <- c(
 ```
 
 <!-- Load feature metadata -->
-```{r} 
+```{r}
 anno_dt <- lapply(opts$anno, function(i) fread(sprintf("%s/%s.bed",io$features.dir,i))) %>% 
   rbindlist %>% setnames(c("chr","start","end","strand","id","anno")) %>%
   .[,chr:=paste0("chr",chr)]

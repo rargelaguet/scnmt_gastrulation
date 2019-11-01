@@ -1,0 +1,50 @@
+## Lefty2 (Mesoderm) ##
+rna.id <- "ENSMUSG00000066652"
+met.id <- "H3K27ac_distal_E7.5_Mes_intersect12_500_97"
+met.anno <- "H3K27ac_distal_E7.5_Mes_intersect12_500"
+acc.id <- "H3K27ac_distal_E7.5_Mes_intersect12_97"
+acc.anno <- "H3K27ac_distal_E7.5_Mes_intersect12"
+
+## Snai1 (Mesoderm) ##
+rna.id <- "ENSMUSG00000042821"
+met.id <- "H3K27ac_distal_E7.5_Mes_intersect12_500_856"
+met.anno <- "H3K27ac_distal_E7.5_Mes_intersect12_500"
+acc.id <- "H3K27ac_distal_E7.5_Mes_intersect12_856"
+acc.anno <- "H3K27ac_distal_E7.5_Mes_intersect12"
+
+## Mesp2 (Mesoderm) ## 
+rna.id <- "ENSMUSG00000030543"
+met.id <- "H3K27ac_distal_E7.5_Mes_intersect12_1225"
+met.anno <- "H3K27ac_distal_E7.5_Mes_intersect12"
+acc.id <- "H3K27ac_distal_E7.5_Mes_intersect12_1225"
+acc.anno <- "H3K27ac_distal_E7.5_Mes_intersect12"
+opts$min.cpg <- 2
+opts$min.gpc <- 10
+
+## Sp8 (Ectoderm) ##
+rna.id <- "ENSMUSG00000048562"
+met.id <- "H3K27ac_distal_E7.5_Ect_intersect12_954"
+met.anno <- "H3K27ac_distal_E7.5_Ect_intersect12"
+acc.id <- "H3K27ac_distal_E7.5_Ect_intersect12_954"
+acc.anno <- "H3K27ac_distal_E7.5_Ect_intersect12"
+
+## Bcl11a (Ectoderm) ##
+rna.id <- "ENSMUSG00000000861"
+met.id <- "H3K27ac_distal_E7.5_Ect_intersect12_566"
+met.anno <- "H3K27ac_distal_E7.5_Ect_intersect12"
+acc.id <- "H3K27ac_distal_E7.5_Ect_intersect12_566"
+acc.anno <- "H3K27ac_distal_E7.5_Ect_intersect12"
+
+## Bmp2 (Endoderm) ##
+rna.id <- "ENSMUSG00000075302"
+met.id <- "H3K27ac_distal_E7.5_End_intersect12_1118"
+met.anno <- "H3K27ac_distal_E7.5_End_intersect12"
+acc.id <- "H3K27ac_distal_E7.5_End_intersect12_1118"
+acc.anno <- "H3K27ac_distal_E7.5_End_intersect12"
+
+## Hnf1b (Endoderm) ##
+rna.id <- "ENSMUSG00000020679"
+met.id <- "H3K27ac_distal_E7.5_End_intersect12_363"
+met.anno <- "H3K27ac_distal_E7.5_End_intersect12"
+acc.id <- "H3K27ac_distal_E7.5_End_intersect12_363"
+acc.anno <- "H3K27ac_distal_E7.5_End_intersect12"

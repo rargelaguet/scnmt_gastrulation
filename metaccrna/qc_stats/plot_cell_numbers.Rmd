@@ -1,18 +1,12 @@
 ---
-title: "Gastrulation: quality control statistics for the three omics"
+title: "Gastrulations scNMT-seq: quality control statistics for the three omics"
 output: 
   BiocStyle::html_document: 
     fig_width: 12
     fig_height: 8
 ---
 
-
-RNA color: #3CB54E
-Met color: #F37A71 (or #F8766D?)
-Acc color: #6691CB (or #00BFC4?)
-
 ```{r echo=FALSE, include=FALSE}
-library(scater)
 library(data.table)
 library(purrr)
 library(ggplot2)

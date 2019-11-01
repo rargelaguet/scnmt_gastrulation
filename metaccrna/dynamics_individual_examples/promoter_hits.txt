@@ -1,0 +1,27 @@
+## Pou5f1 ##
+rna.id <- "ENSMUSG00000024406"
+met.id <- "ENSMUSG00000024406"
+met.anno <- "prom_2000_2000"
+acc.id <- "ENSMUSG00000024406"
+acc.anno <- "prom_2000_2000"
+
+## Tex19.1 ##
+rna.id <- "ENSMUSG00000039329"
+met.id <- "ENSMUSG00000039329"
+met.anno <- "prom_2000_2000"
+acc.id <- "ENSMUSG00000039329"
+acc.anno <- "prom_2000_2000"
+
+## Dppa2 ##
+rna.id <- "ENSMUSG00000072419"
+met.id <- "ENSMUSG00000072419"
+met.anno <- "prom_2000_2000"
+acc.id <- "ENSMUSG00000072419"
+acc.anno <- "prom_2000_2000"
+
+## Dppa4 ##
+rna.id <- "ENSMUSG00000058550"
+met.id <- "ENSMUSG00000058550"
+met.anno <- "prom_2000_2000"
+acc.id <- "ENSMUSG00000058550"
+acc.anno <- "prom_2000_2000"
