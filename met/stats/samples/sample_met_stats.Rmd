@@ -54,7 +54,7 @@ io$outdir <- "/Users/ricard/data/gastrulation/met/stats/samples"
 opts <- list()
 
 # Define which cells to use (use NULL for all cells)
-opts$stage_lineage10x <- c(
+opts$stage_lineage <- c(
   "E4.5_Epiblast",
   "E4.5_Primitive_endoderm",
   "E5.5_Epiblast",
@@ -69,7 +69,7 @@ opts$stage_lineage10x <- c(
   "E7.5_Epiblast",
   "E7.5_Ectoderm"
 )
-# opts$stage_lineage10x <- NULL
+# opts$stage_lineage <- NULL
 
 # Define genomic contexts (use NULL for no genomic context filtering)
 # opts$annos <- c(
@@ -91,7 +91,7 @@ opts$annos <- NULL
 
 # Define which cells to use
 tmp <- fread(io$metadata) %>% .[!is.na(id_met)] 
-if (is.null(opts$stage_lineage10x)) {
+if (is.null(opts$stage_lineage)) {
   opts$cells <- tmp[,id_met]
 } else {
   opts$cells <- tmp %>%

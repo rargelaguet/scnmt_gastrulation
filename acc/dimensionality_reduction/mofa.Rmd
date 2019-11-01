@@ -1,5 +1,5 @@
 ---
-title: "Gastrulation: dimensionality reduction on accessibility data using MOFA"
+title: "Gastrulation scNMT-seq: dimensionality reduction on accessibility data using MOFA"
 output:
   BiocStyle::html_document: 
     fig_width: 10
@@ -27,18 +27,10 @@ if (grepl("ricard",Sys.info()['nodename'])) {
 
 <!-- Load accessibility data -->
 ```{r}
-if (grepl("tmp",io$data.dir)) {
-  acc_dt <- lapply(names(opts$annos), function(n)
-    lapply(opts$cells, function(i)
-      fread(cmd=sprintf("zcat < %s/%s_%s.gz",io$data.dir,i,n), stringsAsFactors=T, showProgress=F, select=c(1,2,3,5,6)) %>% 
-         setnames(c("id_acc","id","anno","N","rate")) %>% .[N>=opts$min.GpCs] %>% .[,N:=NULL]) %>% rbindlist
-  ) %>% rbindlist
-} else {
-  acc_dt <- lapply(names(opts$annos), function(n) 
-    fread(cmd=sprintf("zcat < %s/%s.tsv.gz",io$data.dir,n), stringsAsFactors=T, showProgress=F, select=c(1,2,3,5,6)) %>% 
-      setnames(c("id_acc","id","anno","N","rate")) %>% .[N>=opts$min.GpCs] %>% .[,N:=NULL]
-    ) %>% rbindlist 
-}
+acc_dt <- lapply(names(opts$annos), function(n) 
+  fread(sprintf("%s/%s.tsv.gz",io$data.dir,n), select=c(1,2,3,5,6)) %>% 
+    setnames(c("id_acc","id","anno","N","rate")) %>% .[N>=opts$min.GpCs] %>% .[,N:=NULL]
+  ) %>% rbindlist 
 ```
 
 <!-- Merge accessibility data with sample metadata -->
@@ -61,7 +53,7 @@ nsamples <- length(unique(acc_dt$id_acc))
 acc_dt <- acc_dt[,cov:=.N/nsamples,by=c("id","anno")] %>% .[cov>=opts$min.coverage] %>% .[,c("cov"):=NULL]
 ```
 
-<!-- Regress out covariates -->
+<!-- Regress out technical covariates -->
 Global accessibility rate
 ```{r}
 foo <- acc_dt[,.(mean=mean(m)),by=c("id_acc","anno")]
@@ -206,7 +198,7 @@ for (algorithm in algorithms) {
       legend.position = "none"
     )
 
-pdf(sprintf("%s/pdf/mofa+umap_acc_%s_%s.pdf",io$outdir,paste(names(opts$annos), collapse="_"), paste(opts$stage_lineage10x, collapse="_")), useDingbats = F, onefile = F, width=6, height=6)
+pdf(sprintf("%s/pdf/mofa+umap_acc_%s_%s.pdf",io$outdir,paste(names(opts$annos), collapse="_"), paste(opts$stage_lineage, collapse="_")), useDingbats = F, onefile = F, width=6, height=6)
 print(p)
 dev.off()
 }

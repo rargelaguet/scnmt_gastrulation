@@ -19,10 +19,8 @@ library(cowplot)
 barplot_theme <- function() {
   p <- theme(
     plot.title = element_text(size=30, hjust=0.5),
-    # axis.title.x = element_text(colour="black", size=25, vjust=1.5),
     axis.title.x = element_blank(),
     axis.title.y = element_text(colour="black", size=20),
-    # axis.text.x = element_text(colour="black",size=rel(1.6)),
     axis.text.y = element_text(colour="black",size=rel(1.5)),
     axis.line = element_line(colour="black", size=rel(0.7)),
     axis.ticks.x = element_line(colour="black", size=rel(0.7)),
@@ -39,21 +37,21 @@ barplot_theme <- function() {
 
 ## I/O ##
 io <- list()
-io$sample.metadata <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
-io$in.accdir <- "/Users/ricard/data/gastrulation/acc/raw"
-io$stats <- "/Users/ricard/data/gastrulation/acc/stats/samples/sample_stats.txt"
-# io$outdir <- "/Users/ricard/gastrulation/acc/QC/out"
+if (grepl("ricard",Sys.info()['nodename'])) {
+  io$basedir <- "/Users/ricard/data/gastrulation"
+}
+io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
+io$acc.dir <- paste0(io$basedir,"/acc/raw")
+io$stats <- paste0(io$basedir,"/acc/stats/samples/sample_stats.txt")
 
 ## Options ##
 opts <- list()
 
 # Define which cells to use
 opts$cells <- fread(io$sample.metadata) %>% 
-  # .[plate=="PS_VE_Plate1"] %>%
   .[!is.na(id_acc),id_acc]
 
 # Filtering options
-# opts$acc_coverage_threshold <- 1e6
 opts$acc_coverage_threshold <- 5e5
 opts$acc_mean_threshold.bottom <- 10
 opts$acc_mean_threshold.top <- 45
@@ -66,34 +64,15 @@ metadata <- fread(io$sample.metadata) %>%
   .[id_acc%in%opts$cells]
 ```
 
-<!-- Load accessibility data and calculate coverage per sample -->
-```{r}
-# stats <- data.table(id_acc=opts$cells, coverage=0)
-# 
-# for (cell in opts$cells) {
-#   if (file.exists(sprintf("%s/%s.tsv.gz",io$in.accdir,cell))) {
-#     # print(sprintf("Loading %s",cell))
-#     tmp <- fread(cmd=sprintf("zcat < %s/%s.tsv.gz",io$in.accdir,cell), sep="\t", verbose=F, showProgress=F) %>% .[,c("chr","pos","rate")]
-#     stats[id_acc==cell,coverage:=nrow(tmp)]
-#     stats[id_acc==cell,mean:=100*mean(tmp$rate, na.rm=T)]
-#   } else {
-#     print(sprintf("Sample %s not found",cell))
-#   }
-# }
-```
-
 <!-- Load statistics -->
 ```{r read_stats, echo=FALSE}
-# fwrite(stats, file=io$stats, sep="\t", row.names=F, col.names=T)
 stats <- fread(io$stats)
-```
-
-```{r}
 stats <- stats %>% merge(metadata,by="id_acc")
 ```
 
-
 <!-- Plot QC  -->
+
+Plot coverage per cell
 ```{r}
 tmp <- stats[,c("id_acc","coverage")] %>% setkey(coverage) %>% .[,id_acc:=factor(id_acc,levels=id_acc)]
 tmp$cellcolor <- c("black","red")[as.numeric(tmp$coverage < opts$acc_coverage_threshold)+1]
@@ -116,6 +95,7 @@ print(p1)
 # dev.off()
 ```
 
+Plot mean accessibility rate per cell
 ```{r}
 tmp <- stats %>% copy %>% setkey(mean) %>% .[,id_acc:=factor(id_acc,levels=id_acc)]
 tmp$cellcolor <- c("black","red")[as.numeric(tmp$mean<opts$acc_mean_threshold.bottom | tmp$mean>opts$acc_mean_threshold.top)+1]
@@ -146,29 +126,13 @@ failqc <- stats[coverage<opts$acc_coverage_threshold | (mean<opts$acc_mean_thres
 # print(sort(failqc))
 ```
 
-```{r}
-# sample_metadata_updated <- fread(io$sample.metadata) %>%
-#   .[id_acc %in% stats$id_acc]
-# 
-# sort(sample_metadata_updated[pass_accQC==F,id_acc])
-```
-
+<!-- Update sample metadata file -->
 ```{r}
 sample_metadata_updated <- fread(io$sample.metadata)
 table(sample_metadata_updated$pass_accQC)
 
 sample_metadata_updated <- sample_metadata_updated[id_acc%in%stats$id_acc, pass_accQC:=ifelse(id_acc%in%failqc,F,T)]
-
 table(sample_metadata_updated$pass_accQC)
 
 fwrite(sample_metadata_updated, io$sample.metadata, sep="\t", col.names=T, row.names=F, quote=F, na="NA")
 ```
-
-<!-- Save results -->
-```{r, echo=FALSE, include=FALSE}
-# p <- cowplot::plot_grid(p1, p2, ncol=2, nrow=1)
-# pdf(file=paste0(io$outdir,"/metacc.pdf"), width=19, height=7)
-# print(p)
-# dev.off()
-```
-

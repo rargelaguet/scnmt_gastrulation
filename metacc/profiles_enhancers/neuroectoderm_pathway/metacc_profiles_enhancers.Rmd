@@ -1,5 +1,5 @@
 ---
-title: "Gastrulation: pseudobulked profiles of DNA methylation and chromatin accessibility"
+title: "Gastrulation scNMT-seq: pseudobulked profiles of DNA methylation and chromatin accessibility along the neuroectoderm default pathway"
 output: 
   BiocStyle::html_document: 
     fig_width: 10
@@ -23,12 +23,6 @@ sample_metadata <- fread(io$sample.metadata) %>%
   .[,c("sample","id_acc","id_met","id_rna","stage","lineage10x_2")] %>%
   .[,stage_lineage:=paste(stage,lineage10x_2,sep=" ")] %>%
   .[id_met%in%opts$met.cells | id_acc%in%opts$acc.cells]
-```
-
-<!-- Merge E5.5 and E6.5 epiblast -->
-```{r}
-# sample_metadata %>% 
-  # .[,stage_lineage:=ifelse(stage_lineage=="E5.5_Epiblast","E6.5_Epiblast",stage_lineage)]
 ```
 
 <!-- (ONLY FOR TESTING) Subset cells to reduce memory burden -->
@@ -69,7 +63,7 @@ data[,anno:=stringr::str_replace_all(anno,opts$annos)]
 
 ```{r}
 # saveRDS(data, "/Users/ricard/data/gastrulation/metacc/profiles_neuroectoderm_enhancers/data.rds")
-data <- readRDS("/Users/ricard/data/gastrulation/metacc/profiles_neuroectoderm_enhancers/data.rds")
+# data <- readRDS("/Users/ricard/data/gastrulation/metacc/profiles_neuroectoderm_enhancers/data.rds")
 ```
 
 <!-- Load genome-wide global methylation and accessibility rates -->

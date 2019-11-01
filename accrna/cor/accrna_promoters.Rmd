@@ -1,5 +1,5 @@
   ---
-title: "Gastrulation: Correlation (across cells) between RNA expression and chromatin accessibility"
+title: "Gastrulation scNMT-seq: correlation per gene (across cells) between RNA expression and chromatin accessibility"
 output: 
   BiocStyle::html_document: 
     fig_width: 12
@@ -27,13 +27,13 @@ source("/Users/ricard/gastrulation/accrna/cor/utils.R")
 
 ## I/O ##
 io   <- list()
-io$base_dir   <- "/Users/ricard/data/gastrulation"
-io$in.sample_metadata <- paste0(io$base_dir,"/sample_metadata.txt")
-io$annos_dir  <- paste0(io$base_dir, "/features/filt")
-io$rna_file   <- paste0(io$base_dir, "/rna/parsed/SingleCellExperiment.rds")
-io$acc_dir   <- paste0(io$base_dir, "/acc/parsed")
+io$basedir   <- "/Users/ricard/data/gastrulation"
+io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
+io$annos_dir  <- paste0(io$basedir, "/features/filt")
+io$rna_file   <- paste0(io$basedir, "/rna/parsed/SingleCellExperiment.rds")
+io$acc_dir   <- paste0(io$basedir, "/acc/parsed")
 io$gene_metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
-io$outdir <- "/Users/ricard/data/gastrulation_norsync_stuff/accrna/cor"
+io$outdir <- paste0(io$basedir,"/accrna/cor")
 
 ## Options ##
 opts <- list()
@@ -44,14 +44,11 @@ opts$min.cells <- 50   # Minimum number of cells per feature
 opts$max.genes <- 5000  # Top N most variable genes and features
 
 # Multiple testing correction options
-opts$threshold_fdr  <- 0.1 # pvalue threshold for significance in FDR
+opts$threshold_fdr  <- 0.1
 
 # Correlation type options
 opts$method <- "pearson"      # correlation type (see ?cor)
 opts$weight <- FALSE          # weighted correlation (see ?wtd.cor) 
-
-# Regress out effects of global changes in accessibility
-opts$regress.mean <- FALSE
 
 # Permutation test options
 opts$permutation <- TRUE   # do permutation test?
@@ -63,7 +60,7 @@ opts$annos <- c(
 )
 
 # Define stage and lineages
-opts$stage_lineage10x <- c(
+opts$stage_lineage <- c(
 
   # E4.5
   "E4.5_Epiblast",
@@ -84,7 +81,7 @@ opts$stage_lineage10x <- c(
 )
 
 # Define which cells to use
-tmp <- fread(io$in.sample_metadata, header=T) %>% 
+tmp <- fread(io$sample.metadata) %>% 
   .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")] %>%
   .[pass_accQC==T & pass_rnaQC==T & stage_lineage%in%opts$stage_lineage] 
 opts$rna.cells <- tmp$id_rna
@@ -93,7 +90,7 @@ opts$acc.cells <- tmp$id_acc
 
 <!-- Load sample metadata -->
 ```{r}
-sample_metadata <- fread(io$in.sample_metadata, header=T, stringsAsFactors=T) %>% 
+sample_metadata <- fread(io$sample.metadata) %>% 
   .[,c("sample","id_rna","id_acc","stage","lineage10x_2")] %>%
   .[,stage_lineage:=as.factor(paste(stage,lineage10x_2,sep="_"))] %>%
   .[sample%in%tmp$sample]
@@ -124,7 +121,7 @@ rna_dt <- rna_dt[,var:=var(expr), by="gene"] %>% .[var>0.1] %>% .[,var:=NULL]
 <!-- Load accessibility data -->
 ```{r load_acc, echo=FALSE, include=FALSE}
 acc_dt <- lapply(names(opts$annos), function(n) {
-  data <- fread(cmd=sprintf("zcat < %s/%s.tsv.gz",io$acc_dir,n), showProgress=F, stringsAsFactors=T) %>%
+  data <- fread(sprintf("%s/%s.tsv.gz",io$acc_dir,n)) %>%
   .[V1%in%opts$acc.cells]
 }) %>% rbindlist %>% setnames(c("sample","id","anno","Nacc","N","rate"))
 ```
@@ -144,11 +141,11 @@ acc_dt <- acc_dt[,var:=var(rate), by=c("id","anno")] %>% .[var>0] %>% .[,var:=NU
 <!-- Load genomic contexts -->
 ```{r load_genomiccontexts}
 feature_metadata <- lapply(names(opts$annos), function(anno) 
-  fread(sprintf("%s/%s.bed",io$annos_dir,anno), stringsAsFactors=T)[,c(1,2,3,4,5,6)]) %>%
+  fread(sprintf("%s/%s.bed",io$annos_dir,anno))[,c(1,2,3,4,5,6)]) %>%
   rbindlist %>% setnames(c("chr","start","end","strand","id","anno"))
 
 # Load gene metadata 
-gene_metadata <- fread(io$gene_metadata,stringsAsFactors=T) %>% 
+gene_metadata <- fread(io$gene_metadata) %>% 
   setnames(c("ens_id","symbol"),c("id","gene")) %>% 
   .[,chr:=stringr::str_replace_all(chr,"chr","")]
 ```
@@ -179,23 +176,6 @@ accrna_dt <- accrna_dt %>% .[,gene_id:=paste(gene,id,sep="_")] %>% split(.$anno)
 accrna_dt <- accrna_dt %>% droplevels()
 ```
 
-<!-- Regress out global accessibility rate -->
-```{r}
-if (opts$regress.mean) {
-  # Covariate: mean methylation rate per context and sample
-  # accrna_dt[,covariate:=mean(rate),by=c("anno","sample")]
-  accrna_dt[,covariate:=mean(rate),by=c("sample")]
-
-  # Fit the linear model and regress out the covariate effect
-  accrna_dt[, c("coef","residual"):=.(
-    lm(formula=rate~covariate)[["coefficients"]][2],
-    lm(formula=rate~covariate)[["residuals"]]), by=c("gene","id","anno")] %>% 
-    .[,c("rate","residual"):=.(round(rate,2),round(residual,2))] %>%
-    .[,c("old_rate","rate"):=list(rate,residual)] %>% 
-    .[,c("covariate","residual","coef"):=NULL]
-}
-```
-
 <!-- Compute correlations and do multiple testing correction -->
 
 ```{r}
@@ -219,7 +199,7 @@ cor[,sum(sig),by="anno"]
 <!-- Save results -->
 ```{r}
 fwrite(cor, paste0(io$outdir,"/accrna_cor_promoters.txt"), quote=F, sep="\t")
-# cor <- fread(paste0(io$outdir,"/accrna_cor.txt"))
+# cor <- fread(paste0(io$outdir,"/accrna_cor_promoters.txt"))
 ```
 
 <!-- Run permutation test for the correlation across samples -->
@@ -274,8 +254,6 @@ if (opts$permutation) {
     qq[[n]] <- gg_qqplot(cor[anno == n, ], cor_perm[anno == n]$p, title = "")
     
     # Combine and save
-    # print(pp[[n]])
-    # print(plot_grid(pp[[n]], qq[[n]], labels = c("", ""), label_size = 20, ncol = 2, nrow = 1))
     # pdf(file=paste0(io$outdir,"/pdf/volcano_", n, ".pdf"), width = 13, height = 5.5, useDingbats = FALSE)
     grid.arrange(pp[[n]], qq[[n]], ncol=2, top = textGrob(n, gp=gpar(fontsize=29, fontface = "bold")), newpage = TRUE)
     # dev.off()

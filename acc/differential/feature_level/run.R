@@ -7,7 +7,6 @@ io <- list()
 if (grepl("ricard",Sys.info()['nodename'])) {
   io$script <- "/Users/ricard/gastrulation/acc/differential/feature_level/diffacc_supervised.R"
   io$outdir <- "/Users/ricard/data/gastrulation/acc/differential/feature_level/test"
-  # io$tmpdir <- "/hps/nobackup/stegle/users/ricard/gastrulation/acc/differential/feature_level/tmp"
 } else {
   io$script <- "/homes/ricard/gastrulation/acc/differential/feature_level/diffacc_supervised.R"
   io$outdir <- "/hps/nobackup/stegle/users/ricard/gastrulation/acc/differential/feature_level/test"
@@ -68,16 +67,6 @@ opts$groups <- list(
   "E6.5Epiblast_vs_E7.5Ectoderm" = list(c("E6.5_Epiblast"), c("E7.5_Ectoderm")),
   "E6.5Primitive_Streak_vs_E7.5Endoderm" = list(c("E6.5_Primitive_Streak"), c("E7.5_Endoderm")),
   "E6.5Primitive_Streak_vs_E7.5Mesoderm" = list(c("E6.5_Primitive_Streak"), c("E7.5_Mesoderm"))
-)
-
-opts$groups <- list(
-  # "E5.5E6.5E7.5Epiblast_vs_E7.5Ectoderm" = list(c("E5.5_Epiblast","E6.5_Epiblast","E7.5_Epiblast"), c("E7.5_Ectoderm")),
-  # "E6.5E7.5Epiblast_vs_E7.5Ectoderm" = list(c("E6.5_Epiblast","E7.5_Epiblast"), c("E7.5_Ectoderm")),
-  # "E7.5Epiblast_vs_E7.5Ectoderm" = list(c("E7.5_Epiblast"), c("E7.5_Ectoderm"))
-  # "E4.5Epiblast_vs_E7.5Ectoderm" = list(c("E4.5_Epiblast"), c("E7.5_Ectoderm"))
-  "E5.5E6.5Epiblast_vs_E7.5Ectoderm" = list(c("E6.5_Epiblast","E5.5_Epiblast"), c("E7.5_Ectoderm")),
-  "E5.5Epiblast_vs_E7.5Ectoderm" = list(c("E5.5_Epiblast"), c("E7.5_Ectoderm")),
-  "E6.5Epiblast_vs_E7.5Ectoderm" = list(c("E6.5_Epiblast"), c("E7.5_Ectoderm"))
 )
 
 # Minimum number of observations per group, for each feature

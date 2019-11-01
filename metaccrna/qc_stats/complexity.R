@@ -23,7 +23,7 @@ io$outdir <- "/Users/ricard/gastrulation/metaccrna/qc_stats/out"
 opts <- list()
 
 # Define which stage and lineages to look at 
-opts$stage_lineage10x <- c(
+opts$stage_lineage <- c(
   "E4.5_Epiblast",
   "E4.5_Primitive_endoderm",
   "E5.5_Epiblast",
@@ -38,14 +38,14 @@ opts$stage_lineage10x <- c(
   "E7.5_Epiblast",
   "E7.5_Ectoderm"
 )
-opts$stage_lineage10x <- NULL
+opts$stage_lineage <- NULL
 
 # Define genomic contexts (use NULL for no genomic context filtering)
 opts$annos <- NULL
 
 # Define which cells to use
 tmp <- fread(io$in.metadata)
-if (!is.null(opts$stage_lineage10x) ) {
+if (!is.null(opts$stage_lineage) ) {
   tmp <- tmp %>% 
     .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")] %>% 
     .[stage_lineage%in%opts$stage_lineage]

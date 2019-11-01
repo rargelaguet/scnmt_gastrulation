@@ -1,5 +1,5 @@
 ---
-title: "Gastrulation: dimensionality reduction on the DNA methylation data"
+title: "Gastrulation scNMT-seq: dimensionality reduction on the DNA methylation data"
 output:
   BiocStyle::html_document: 
     fig_width: 10
@@ -25,20 +25,8 @@ if (grepl("ricard",Sys.info()['nodename'])) {
 
 <!-- Load methylation data -->
 ```{r load_data, echo=FALSE, include=FALSE}
-# if (grepl("tmp",io$data.dir)) {
-#   met_dt <- lapply(names(opts$annos), function(n)
-#     lapply(opts$cells, function(i)
-#       fread(cmd=sprintf("zcat < %s/%s_%s.gz",io$data.dir,i,n), stringsAsFactors=T, showProgress=F, select=c(1,2,3,5,6)) %>% 
-#          setnames(c("id_met","id","anno","N","rate")) %>% .[N>=opts$min.CpGs] %>% .[,N:=NULL]) %>% rbindlist
-#   ) %>% rbindlist
-# } else {
-#   met_dt <- lapply(names(opts$annos), function(n) 
-#     fread(cmd=sprintf("zcat < %s/%s.tsv.gz",io$data.dir,n), stringsAsFactors=T, showProgress=F, select=c(1,2,3,5,6)) %>% 
-#       setnames(c("id_met","id","anno","N","rate")) %>% .[N>=opts$min.CpGs] %>% .[,N:=NULL]
-#     ) %>% rbindlist 
-# }
 met_dt <- lapply(names(opts$annos), function(n)
-  fread(cmd=sprintf("zcat < %s/%s.tsv.gz",io$data.dir,n), stringsAsFactors=T, showProgress=F, select=c(1,2,3,5,6)) %>%
+  fread(sprintf("%s/%s.tsv.gz",io$data.dir,n), select=c(1,2,3,5,6)) %>%
   setnames(c("id_met","id","anno","N","rate")) %>% .[N>=opts$min.CpGs] %>% .[,N:=NULL]
 ) %>% rbindlist
 ```
@@ -83,7 +71,6 @@ dmatrix_list <- met_dt %>% split(.$anno) %>%
       tibble::column_to_rownames("id_met") %>% as.matrix %>% t
      )
 lapply(dmatrix_list,dim)
-# rm(met_dt); gc(reset=T)
 ```
 
 <!-- Fit MOFA model -->
@@ -112,6 +99,8 @@ MOFAmodel <- prepareMOFA(
 model <- runMOFA(MOFAmodel, io$outfile)
 ```
 
+
+
 <!-- Load pretrained model -->
 ```{r}
 model <- loadModel(io$outfile)
@@ -133,11 +122,6 @@ sample_metadata_filt %>%
 ```{r}
 r2 <- calculateVarianceExplained(model)$R2PerFactor
 ```
-
-```{r}
-# plotVarianceExplained(model)
-```
-
 <!-- (Optional) Rotate a factor -->
 ```{r}
 # model@Expectations$Z[,1] <- -model@Expectations$Z[,1]
@@ -159,37 +143,6 @@ p <- p +
     legend.position = "none"
   )
 print(p)
-
-# pdf(sprintf("%s/pdf/mofa_met_%s_%s.pdf",io$outdir,paste(names(opts$annos), collapse="_"), paste(opts$stage_lineage10x, collapse="_")), useDingbats = F, onefile = F, width=6, height=6)
-# print(p)
-# dev.off()
-```
-
-<!-- Correlate Factor 1 with global methylation differences -->
-```{r}
-# library(ggpubr) 
-# 
-# foo <- fread(io$met.stats) %>% .[,c("id_met","mean")] %>% 
-#   merge(sample_metadata_filt, by="id_met") %>%
-#   setnames("id_met","sample") %>% .[,mean:=100*mean] %>%
-#   setkey(sample) %>% .[MOFA::sampleNames(model)] 
-# 
-# Z <- getFactors(model, 1, as.data.frame=T) %>% 
-#   as.data.table %>% merge(foo, by="sample") 
-# 
-#  p <- ggscatter(Z, x="value", y="mean", color="embryonic",
-#   add="reg.line", add.params = list(color="black", fill="lightgray"), conf.int=TRUE) +
-#   stat_cor(method = "pearson", label.x = -2.5, label.y = 90) +
-#   labs(x="Factor 1", y="Mean methylation rate") +
-#   scale_colour_manual(values=opts$colors) +
-#   theme(
-#     axis.title = element_text(size=rel(1.2)),
-#     legend.position = "none"
-#   )
-#  
-# pdf(sprintf("%s/pdf/mofa_met_CORRELATION.pdf",io$outdir), useDingbats = F, width=6, height=6)
-# print(p)
-# dev.off()
 ```
 
 <!-- Non-linear dimensionality reduction from MOFA factors -->
@@ -204,7 +157,7 @@ for (algorithm in algorithms) {
 
   set.seed(1)
   if (algorithm=="tsne") {
-    tsne <- Rtsne::Rtsne(Z, check_duplicates=FALSE, pca=FALSE, theta=0.5, dims=2)
+    tsne <- Rtsne(Z, check_duplicates=FALSE, pca=FALSE, theta=0.5, dims=2)
     Z.out <- tsne$Y
   } else if (algorithm=="umap") {
     umap.defaults$n_neighbors <- 20
@@ -228,7 +181,7 @@ for (algorithm in algorithms) {
       legend.position = "none"
     )
 
-# pdf(sprintf("%s/pdf/mofa+umap_met_%s_%s.pdf",io$outdir,paste(names(opts$annos), collapse="_"), paste(opts$stage_lineage10x, collapse="_")), useDingbats = F, onefile = F, width=6, height=6)
+# pdf(sprintf("%s/pdf/mofa+umap_met_%s_%s.pdf",io$outdir,paste(names(opts$annos), collapse="_"), paste(opts$stage_lineage, collapse="_")), useDingbats = F, onefile = F, width=6, height=6)
 print(p)
 # dev.off()
 }

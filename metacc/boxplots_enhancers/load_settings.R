@@ -1,23 +1,34 @@
-#####################
-## Define settings ##
-#####################
-
+################
 ## Define I/O ##
+################
+
 io <- list()
-io$sample.metadata <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
-io$met.dir <- "/Users/ricard/data/gastrulation/met/parsed"
-io$acc.dir <- "/Users/ricard/data/gastrulation/acc/parsed"
-io$outdir <- "/Users/ricard/gastrulation/metaccrna/boxplots_enhancers/out"
+if (grepl("ricard",Sys.info()['nodename'])) {
+  io$basedir <- "/Users/ricard/data/gastrulation"
+}
+
+# Sample metadata file
+io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
+
+# Data folders
+io$met.dir <- paste0(io$basedir,"/met/parsed")
+io$acc.dir <- paste0(io$basedir,"/acc/parsed")
+
+# File with global statistics per cell
+io$acc.stats <- paste0(io$basedir,"/acc/stats/samples/sample_stats.txt")
+io$met.stats <- paste0(io$basedir,"/met/stats/samples/sample_stats.txt")
 
 # Folders with the differential analysis results
 io$diff.met <- "/Users/ricard/data/gastrulation/met/differential/feature_level"
 io$diff.acc <- "/Users/ricard/data/gastrulation/acc/differential/feature_level"
 
-# Global statistics per cell
-io$met.stats <- "/Users/ricard/data/gastrulation/met/stats/samples/sample_stats.txt"
-io$acc.stats <- "/Users/ricard/data/gastrulation/acc/stats/samples/sample_stats.txt"
+# Output directory
+io$outdir <- paste0(io$basedir,"/metacc/boxplots_enhancers")
 
+####################
 ## Define options ##
+####################
+
 opts <- list()
 
 # Define which stage and lineages to look at 
@@ -55,17 +66,6 @@ opts$min.fdr <- 0.10
 opts$min.acc.diff <- 5
 opts$min.met.diff <- 5
 
-opts$colors <- c(
-  "E4.5 Epiblast"="#C1CDCD",
-  "E5.5 Epiblast"="#C1CDCD",
-  "E6.5 Epiblast"="#C1CDCD",
-  "E7.5 Epiblast"="#C1CDCD",
-  "E7.5 Ectoderm"="steelblue",
-  "E6.5 Primitive Streak"="sandybrown",
-  "E7.5 Primitive Streak"="sandybrown",
-  "E7.5 Endoderm"="#43CD80",
-  "E7.5 Mesoderm"="#CD3278"
-)
 
 # Define which cells to use
 tmp <- fread(io$sample.metadata) %>% 

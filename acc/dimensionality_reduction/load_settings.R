@@ -7,16 +7,12 @@ opts <- list()
 
 if (grepl("ricard",Sys.info()['nodename'])) {
   io$basedir <- "/Users/ricard/data/gastrulation"
-  io$sample.metadata <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
-  io$data.dir <- "/Users/ricard/data/gastrulation/acc/parsed"
-  io$outdir <- "/Users/ricard/data/gastrulation_norsync_stuff/acc/dimensionality_reduction"
 } else {
   io$basedir <- "/hps/nobackup/stegle/users/ricard/gastrulation"
-  io$sample.metadata <- "/hps/nobackup/stegle/users/ricard/gastrulation/sample_metadata.txt"
-  io$data.dir <- "/hps/nobackup/stegle/users/ricard/gastrulation/acc/parsed/tmp"
-  io$outdir <- "/hps/nobackup/stegle/users/ricard/gastrulation/acc/dimensionality_reduction"  
 }
-io$acc.stats <- paste0(io$basedir,"/acc/stats/samples/sample_stats.txt")
+io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
+io$data.dir <- paste0(io$basedir,"/acc/parsed")
+io$outdir <- paste0(io$basedir,"/acc/dimensionality_reduction")
 
 ####################
 ## Define options ##
@@ -31,7 +27,7 @@ opts$annos <- c(
 )
 
 # Define which stage and lineages to use
-opts$stage_lineage10x <- c(
+opts$stage_lineage <- c(
   
   # E4.5
   # "E4.5_Epiblast",
@@ -53,7 +49,7 @@ opts$stage_lineage10x <- c(
   "E7.5_Ectoderm"
 )
 
-
+# Define lineage colors
 opts$colors <- c(
   ExE="#fc8d62", 
   Embryonic="#8da0cb", 
@@ -71,7 +67,7 @@ opts$min.coverage <- 0.20  # minimum coverage per feature (fraction of cells wit
 opts$nfeatures <- 10000     # maximum number of features per view (filter based on variance)
 
 # Define which cells to use
-opts$cells <- fread(io$sample.metadata, stringsAsFactors=T) %>% 
+opts$cells <- fread(io$sample.metadata) %>% 
   .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")] %>%
   .[pass_accQC==T & stage_lineage%in%opts$stage_lineage,id_acc] %>% as.character()
 
@@ -83,6 +79,6 @@ io$outfile = sprintf("%s/hdf5/model_%s_%s.hdf5",io$outdir,paste(names(opts$annos
 ## Load sample metadata ##
 ##########################
 
-sample_metadata <- fread(io$sample.metadata, stringsAsFactors=T) %>% 
+sample_metadata <- fread(io$sample.metadata) %>% 
   .[id_acc%in%opts$cells] %>% .[,c("id_acc","stage","lineage10x_2")] %>%
-  .[,stage_lineage:=as.factor(paste(stage,lineage10x_2,sep="_"))] %>% droplevels()
+  .[,stage_lineage:=as.factor(paste(stage,lineage10x_2,sep="_"))]

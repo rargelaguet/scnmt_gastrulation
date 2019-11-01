@@ -82,3 +82,5 @@ tmp <- fread(io$sample.metadata) %>%
   .[stage_lineage%in%opts$stage_lineage] 
 opts$met.cells <- tmp %>% .[pass_metQC==T,id_met]
 opts$acc.cells <- tmp %>% .[pass_accQC==T,id_acc]
+
+rm(tmp)

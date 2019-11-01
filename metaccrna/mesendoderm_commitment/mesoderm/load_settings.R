@@ -43,7 +43,7 @@ opts$acc.annos <- c(
 
 
 # Define which stage and lineages to look at 
-opts$stage_lineage10x <- c(
+opts$stage_lineage <- c(
   "E5.5_Epiblast",
   "E6.5_Epiblast",
   "E6.5_Primitive_Streak",
@@ -82,7 +82,7 @@ opts$views_names <- c(
 # Define which cells to use
 tmp <- fread(io$sample.metadata) %>%
   .[,stage_lineage:=as.factor(paste(stage,lineage10x_2,sep="_"))] %>%
-  .[stage_lineage%in%opts$stage_lineage10x]
+  .[stage_lineage%in%opts$stage_lineage]
 opts$met_cells <- tmp %>% .[pass_metQC==T, id_met]
 opts$rna_cells <- tmp %>% .[pass_rnaQC==T, id_rna]
 opts$acc_cells <- tmp %>% .[pass_accQC==T, id_acc]

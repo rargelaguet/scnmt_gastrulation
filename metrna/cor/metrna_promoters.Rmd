@@ -1,5 +1,5 @@
 ---
-title: "Gastrulation: correlation per gene (across cells) between RNA expression and DNA methylation"
+title: "Gastrulation scNMT-seq: correlation per gene (across cells) between RNA expression and DNA methylation"
 output: 
   BiocStyle::html_document: 
     fig_width: 12
@@ -27,13 +27,13 @@ source("/Users/ricard/gastrulation/metrna/cor/utils.R")
 
 ## I/O ##
 io   <- list()
-io$base_dir   <- "/Users/ricard/data/gastrulation"
-io$in.sample_metadata <- paste0(io$base_dir,"/sample_metadata.txt")
-io$annos_dir  <- paste0(io$base_dir, "/features/filt")
-io$rna_file   <- paste0(io$base_dir, "/rna/parsed/SingleCellExperiment.rds")
-io$met_dir   <- paste0(io$base_dir, "/met/parsed")
+io$basedir   <- "/Users/ricard/data/gastrulation"
+io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
+io$annos_dir  <- paste0(io$basedir, "/features/filt")
+io$rna_file   <- paste0(io$basedir, "/rna/parsed/SingleCellExperiment.rds")
+io$met_dir   <- paste0(io$basedir, "/met/parsed")
+io$outdir <- paste0(io$basedir,"/metrna/cor")
 io$gene_metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
-io$outdir <- "/Users/ricard/data/gastrulation_norsync_stuff/metrna/cor"
 
 ## Options ##
 opts <- list()
@@ -44,14 +44,11 @@ opts$min.cells <- 50    # Minimum number of observed cells per feature with at l
 opts$max.genes <- 5000  # Top N most variable genes and features
 
 # Multiple testing correction options
-opts$threshold_fdr  <- 0.1 # pvalue threshold for significance in FDR
+opts$threshold_fdr  <- 0.1
 
 # Correlation type options
 opts$method <- "pearson"      # correlation type (see ?cor)
 opts$weight <- FALSE          # weighted correlation (see ?wtd.cor) 
-
-# Regress out effects of global changes in methylation
-opts$regress.mean <- FALSE
 
 # Permutation test options
 opts$permutation <- TRUE   # do permutation test?
@@ -63,7 +60,7 @@ opts$annos <- c(
 )
 
 # Define stage and lineages
-opts$stage_lineage10x <- c(
+opts$stage_lineage <- c(
 
   # E4.5
   "E4.5_Epiblast",
@@ -84,16 +81,18 @@ opts$stage_lineage10x <- c(
 )
 
 # Define which cells to use
-tmp <- fread(io$in.sample_metadata, header=T) %>% 
+tmp <- fread(io$sample.metadata) %>% 
   .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")] %>%
   .[pass_metQC==T & pass_rnaQC==T & stage_lineage%in%opts$stage_lineage] 
 opts$rna.cells <- tmp$id_rna
 opts$met.cells <- tmp$id_met
+
+rm(tmp)
 ```
 
 <!-- Load sample metadata -->
 ```{r}
-sample_metadata <- fread(io$in.sample_metadata, header=T, stringsAsFactors=T) %>% 
+sample_metadata <- fread(io$sample.metadata) %>% 
   .[,c("sample","id_rna","id_met","stage","lineage10x_2")] %>%
   .[,stage_lineage:=as.factor(paste(stage,lineage10x_2,sep="_"))] %>%
   .[sample%in%tmp$sample]
@@ -126,7 +125,7 @@ rna_dt <- rna_dt[,var:=var(expr), by="gene"] %>% .[var>0.5] %>% .[,var:=NULL]
 <!-- Load methylation data -->
 ```{r load_met, echo=FALSE, include=FALSE}
 met_dt <- lapply(names(opts$annos), function(n) {
-  data <- fread(cmd=sprintf("zcat < %s/%s.tsv.gz",io$met_dir,n)) %>%
+  data <- fread(sprintf("%s/%s.tsv.gz",io$met_dir,n)) %>%
   .[V1%in%opts$met.cells]
 }) %>% rbindlist %>% setnames(c("sample","id","anno","Nmet","N","rate"))
 ```
@@ -143,11 +142,11 @@ met_dt <- met_dt %>% .[,N:=.N, by=c("id","anno")] %>% .[N>=opts$min.cells] %>% .
 <!-- Load genomic contexts -->
 ```{r load_genomiccontexts}
 feature_metadata <- lapply(names(opts$annos), function(anno) 
-  fread(sprintf("%s/%s.bed",io$annos_dir,anno), stringsAsFactors=T)[,c(1,2,3,4,5,6)]) %>%
+  fread(sprintf("%s/%s.bed",io$annos_dir,anno))[,c(1,2,3,4,5,6)]) %>%
   rbindlist %>% setnames(c("chr","start","end","strand","id","anno"))
 
 # Load gene metadata 
-gene_metadata <- fread(io$gene_metadata,stringsAsFactors=T) %>% 
+gene_metadata <- fread(io$gene_metadata) %>% 
   setnames(c("ens_id","symbol"),c("id","gene")) %>% 
   .[,chr:=stringr::str_replace_all(chr,"chr","")] 
 ```
@@ -178,29 +177,6 @@ metrna_dt <- metrna_dt %>% .[,gene_id:=paste(gene,id,sep="_")] %>% split(.$anno)
 metrna_dt <- metrna_dt %>% droplevels()
 ```
 
-<!-- Regress out global mean methylation effect -->
-```{r}
-# if (opts$regress.mean) {
-  
-#   # metstats <- fread("/Users/ricard/gastrulation/met/stats/samples/out/sample_stats.txt") %>%
-#   # .[anno%in%names(opts$annos)] %>% .[,c("coverage"):=NULL] %>% merge(sample_metadata[,c("id_met","sample")]) %>%
-#   # setnames("mean","covariate")
-#   # metrna_dt <- merge(metrna_dt,metstats[,c("anno","sample","covariate")])
-  
-#   # Covariate: mean methylation rate per context and sample
-#   # metrna_dt[,covariate:=mean(rate),by=c("anno","sample")]
-#   metrna_dt[,covariate:=mean(rate),by=c("sample")]
-  
-#   # Fit the linear model and regress out the covariate effect
-#   metrna_dt[, c("coef","residual"):=.(
-#     lm(formula=rate~covariate)[["coefficients"]][2],
-#     lm(formula=rate~covariate)[["residuals"]]), by=c("gene","id","anno")] %>% 
-#     .[,c("rate","residual"):=.(round(rate,2),round(residual,2))] %>%
-#     .[,c("old_rate","rate"):=list(rate,residual)] %>% 
-#     .[,c("covariate","residual","coef"):=NULL]
-# }
-```
-
 <!-- Compute correlations and do multiple testing correction -->
 
 ```{r}
@@ -224,7 +200,7 @@ cor[,sum(sig),by="anno"]
 <!-- Save results -->
 ```{r}
 fwrite(cor, paste0(io$outdir,"/metrna_cor_promoters.txt"), quote=F, sep="\t")
-# cor <- fread(paste0(io$outdir,"/metrna_cor.txt"))
+# cor <- fread(paste0(io$outdir,"/metrna_cor_promoters.txt"))
 ```
 
 <!-- Run permutation test for the correlation across samples -->
@@ -240,7 +216,6 @@ if (opts$permutation) {
     metrna_dt_perm <- metrna_dt_perm[, expr:=sample(expr), by = c("id","gene","anno")]
     # Permute methylation levels
     metrna_dt_perm <- metrna_dt_perm[, rate:=sample(rate), by = c("id","gene","anno")]
-    # metrna_dt_perm <- metrna_dt_perm[,c("expr","rate"):=list(sample(expr),sample(rate)), by=c("id","gene","anno")]
     # Compute correlation across samples
     if (opts$weight) {
       # cor_perm <- metrna_dt_perm[, .(p = wtd.cor(rate, expr, weight)[, c("p.value")]), by = c("id", "gene", "anno")]
@@ -248,8 +223,6 @@ if (opts$permutation) {
       cor_perm <- metrna_dt_perm[, .(p = cor.test(rate, expr, method=opts$method)[["p.value"]]), by = c("id","gene","anno")]
     }
     
-    # If a gene has multiple hits, just keep the most significant
-    # cor_perm <- cor_perm %>% split(.$anno) %>% map(~ .[,.SD[which.min(p)], by=c("gene")]) %>% rbindlist
     # For each annotation sort by p-value and store the permuted p-values
     cor_perm <- cor_perm %>% split(.$anno) %>% map(~ .[,.(anno = anno, p = sort(p))]) %>% rbindlist
     pp_vals <- pp_vals + cor_perm$p
@@ -280,10 +253,6 @@ if (opts$permutation) {
     # Generate permutation plot
     qq[[n]] <- gg_qqplot(cor[anno == n, ], cor_perm[anno == n]$p, title = "")
     
-    # Plot volcano
-    # pdf(file=paste0(io$outdir,"/volcano_", n, ".pdf"), width = 6, height = 5, useDingbats = FALSE)
-    # print(pp[[n]])
-    # dev.off()
     
     # Plot volcano + qqplot
     # pdf(file=paste0(io$outdir,"/pdf/volcano_qq_", n, ".pdf"), width = 13, height = 5.5, useDingbats = FALSE)
@@ -292,34 +261,3 @@ if (opts$permutation) {
   }
 }
 ```
-
-<!-- Scatterplots of single examples -->
-```{r}
-# anno_foo="genebody"
-# id_foo="ENSMUSG00000019863"
-# 
-# p <- ggplot(metrna_dt[anno==anno_foo & id==id_foo], aes(x=rate,y=expr)) +
-#   geom_point(alpha=0.5) +
-#   stat_smooth(method="lm", color="black", alpha=0.5) +
-#   # facet_wrap(~sample) +
-#   xlab("Methylation rate") + ylab("Expression") +
-#   theme(
-#     plot.title = element_text(size=30, hjust=0.5, margin=margin(0,0,20,0)),
-#     axis.title.y = element_text(colour="black", size=28, vjust=1.5),
-#     axis.title.x = element_text(colour="black", size=28, vjust=1.5, margin=margin(15,0,0,0)),
-#     axis.text.x = element_text(colour="black",size=rel(1.8)),
-#     axis.text.y = element_text(colour="black",size=rel(1.8)),
-#     # axis.line = element_line(colour="black", size=rel(0.7)),
-#     # axis.ticks.x = element_line(colour="black", size=rel(0.8)),
-#     # axis.ticks.y = element_blank(),
-#     legend.position="none",
-#     panel.background = element_blank(),
-#     panel.border = element_blank(),
-#     panel.grid = element_blank()
-#   )
-
-# pdf(file=paste0("out/scatter_", features[i], ".pdf"), width = 8, height = 8)
-# print(p)
-# dev.off()
-```
-

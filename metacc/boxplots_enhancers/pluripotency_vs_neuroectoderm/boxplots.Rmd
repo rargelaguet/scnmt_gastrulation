@@ -1,5 +1,5 @@
 ---
-title: "Gastrulation:"
+title: "Gastrulation scNMT-seq: box plots of DNA methylation and chromatin accessibiliy levels in neuroectoderm vs pluripotency enhancers"
 output:
   BiocStyle::html_document: 
     toc: false
@@ -12,25 +12,12 @@ library(data.table)
 library(purrr)
 library(ggplot2)
 library(ggpubr)
-
-theme_pb <- function() {
-  theme(
-    plot.title = element_text(size=rel(1.2), color="black", hjust=0.5),
-    axis.text.x = element_text(size=rel(1.4), color="black", angle=50, vjust=1, hjust=1),
-    axis.text.y = element_text(size=rel(1.2), color="black"),
-    axis.title.y = element_text(size=rel(1.4), color="black"),
-    strip.background = element_rect(fill="#F37A71"),
-    strip.text = element_text(size=rel(1.8), color="black"),
-    # strip.text.x = element_text(size=rel(1.45), color="black"),
-    legend.position="top",
-    legend.title = element_blank()
-  )
-}
 ```
 
 <!-- Define I/O and options -->
 ```{r define_opts, echo=FALSE}
-source("/Users/ricard/gastrulation/metacc/boxplots_neuroectoderm_enhancers/load_settings.R")
+source("/Users/ricard/gastrulation/metacc/boxplots_enhancers/pluripotency_vs_neuroectoderm/load_settings.R")
+source("/Users/ricard/gastrulation/metacc/boxplots_enhancers/utils.R")
 io$esc_vs_brain <- "/Users/ricard/data/gastrulation/H3K27ac/E7.5_enhancers_Ect_ESC_brain_top250.txt"
 ```
 
@@ -102,10 +89,10 @@ DNA methylation
 ```{r}
 foo.met <- met_dt %>%
   .[,.(rate=100*(sum(Nmet)/sum(Ntotal))),by=c("sample","stage_lineage","anno")] %>%
-  .[,stage_lineage:=factor(stage_lineage, levels=names(opts$colors))]
+  .[,stage_lineage:=factor(stage_lineage, levels=names(colors))]
 
 p <- ggboxplot(foo.met, x = "stage_lineage", y = "rate", fill="grey80", coef=1, outlier.shape=NA) +
-  scale_fill_manual(values=opts$colors) +
+  scale_fill_manual(values=colors) +
   labs(x="", y="Methylation (%)") +
   facet_wrap(~anno, nrow=1, scales="fixed") +
   # stat_compare_means(aes(label = paste0("p = ", ..p.format..)), label.y = 80, method="t.test", size=5) +
@@ -128,10 +115,10 @@ Chromatin accessibility
 ```{r}
 foo.acc <- acc_dt %>%
   .[,.(rate=100*(sum(Nmet)/sum(Ntotal))),by=c("sample","stage_lineage","anno")] %>%
-  .[,stage_lineage:=factor(stage_lineage, levels=names(opts$colors))]
+  .[,stage_lineage:=factor(stage_lineage, levels=names(colors))]
 
 p <- ggboxplot(foo.acc, x = "stage_lineage", y = "rate", fill="grey80", outlier.shape=NA) +
-  scale_fill_manual(values=opts$colors) +
+  scale_fill_manual(values=colors) +
   labs(x="", y="Accessibility (%)") +
   facet_wrap(~anno, nrow=1, scales="fixed") +
   # stat_compare_means(aes(label = paste0("p = ", ..p.format..)), label.y = 63, method="t.test", size=5) +
@@ -175,12 +162,12 @@ DNA methylation
 ```{r}
 foo.met <- met_dt %>%
   .[,.(rate=100*(sum(Nmet)/sum(Ntotal))),by=c("id_met","stage_lineage","anno")] %>%
-  .[,stage_lineage:=factor(stage_lineage, levels=names(opts$colors))] %>%
+  .[,stage_lineage:=factor(stage_lineage, levels=names(colors))] %>%
     merge(met.stats, by="id_met") %>%
   .[,norm_rate:=rate/mean] 
 
 p <- ggboxplot(foo.met, x = "stage_lineage", y = "norm_rate", fill="grey80", outlier.shape=NA) +
-  scale_fill_manual(values=opts$colors) +
+  scale_fill_manual(values=colors) +
   geom_hline(yintercept=1, linetype="dashed", alpha=0.75, size=0.75) +
   labs(x="", y="Methylation (scaled)") +
   facet_wrap(~anno, nrow=1, scales="fixed") +
@@ -204,12 +191,12 @@ Chromatin accessibility
 ```{r}
 foo.acc <- acc_dt %>%
   .[,.(rate=100*(sum(Nmet)/sum(Ntotal))),by=c("id_acc","stage_lineage","anno")] %>%
-  .[,stage_lineage:=factor(stage_lineage, levels=names(opts$colors))] %>%
+  .[,stage_lineage:=factor(stage_lineage, levels=names(colors))] %>%
     merge(acc.stats, by="id_acc") %>%
   .[,norm_rate:=rate/mean] 
 
 p <- ggboxplot(foo.acc, x = "stage_lineage", y = "norm_rate", fill="grey80", coef=0.5, outlier.shape=NA) +
-  scale_fill_manual(values=opts$colors) +
+  scale_fill_manual(values=colors) +
   geom_hline(yintercept=1, linetype="dashed", alpha=0.75, size=0.75) +
   labs(x="", y="Accessibility (scaled)") +
   facet_wrap(~anno, nrow=1, scales="fixed") +

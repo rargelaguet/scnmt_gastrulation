@@ -1,5 +1,5 @@
 ---
-title: "Gastrulation scNMT-seq: genome-wide distributions of chromatin accessibility"
+title: "Gastrulation scNMT-seq: plot distributions of DNA methylation"
 output:
   BiocStyle::html_document: 
     toc: false
@@ -18,17 +18,14 @@ library(ggpubr)
 
 ## Define I/O ##
 io <- list()
-if (grepl("ricard",Sys.info()['nodename'])) {
-  io$basedir <- "/Users/ricard/data/gastrulation"
-}
-io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
-io$data <- paste0(io$basedir,"/acc/parsed")
-io$outdir <- paste0(io$basedir,"/acc/distributions")
+io$sample.metadata <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
+io$data <- "/Users/ricard/data/gastrulation/met/parsed"
+io$outdir <- "/Users/ricard/data/gastrulation/met/distributions"
 
 ## Define options ##
 opts <- list()
 
-# Define which lineages to use (use NULL for all cells)
+# Define which stage and lineages to use (use NULL for all)
 opts$stage_lineage <- c(
   
   # E4.5
@@ -50,7 +47,7 @@ opts$stage_lineage <- c(
 )
 # opts$stage_lineage <- NULL
 
-# Define which genomic contexts to use
+# Define which annotations to use
 opts$annos <- c(
   "prom_2000_2000"="Promoters",
   "H3K27ac_distal_E7.5_Mes_intersect12"="Mesoderm enhancers",
@@ -59,42 +56,41 @@ opts$annos <- c(
 )
 
 # Define which cells to use
-tmp <- fread(io$sample.metadata) %>% .[!is.na(id_acc)] 
+tmp <- fread(io$sample.metadata) %>% .[!is.na(id_met)] 
 if (is.null(opts$stage_lineage)) {
-  opts$cells <- tmp[,id_acc]
+  opts$cells <- tmp[,id_met]
 } else {
   opts$cells <- tmp %>%
     .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")] %>%
-    .[pass_accQC==T & stage_lineage%in%opts$stage_lineage,id_acc]
+    .[pass_metQC==T & stage_lineage%in%opts$stage_lineage,id_met]
 }
 ```
 
 <!-- Load sample metadata -->
 ```{r}
 sample_metadata <- fread(io$sample.metadata) %>% 
-  .[,c("id_acc","stage","lineage10x_2","plate")] %>%
-  .[id_acc%in%opts$cells] %>%
+  .[,c("id_met","stage","lineage10x_2","plate")] %>%
+  .[id_met%in%opts$cells] %>%
   .[,stage_lineage:=as.factor(paste(stage,lineage10x_2,sep="_"))]
 ```
 
-<!-- Load data  -->
+<!-- Load DNA methylation data  -->
 ```{r}
 data <- lapply(names(opts$annos), function(n)
   fread(sprintf("%s/%s.tsv.gz",io$data,n), showProgress=F) %>%
-  setnames(c("id_acc","id","anno","Nmet","Ntotal","rate"))
+  setnames(c("id_met","id","anno","Nmet","Ntotal","rate"))
 ) %>% rbindlist
 ```
 
 <!-- Parse data -->
 ```{r}
-# Merge with sample metadata
-data <- data %>% merge(sample_metadata, by="id_acc")
+# Merge methylation data and sample metadata
+data <- data %>% merge(sample_metadata, by="id_met")
 
 # Convert beta value to M value
 # data[,m:=log2(((rate/100)+0.01)/(1-(rate/100)+0.01))]
 ```
 
-<!-- Rename annotations -->
 ```{r}
 data %>% .[,anno:=stringr::str_replace_all(anno,opts$annos)]
 ```
@@ -102,31 +98,31 @@ data %>% .[,anno:=stringr::str_replace_all(anno,opts$annos)]
 <!-- Plot histogram in pseudobulk stages -->
 ```{r}
 data.pseudobulk <- data %>% 
+  # .[,.(rate=100*(sum(Nmet)/sum(Ntotal))),by=c("id_met","stage","id","anno")]
   .[,.(rate=100*(sum(Nmet)/sum(Ntotal))),by=c("stage","id","anno")]
   
-p <- gghistogram(data.pseudobulk, x = "rate", y="..density..", fill = "#00BFC4", color = "black", alpha=0.75) +
+p <- gghistogram(data.pseudobulk, x = "rate", y="..density..", fill = "#F37A71", color = "black", alpha=0.75) +
   facet_wrap(~stage+anno, nrow=4, scales="fixed") +
-  coord_cartesian(xlim=c(15,65)) +
   theme(
     axis.text.y = element_text(size=rel(0.9))
     )
 
-pdf(sprintf("%s/distributions_acc.pdf",io$outdir), width=9, height=8)
+pdf(sprintf("%s/distributions_met.pdf",io$outdir), width=9, height=8)
 print(p)
 dev.off()
 ```
 
 <!-- Plot histogram for every cell -->
 ```{r}
-# for (i in head(unique(data$id_acc),n=10)) {
-#   p <- gghistogram(data[id_acc==i], x = "rate", y="..density..", fill = "#F37A71", color = "black", alpha=0.75) +
-#     facet_wrap(~stage+anno, nrow=1, scales="fixed") +
-#     theme(
-#       axis.text.y = element_text(size=rel(0.9))
-#     )
+for (i in head(unique(data$id_met),n=10)) {
+  p <- gghistogram(data[id_met==i], x = "rate", y="..density..", fill = "#F37A71", color = "black", alpha=0.75) +
+    facet_wrap(~stage+anno, nrow=1, scales="fixed") +
+    theme(
+      axis.text.y = element_text(size=rel(0.9))
+    )
   
-#   pdf(sprintf("%s/distributions_acc_%s.pdf",io$outdir,i), width=9, height=8)
-#   print(p)
-#   dev.off()
-# }
+  pdf(sprintf("%s/distributions_met_%s.pdf",io$outdir,i), width=9, height=8)
+  print(p)
+  dev.off()
+}
 ```

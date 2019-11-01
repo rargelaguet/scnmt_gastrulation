@@ -1,5 +1,5 @@
 ---
-title: "Gastrulation:"
+title: "Gastrulation scNMT-seq: box plots of DNA methylation and chromatin accessibiliy levels in lineage-defining enhancers"
 output:
   BiocStyle::html_document: 
     toc: false
@@ -12,24 +12,16 @@ library(data.table)
 library(purrr)
 library(ggplot2)
 library(scater)
-
-
-theme_pb <- function() {
-  theme(
-    axis.text.x = element_text(size=rel(1.4), color="black", angle=50, vjust=1, hjust=1),
-    axis.text.y = element_text(size=rel(1.2), color="black"),
-    axis.title.y = element_text(size=rel(1.4), color="black"),
-    strip.background = element_rect(fill="#F37A71"),
-    strip.text = element_text(size=rel(1.8), color="black"),
-    legend.position="top",
-    legend.title = element_blank()
-  )
-}
 ```
 
 <!-- Define I/O and options -->
 ```{r define_opts, echo=FALSE}
 source("/Users/ricard/gastrulation/metacc/boxplots_enhancers/load_settings.R")
+source("/Users/ricard/gastrulation/metacc/boxplots_enhancers/utils.R")
+
+# Size of figures
+opts$width = 10
+opts$height = 5
 ```
 
 <!-- Load sample metadata -->
@@ -61,6 +53,7 @@ acc_dt <- merge(acc_dt, sample_metadata, by="id_acc") %>% droplevels()
 met_dt <- merge(met_dt, sample_metadata, by="id_met") %>% droplevels()
 ```
 
+<!-- Rename annotations -->
 ```{r}
 met_dt <- met_dt %>% .[,anno:=stringr::str_replace_all(anno,opts$met.annos)]
 acc_dt <- acc_dt %>% .[,anno:=stringr::str_replace_all(anno,opts$acc.annos)]
@@ -80,17 +73,15 @@ diff.acc <- diff.acc %>%
 ```
 
 <!-- Subset lineage-defining sites -->
-Lineage-defining elements are defined as ChIP-seq peaks that show differential activity during germ layer commitment
+Lineage-defining elements are defined as ChIP-seq peaks that show differential DNA methylation or chromatin accessibility activity during germ layer commitment
 
-Methylation
 ```{r}
+# Methylation
 met_dt <- met_dt %>% split(.$anno) %>%
   map2(.,names(.), function(x,y) x[id%in%diff.met[sig==T & anno==y,id]]) %>%
   rbindlist %>% droplevels()
-```
 
-Accessibility
-```{r}
+# Accessibility
 acc_dt <- acc_dt %>% split(.$anno) %>%
   map2(.,names(.), function(x,y) x[id%in%diff.acc[sig==T & anno==y,id]]) %>%
   rbindlist %>% droplevels()
@@ -126,11 +117,11 @@ met_dt <- met_dt[,N:=.N, by=c("sample","stage_lineage","anno")] %>% .[N>=opts$mi
 foo.acc <- acc_dt %>%
   .[,.(rate=100*(sum(Nmet)/sum(Ntotal)), Nmet=sum(Nmet), N=sum(Ntotal)),by=c("sample","stage_lineage","anno")] %>%
   # .[,.(rate=mean(new_rate)),by=c("id_acc","stage_lineage","anno")] %>%
-  .[,stage_lineage:=factor(stage_lineage, levels=names(opts$colors))]
+  .[,stage_lineage:=factor(stage_lineage, levels=names(colors))]
 
 p <- ggplot(foo.acc, aes(x=stage_lineage, y=rate)) +
   geom_boxplot(aes(fill=stage_lineage), outlier.shape=NA, coef=1) +
-  scale_fill_manual(values=opts$colors) +
+  scale_fill_manual(values=colors) +
   labs(x="", y="Accessibility (%)") +
   facet_wrap(~anno, nrow=1, scales="fixed") +
   coord_cartesian(ylim=c(21,55)) +
@@ -150,11 +141,11 @@ print(p)
 foo.met <- met_dt %>%
   .[,.(rate=100*(sum(Nmet)/sum(Ntotal)), Nmet=sum(Nmet), N=sum(Ntotal)),by=c("sample","stage_lineage","anno")] %>%
   # .[,.(rate=mean(rate)),by=c("id_acc","stage_lineage","anno")] %>%
-  .[,stage_lineage:=factor(stage_lineage, levels=names(opts$colors))]
+  .[,stage_lineage:=factor(stage_lineage, levels=names(colors))]
 
 p <- ggplot(foo.met, aes(x=stage_lineage, y=rate)) +
   geom_boxplot(aes(fill=stage_lineage), outlier.shape=NA, coef=1) +
-  scale_fill_manual(values=opts$colors) +
+  scale_fill_manual(values=colors) +
   labs(x="", y="Methylation (%)") +
   facet_wrap(~anno, nrow=1, scales="fixed") +
   coord_cartesian(ylim=c(8,93)) +

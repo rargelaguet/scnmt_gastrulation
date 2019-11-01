@@ -1,5 +1,5 @@
 ---
-title: "Gastrulation: pseudobulked profiles of DNA methylation and chromatin accessibility"
+title: "Gastrulation scNMT-seq: pseudobulked profiles of DNA methylation and chromatin accessibility"
 output: 
   BiocStyle::html_document: 
     fig_width: 10

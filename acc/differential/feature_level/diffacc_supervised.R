@@ -4,7 +4,6 @@
 
 library(data.table)
 library(purrr)
-library(ggplot2)
 library(argparse)
 
 ## Initialize argument parser ##
@@ -20,11 +19,9 @@ args <- p$parse_args(commandArgs(TRUE))
 io <- list()
 if (grepl("ricard",Sys.info()['nodename'])) {
   io$basedir <- "/Users/ricard/data/gastrulation"
-  io$gene.metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
   source("/Users/ricard/gastrulation/met/differential/utils.R")
 } else {
   io$basedir <- "/hps/nobackup/stegle/users/ricard/gastrulation"
-  io$gene.metadata <- "/hps/nobackup/stegle/users/ricard/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
   source("/homes/ricard/gastrulation/met/differential/utils.R")
 }
 io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
@@ -40,7 +37,7 @@ opts <- list()
 opts$annos <- args$anno
 
 # Regress out global mean accessibility rate
-opts$regress.mean <- FALSE
+# opts$regress.mean <- FALSE
 
 # Statistical test: binomial (counts) or t.test (beta-values)
 opts$statistical.test <- "binomial"
@@ -90,15 +87,6 @@ sample_metadata <- fread(io$sample.metadata) %>%
   .[id_acc%in%opts$cells] %>% 
   .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")]
 
-# Load gene metadata
-# gene_metadata <- fread(io$gene.metadata) %>% 
-#   .[,chr:=as.factor(sub("chr","",chr))] %>%
-#   setnames(c("ens_id","symbol"),c("id","gene"))
-
-# Load genomic context metadata
-# feature_metadata <- lapply(opts$annos, function(n) fread(sprintf("%s/%s.bed",io$annos_dir,n), showProgress=F)) %>% rbindlist
-# colnames(feature_metadata) <- c("chr","start","end","strand","id","anno")
-
 # Load accessibility data
 data <- lapply(opts$annos, function(n) fread(cmd=sprintf("zcat < %s/%s.tsv.gz",io$data.dir,n), showProgress=F, header=F, sep="\t")) %>% 
   rbindlist %>% setnames(c("id_acc","id","anno","Nacc","N","rate"))
@@ -143,71 +131,23 @@ if (!is.na(opts$number_features)) {
 ## Regress out global statistics ##
 ###################################
 
-if (opts$regress.mean) {
+# if (opts$regress.mean) {
   
-  # Load global statistics
-  stats <- fread(io$stats) %>% .[,mean:=mean/100]
+#   # Load global statistics
+#   stats <- fread(io$stats) %>% .[,mean:=mean/100]
   
-  # QC
-  stopifnot(all(stats$mean>0 & stats$mean<1))
-  stopifnot(all(data$id_acc %in% stats$id_acc))
+#   # QC
+#   stopifnot(all(stats$mean>0 & stats$mean<1))
+#   stopifnot(all(data$id_acc %in% stats$id_acc))
   
-  # Calculate M-values from B-values
-  stats %>%  .[,covariate:=log2(((mean)+0.01)/(1-(mean/100)+0.01))]
+#   # Calculate M-values from B-values
+#   stats %>%  .[,covariate:=log2(((mean)+0.01)/(1-(mean/100)+0.01))]
   
-  # Merge data with global statistics
-  data <- merge(data, stats[,c("id_acc","covariate")], by="id_acc")
+#   # Merge data with global statistics
+#   data <- merge(data, stats[,c("id_acc","covariate")], by="id_acc")
   
-  # Fit the linear model and regress out the covariate effect
-  data[, c("m"):=.(lm(formula=m~covariate)[["residuals"]]), by=c("id","anno")]
-}
-
-###############################################
-## Associate the genomic features with genes ##
-###############################################
-
-# if (opts$OverlapWithGenes==TRUE) {
-#   
-#   # Prepare feature metadata and gene metadata for the overlap
-#   gene_metadata_filt <- gene_metadata[, c("chr","start","end","gene","id")] %>%
-#     .[,c("start", "end") := list(start-opts$gene_window, end+opts$gene_window)] %>% 
-#     setkey(chr,start,end)
-#   
-#   feature_metadata_filt <- feature_metadata %>% split(.$anno) %>% 
-#     map2(.,names(.), function(x,y) x[id %in% data[anno==y,id]] ) %>%
-#     rbindlist
-#   
-#   # Do the overlap  
-#   data_list <- list()
-#   for (i in unique(data$anno)){
-#     data_tmp <- data[anno==i, ]
-#     
-#     # Non gene-associated feature
-#     if (all(grepl("ENSMUSG", unique(data_tmp$id)) == FALSE)) {
-#       ov <- foverlaps(
-#         feature_metadata_filt[anno==i, c("chr","start","end","id")] %>% setkey(chr,start,end),
-#         gene_metadata_filt[, c("chr","start","end","gene")],
-#         nomatch = NA) %>% .[,c("gene", "id")]
-#       
-#       # ov1 <- ov[is.na(gene)]
-#       # ov2 <- ov[!is.na(gene)] %>% .[,.(gene=paste(gene,collapse="_")), by="id"]
-#       # ov <- rbind(ov1,ov2)
-#       
-#       # Merge with accessibility data
-#       data_list[[i]] <- merge(ov, data_tmp, by = "id", allow.cartesian=T) %>%
-#         .[,c("id","gene","anno","id_acc","rate","Nacc","N","stage_lineage","group")]
-#     }
-#     
-#     # Gene-associated feature
-#     else if (all(grepl("ENSMUSG", unique(data_tmp$id)) == TRUE)) {
-#       data_list[[i]] <- merge(data_tmp, gene_metadata[, c("id", "gene")], by="id") %>%
-#         .[,c("id","gene","anno","id_acc","rate","Nacc","N","stage_lineage","group")]
-#     }
-#   }
-#   data <- rbindlist(data_list)
-#   
-# } else {
-#   data[,gene:="NA"]
+#   # Fit the linear model and regress out the covariate effect
+#   data[, c("m"):=.(lm(formula=m~covariate)[["residuals"]]), by=c("id","anno")]
 # }
 
 

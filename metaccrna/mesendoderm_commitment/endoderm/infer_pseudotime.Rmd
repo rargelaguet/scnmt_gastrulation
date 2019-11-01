@@ -27,7 +27,7 @@ io$outdir <- "/Users/ricard/gastrulation/metaccrna/mofa/primitive_streak/endoder
 ## Options ##
 opts <- list()
 
-opts$stage_lineage10x <- c(
+opts$stage_lineage <- c(
 
   # E5.5
   "E5.5_Epiblast",
