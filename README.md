@@ -1,7 +1,7 @@
 # Multi-omics profiling of mouse gastrulation at single cell resolution
 
 This repository contains the scripts to reproduce the results of the manuscript ([Multi-omics profiling of mouse gastrulation at single cell resolution](https://www.biorxiv.org/content/early/2019/01/13/519207)).  
-The source code for the second part of the paper, where we explore the effect of a Tet TKO in embryoid bodies, is available in [this repository](XXX)
+The source code for the second part of the paper, where we explore the effect of a Tet TKO in embryoid bodies, is available in [this repository](https://github.com/rargelaguet/scnmt_eb)
 
 
 Abstract
@@ -40,7 +40,7 @@ Content
 Data
 -------
 The raw data is accessible at GEO ([GSE121708](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE121708)). 
-The parsed data can be downloaded [here][ftp://ftp.ebi.ac.uk/pub/databases/scnmt_gastrulation]
+The parsed data can be downloaded [here](ftp://ftp.ebi.ac.uk/pub/databases/scnmt_gastrulation)
 
 Contact
 -------
