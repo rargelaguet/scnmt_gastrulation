@@ -87,24 +87,3 @@ for (i in unique(tmp$lineage)) {
   dev.off()
 }
 ```
-
-
-
-<!-- TEST -->
-```{r}
-opts$diff.type <- 1
-opts$min.fdr <- 0.10
-opts$min.acc.diff <- 10
-opts$min.met.diff <- 10
-
-source("/Users/ricard/gastrulation/metaccrna/differential/load_data.R")
-
-foo <- diff.met[anno=="H3K27ac_distal_E7.5_Ect_intersect12" & lineage=="Endoderm"]
-foo.filt <- foo[sig==T & diff>0]
-table(foo.filt$diff>0)
-
-foo <- diff.met[anno=="H3K27ac_distal_E7.5_Ect_intersect12" & lineage=="Mesoderm"]
-foo.filt <- foo[sig==T & diff>0]
-table(foo.filt$diff>0)
-```
-

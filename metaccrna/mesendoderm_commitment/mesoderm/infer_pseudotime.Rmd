@@ -20,9 +20,10 @@ library(scran)
 ## I/O ##
 io <- list()
 io$basedir <- "/Users/ricard/data/gastrulation"
-io$in.sample_metadata <- paste0(io$basedir,"/sample_metadata.txt")
-io$rna.infile <- paste(io$basedir,"rna/parsed/SingleCellExperiment.rds",sep="/")
-io$outdir <- "/Users/ricard/data/gastrulation_norsync_stuff/metaccrna/mofa/Primitive_Streak"
+io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
+io$rna <- paste0(io$basedir,"/rna/SingleCellExperiment.rds")
+io$outdir <- paste0(io$basedir,"/mesendoderm_commitment/mesoderm")
+io$outdir <- "/Users/ricard/data/gastrulation_norsync_stuff/"
 
 ## Options ##
 opts <- list()
@@ -51,18 +52,18 @@ opts$colors <- c(
   Endoderm="#43CD80"
 )
 
-opts$cells <- fread(io$in.sample_metadata) %>% 
+opts$cells <- fread(io$sample.metadata) %>% 
   .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")] %>% 
   .[pass_rnaQC==T & stage_lineage%in%opts$stage_lineage, id_rna]
 ```
 
 ```{r}
-sample_metadata <- fread(io$in.sample_metadata) %>% .[id_rna%in%opts$cells] %>%
+sample_metadata <- fread(io$sample.metadata) %>% .[id_rna%in%opts$cells] %>%
   .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")]
 ```
 
 ```{r load_data, echo=FALSE}
-sce <- readRDS(io$rna.infile) %>% .[,opts$cells]
+sce <- readRDS(io$rna) %>% .[,opts$cells]
 sce$lineage <- sample_metadata$lineage10x_2
 sce$stage_lineage <- sample_metadata$stage_lineage
 ```

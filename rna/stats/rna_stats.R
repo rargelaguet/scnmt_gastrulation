@@ -13,7 +13,7 @@ library(RColorBrewer)
 ################
 
 io <- list()
-io$rna <- "/Users/ricard/data/gastrulation/rna/parsed/SingleCellExperiment.rds"
+io$rna <- "/Users/ricard/data/gastrulation/rna/SingleCellExperiment.rds"
 io$metadata.file <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
 io$outdir <- "/Users/ricard/data/gastrulation/rna/stats"
 

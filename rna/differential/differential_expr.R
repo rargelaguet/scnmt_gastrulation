@@ -29,7 +29,7 @@ if (grepl("ricard",Sys.info()['nodename'])) {
   source("/homes/ricard/gastrulation/rna/differential/utils.R")
 }
 io$sample_metadata <- paste0(io$basedir,"/sample_metadata.txt")
-io$rna.infile <- paste(io$basedir,"rna/parsed/SingleCellExperiment.rds",sep="/")
+io$rna <- paste(io$basedir,"rna/SingleCellExperiment.rds",sep="/")
 io$outfile <- args$outfile
 
 ## Options ##
@@ -62,7 +62,7 @@ sample_metadata <- fread(io$sample_metadata, stringsAsFactors=T) %>%
   .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")]
 
 # Load SingleCellExperiment object
-sce <- readRDS(io$rna.infile)[,opts$cells]
+sce <- readRDS(io$rna)[,opts$cells]
 sce$stage_lineage <- sample_metadata$stage_lineage
 
 # Define the two exclusive groups

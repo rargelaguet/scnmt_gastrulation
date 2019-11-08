@@ -13,21 +13,7 @@ suppressPackageStartupMessages(library(ggplot2))
 ```
 
 ```{r define_opts, echo=FALSE, include=FALSE}
-
-## Define I/O ##
-io <- list()
-io$basedir <- "/Users/ricard/data/gastrulation"
-io$sample_metadata <- paste0(io$basedir,"/sample_metadata.txt")
-io$gene_metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
-io$annos_dir <- "/Users/ricard/data/gastrulation/features/filt"
-io$outdir <- "/Users/ricard/data/gastrulation_norsync_stuff/metaccrna/differential"
-
-io$diff.rna <- "/Users/ricard/data/gastrulation/rna/differential"
-io$diff.met <- "/Users/ricard/data/gastrulation/met/differential/feature_level"
-io$diff.acc <- "/Users/ricard/data/gastrulation/acc/differential/feature_level"
-
-## Define options ##
-opts <- list()
+source("/Users/ricard/gastrulation/metaccrna/differential/load_settings.R")
 
 # window length for the overlap between genes and features
 opts$gene_window <- 50000
@@ -45,25 +31,6 @@ opts$min.acc.diff <- 10
 #   Option 1 (more liberal): (lineage_A) vs (lineage_B+lineage_C)
 #   Option 2 (more conservative): (lineage_A vs lineage_B) AND (lineageA vs lineage_C)
 opts$diff.type <- 1
-
-# FDR threshold
-opts$min.fdr <- 0.10
-
-# Genomic annotations
-opts$annos <- c(
-  "H3K27ac_distal_E7.5_End_intersect12" = "Endoderm enhancers",
-  "H3K27ac_distal_E7.5_Mes_intersect12" = "Mesoderm enhancers",
-  "H3K27ac_distal_E7.5_Ect_intersect12" = "Ectoderm enhancers",
-  "prom_2000_2000" = "Promoters"
-)
-opts$met.annos <- opts$acc.annos <- opts$annos
-
-# Lineage colors
-opts$colors <- c(
-  Ectoderm = "steelblue", 
-  Endoderm = "#43CD80", 
-  Mesoderm = "violetred"
-)
 
 # Plotting properties
 opts$ymin <- -45

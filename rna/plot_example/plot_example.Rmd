@@ -40,7 +40,7 @@ boxplot_theme <- function() {
 io <- list()
 io$basedir <- "/Users/ricard/data/gastrulation"
 io$sample_metadata <- paste0(io$basedir,"/sample_metadata.txt")
-io$rna.infile <- paste(io$basedir,"rna/parsed/SingleCellExperiment.rds",sep="/")
+io$rna <- paste(io$basedir,"rna/SingleCellExperiment.rds",sep="/")
 io$outdir <- "/Users/ricard/gastrulation/rna/plot_example/out"
 
 ## Define options
@@ -71,7 +71,7 @@ sample_metadata <- fread(io$sample_metadata) %>% .[id_rna %in% opts$cells] %>%
 <!-- Load expression data -->
 ```{r load_expr, echo=FALSE, include=FALSE}
 # Load SingleCellExperiment object
-sce <- readRDS(io$rna.infile)[,opts$cells]
+sce <- readRDS(io$rna)[,opts$cells]
 
 # Create data.table
 rna <- exprs(sce) %>% t %>% as.data.table(keep.rownames="id_rna") %>% melt(id.vars="id_rna", value.name="expr", variable.name="id") %>%

@@ -3,18 +3,29 @@
 #####################
 
 ## Define I/O ##
+
 io <- list()
-io$sample.metadata <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
-io$met.dir <- "/Users/ricard/data/gastrulation/met/parsed"
-io$acc.dir <- "/Users/ricard/data/gastrulation/acc/parsed"
-io$outdir <- "/Users/ricard/gastrulation/metaccrna/differential/out"
-io$annos_dir <- "/Users/ricard/data/gastrulation/features/filt"
-io$gene_metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
+if (grepl("ricard",Sys.info()['nodename'])) {
+  io$basedir <- "/Users/ricard/data/gastrulation"
+  io$gene_metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
+} else {
+  stop()
+}
+io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
+io$met.dir <- paste0(io$basedir,"/met/feature_level")
+io$acc.dir <- paste0(io$basedir,"/acc/feature_level")
+io$met.stats <- paste0(io$basedir,"/met/results/stats/samples/sample_stats.txt")
+io$acc.stats <- paste0(io$basedir,"/acc/results/stats/samples/sample_stats.txt")
+io$rna.file <- paste0(io$basedir,"/rna/SingleCellExperiment.rds")
+io$annos_dir  <- paste0(io$basedir, "/features/filt")
+io$outdir <- paste0(io$basedir,"/metaccrna/mesendoderm_commitment/ectoderm")
+
+io <- list()
 
 # Folders with the differential analysis results
-io$diff.met <- "/Users/ricard/data/gastrulation/met/differential/feature_level"
-io$diff.acc <- "/Users/ricard/data/gastrulation/acc/differential/feature_level"
-# io$diff.rna <- "/Users/ricard/data/gastrulation/rna/differential"
+io$diff.met <- "/Users/ricard/data/gastrulation/met/results/differential"
+io$diff.acc <- "/Users/ricard/data/gastrulation/acc/results/differential"
+io$diff.rna <- "/Users/ricard/data/gastrulation/rna/results/differential"
 
 ## Define options ##
 opts <- list()
@@ -22,7 +33,7 @@ opts <- list()
 # Define genomic contexts for methylation
 opts$met.annos <- c(
   # "genebody"="Gene body",
-  # "prom_2000_2000"="Promoters",
+  "prom_2000_2000"="Promoters",
   # "prom_2000_2000_cgi"="CGI promoters",
   # "prom_2000_2000_noncgi"="non-CGI promoters",
   "H3K27ac_distal_E7.5_Mes_intersect12"="Mesoderm enhancers",
@@ -36,7 +47,7 @@ opts$met.annos <- c(
 # Define genomic contexts for accessibility
 opts$acc.annos <- c(
   # "genebody"="Gene body",
-  # "prom_2000_2000"="Promoters",
+  "prom_2000_2000"="Promoters",
   # "prom_2000_2000_cgi"="CGI promoters",
   # "prom_2000_2000_noncgi"="non-CGI promoters",
   "H3K27ac_distal_E7.5_Mes_intersect12"="Mesoderm enhancers",
@@ -61,6 +72,13 @@ opts$diff.type <- 2
 opts$min.fdr <- 0.10
 opts$min.acc.diff <- 5
 opts$min.met.diff <- 5
+
+# Lineage colors
+opts$colors <- c(
+  Ectoderm = "steelblue", 
+  Endoderm = "#43CD80", 
+  Mesoderm = "violetred"
+)
 
 ######################
 ## Define functions ##

@@ -15,7 +15,7 @@ if (grepl("ricard",Sys.info()['nodename'])) {
 io$sample_metadata <- paste0(io$basedir,"/sample_metadata.txt")
 io$features.dir <- paste0(io$basedir,"/features/filt")
 io$gene.metadata <- paste0(io$basedir,"/features/genes/Mmusculus_genes_BioMart.87.txt")
-io$rna.infile <- paste0(io$basedir,"/rna/parsed/SingleCellExperiment.rds")
+io$rna <- paste0(io$basedir,"/rna/SingleCellExperiment.rds")
 
 # Folders with enhancer data
 io$enh <- paste0(io$basedir, "/H3K27ac/20190508_ProbeReport_enhancers.txt")  

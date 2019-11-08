@@ -23,9 +23,6 @@ source("/Users/ricard/gastrulation/metaccrna/mesendoderm_commitment/endoderm/loa
 
 <!-- Load results from differential methylation and accessibility analysis -->
 ```{r}
-io$diff.met <- "/Users/ricard/data/gastrulation/met/differential/feature_level"
-io$diff.acc <- "/Users/ricard/data/gastrulation/acc/differential/feature_level"
-
 opts$diff.type <- 2
 opts$min.fdr <- 0.10
 opts$min.acc.diff <- 5

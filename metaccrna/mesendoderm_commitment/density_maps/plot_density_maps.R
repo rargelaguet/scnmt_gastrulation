@@ -38,7 +38,7 @@ source("/Users/ricard/gastrulation/metaccrna/mesendoderm_commitment/density_maps
 # Load precomputed differential results
 diff.met.ps <- lapply(opts$comparisons, function(i) 
   lapply(names(opts$met.annos), function(j)
-    fread(cmd=sprintf("zcat < %s/%s_%s.txt.gz",io$diff.met,i,j))
+    fread(sprintf("%s/%s_%s.txt.gz",io$diff.met,i,j))
   ) %>% rbindlist %>% .[,comparison:=i] 
 ) %>% rbindlist# %>% .[,sig:=padj_fdr<opts$min.fdr & abs(diff)>opts$min.diff]
 
@@ -48,7 +48,7 @@ diff.met.ps <- lapply(opts$comparisons, function(i)
 
 diff.acc.ps <- lapply(opts$comparisons, function(i) 
   lapply(names(opts$acc.annos), function(j)
-    fread(cmd=sprintf("zcat < %s/%s_%s.txt.gz",io$diff.acc,i,j))
+    fread(sprintf("%s/%s_%s.txt.gz",io$diff.acc,i,j))
   ) %>% rbindlist %>% .[,comparison:=i] 
 ) %>% rbindlist# %>% .[,sig:=padj_fdr<opts$min.fdr & abs(diff)>opts$min.diff]
 
@@ -82,95 +82,6 @@ diff.metacc <- rbind(
   diff.met.ps[,assay:="met"], 
   diff.acc.ps[,assay:="acc"]
 ) %>% data.table::dcast(id+anno+comparison~assay, value.var=c("diff","sig"))
-
-########################################
-## Plot fraction of differential hits ##
-########################################
-
-# tmp <- diff.metacc %>%
-#   .[,.(Nmet=mean(met,na.rm=T), Nacc=mean(acc,na.rm=T)), by=c("anno","comparison")] %>%
-#   melt(id.vars=c("anno","comparison"), variable.name="assay", value.name="N")
-
-# for (i in opts$comparisons) {
-#   p <- ggplot(tmp[comparison==i], aes(x=anno, y=N, group=assay)) +
-#     geom_bar(aes(fill=assay), stat="identity", position="dodge", color="black", size=0.25) +
-#     scale_fill_manual(values=c("Nmet"="#F37A71", "Nacc"="#00BFC4")) +
-#     labs(x="", y="Fraction of differential sites", title=i) +
-#     coord_cartesian(ylim=c(0,0.35)) +
-#     theme_pub() + theme(legend.position = "none")
-#   
-#   # pdf(paste0(io$outdir,"/mes_fractionsigcor.pdf"), width=8, height=5)
-#   print(p)
-#   # dev.off()
-# }
-
-# tmp %>% .[,comparison:=factor(comparison, levels=opts$comparisons)]
-# 
-# p <- ggplot(tmp, aes(x=comparison, y=N, group=assay)) +
-#   geom_bar(aes(fill=assay), stat="identity", position="dodge", color="black", size=0.25) +
-#   scale_fill_manual(values=c("Nmet"="#F37A71", "Nacc"="#00BFC4")) +
-#   facet_wrap(~anno, nrow=2) +
-#   labs(x="", y="Fraction of differential sites") +
-#   coord_cartesian(ylim=c(0,0.35)) +
-#   theme_pub() + theme(legend.position = "none", axis.text.x = element_blank())
-#   
-# # pdf(paste0(io$outdir,"/mes_fractionsigcor.pdf"), width=8, height=5)
-# print(p)
-# # dev.off()
-
-  
-#######################################
-## Plot number of differential hits  ##
-#######################################
-
-# tmp <- rbind(diff.met, diff.acc) %>%
-#   .[,.(number_positive_hits=sum(sig==T & diff>0, na.rm=T), 
-#        number_negative_hits=-sum(sig==T & diff<0, na.rm=T)), by=c("assay","anno","comparison")] %>%
-#   melt(id.vars=c("anno","comparison","assay"))
-# 
-# 
-# ylim <- c(min(tmp$value), max(tmp$value))
-# 
-# for (i in opts$comparisons) {
-#   # p <- gg_barplot(tmp[comparison==i], title=i, ylim=ylim) +
-#   #   theme(axis.text.x = element_blank())
-# 
-#   p <- ggplot(tmp[comparison==i], aes(x=anno, y=value)) +
-#     geom_bar(aes(fill=assay), color="black", stat="identity", position="dodge", size=0.25) +
-#     scale_fill_manual(values=c("met"="#F37A71", "acc"="#00BFC4")) +
-#     geom_hline(yintercept=0, color="black") +
-#     scale_y_continuous(limits=c(ylim[1],ylim[2])) +
-#     facet_wrap(~anno, nrow=1, scales="free_x") +
-#     labs(x="", y="Number of hits") +
-#     theme_bw() +
-#     theme(
-#       plot.title = element_text(size=11, face='bold', hjust=0.5),
-#       axis.text = element_text(size=rel(0.9), color='black'),
-#       axis.text.x = element_blank(),
-#       # axis.text.x = element_text(size=rel(0.75), angle=30, hjust=1, vjust=1, color="black"),
-#       axis.ticks.x = element_blank(),
-#       axis.title = element_text(size=rel(1.0), color='black'),
-#       axis.line = element_line(color="black"),
-#       legend.position="none"
-#     )
-#   p
-#   
-#   pdf(sprintf("%s/%s_barplotsN.pdf",io$outdir,i), width=6, height=2.5)
-#   print(p)
-#   dev.off()
-# }
-
-
-# a <- diff.met[comparison=="E6.5E7.5Primitive_Streak_vs_E6.5E7.5Mesoderm" & anno=="Mes- enhancers"] %>% .[sig==T]
-# b <- diff.met[comparison=="E6.5E7.5Primitive_Streak_vs_E7.5Endoderm" & anno=="Mes- enhancers"] %>% .[sig==T]
-# foo <- VennDiagram::venn.diagram(
-#   x = list("Mesoderm"=a$id, "Endoderm"=b$id),
-#   filename=NULL,
-#   col="transparent", fill=c("#CD3278","#43CD80"), alpha = 0.60, cex = 1.5,
-#   fontfamily = "serif", fontface = "bold")
-# pdf(file=sprintf("%s/venn.pdf",io$outdir))
-# grid.draw(foo)
-# dev.off()
 
 
 #############################

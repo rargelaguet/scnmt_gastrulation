@@ -13,9 +13,9 @@ if (grepl("ricard",Sys.info()['nodename'])) {
   io$outdir <- "/hps/nobackup/stegle/users/ricard/gastrulation/metaccrna/mofa/full"
 }
 io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
-io$met.dir <- paste0(io$basedir,"/met/parsed")
-io$acc.dir <- paste0(io$basedir,"/acc/parsed")
-io$rna.file <- paste0(io$basedir,"/rna/parsed/SingleCellExperiment.rds")
+io$met.dir <- paste0(io$basedir,"/met/feature_level")
+io$acc.dir <- paste0(io$basedir,"/acc/feature_level")
+io$rna.file <- paste0(io$basedir,"/rna/SingleCellExperiment.rds")
 io$annos_dir  <- paste0(io$basedir, "/features/filt")
 
 # Folders with the global statistics per cell

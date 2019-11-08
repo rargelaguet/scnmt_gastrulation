@@ -60,7 +60,7 @@ opts$aggregated_lineages <- c(
 ###########################
 
 # The output of the mapping algorithm is a data.frame with three important columns:
-# - cell: cell ID (id_rna in sample_metadata.txt)
+# - cell: cell ID (id_rna sample.metadata.txt)
 # - celltype.mapped: lineage label
 # - stage.mapped: stage label
 mapping <- readRDS(io$mapping.results)$mapping %>% as.data.table %>%

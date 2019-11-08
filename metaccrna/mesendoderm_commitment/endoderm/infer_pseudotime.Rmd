@@ -20,9 +20,9 @@ library(scran)
 ## I/O ##
 io <- list()
 io$basedir <- "/Users/ricard/data/gastrulation"
-io$in.sample_metadata <- paste0(io$basedir,"/sample_metadata.txt")
-io$rna.infile <- paste(io$basedir,"rna/parsed/SingleCellExperiment.rds",sep="/")
-io$outdir <- "/Users/ricard/gastrulation/metaccrna/mofa/primitive_streak/endoderm"
+io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
+io$rna <- paste0(io$basedir,"/rna/SingleCellExperiment.rds")
+io$outdir <- paste0(io$basedir,"/metaccrna/mesendoderm_commitment/endoderm")
 
 ## Options ##
 opts <- list()
@@ -35,13 +35,10 @@ opts$stage_lineage <- c(
   # E6.5
   "E6.5_Epiblast",
   "E6.5_Primitive_Streak",
-  # "E6.5_Mesoderm",
 
   # E7.5 
-  # "E7.5_Epiblast",
   "E7.5_Primitive_Streak",
   "E7.5_Endoderm"
-  # "E7.5_Mesoderm"
 )
 
 opts$colors <- c(
@@ -52,18 +49,18 @@ opts$colors <- c(
 )
 
 
-opts$cells <- fread(io$in.sample_metadata) %>% 
+opts$cells <- fread(io$sample.metadata) %>% 
   .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")] %>% 
   .[pass_rnaQC==T & stage_lineage%in%opts$stage_lineage, id_rna]
 ```
 
 ```{r}
-sample_metadata <- fread(io$in.sample_metadata) %>% .[id_rna%in%opts$cells] %>%
+sample_metadata <- fread(io$sample.metadata) %>% .[id_rna%in%opts$cells] %>%
   .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")]
 ```
 
 ```{r load_data, echo=FALSE}
-sce <- readRDS(io$rna.infile) %>% .[,opts$cells]
+sce <- readRDS(io$rna) %>% .[,opts$cells]
 sce$lineage <- sample_metadata$lineage10x_2
 sce$stage_lineage <- sample_metadata$stage_lineage
 ```
@@ -126,37 +123,6 @@ set.seed(42)
 dm <- DiffusionMap(t(logcounts(sce_filt)))
 ```
 
-<!-- Fit PCA -->
-```{r}
-# Z.out <- irlba::prcomp_irlba(x = t(data_regressed), n = 3)$x
-# 
-# to.plot <- Z.out %>% as.data.table %>% .[,id_rna:=colnames(sce_filt)] %>%
-#     merge(sample_metadata, by="id_rna")
-# 
-# p <- ggplot(to.plot, aes(PC1, PC2)) +
-#   geom_point(aes(color=lineage10x_2, shape=stage), alpha=1.0, size=1.0) +
-#   # geom_point(aes(color=cdr, shape=stage_lineage), alpha=0.7, size=2.0) +
-#   labs(x="Diffusion component 1", y="Diffusion component 2") +
-#   theme(
-#     plot.title = element_text(size=20, hjust=0.5),
-#     axis.title.y = element_text(colour="black", size=16, margin=margin(0,15,0,0)),
-#     axis.title.x = element_text(colour="black", size=16, margin=margin(15,0,0,0)),
-#     axis.text.x = element_text(colour="black",size=rel(1.4)),
-#     axis.text.y = element_text(colour="black",size=rel(1.4)),
-#     axis.line = element_line(colour="black", size=rel(0.9)),
-#     axis.ticks = element_line(colour="black", size=rel(1.0)),
-#     panel.background = element_blank(),
-#     panel.grid = element_blank(),
-#     legend.position="right",
-#     legend.text=element_text(size=15),
-#     legend.key = element_blank(),
-#     legend.title=element_blank(),
-#     legend.background=element_blank(),
-#     panel.border = element_blank()
-#   )
-# print(p)
-```
-
 ```{r}
 tmp <- data.table(
   sample = colnames(sce_filt),
@@ -212,11 +178,6 @@ print(p)
 pdf(paste0(io$outdir,"/destiny_endoderm_v2.pdf"), useDingbats = F, width=4.75, height=4.25)
 print(p)
 dev.off()
-```
-
-<!-- Remove outliers -->
-```{r}
-# tmp <- tmp[!(x>(0.008) & lineage=="Epiblast")]
 ```
 
 <!-- Save results -->

@@ -20,7 +20,7 @@ library(umap)
 io <- list()
 io$basedir <- "/Users/ricard/data/gastrulation"
 io$sample_metadata <- paste0(io$basedir,"/sample_metadata.txt")
-io$rna <- paste0(io$basedir,"/rna/parsed/SingleCellExperiment.rds")
+io$rna <- paste0(io$basedir,"/rna/SingleCellExperiment.rds")
 io$outdir <- paste0(io$basedir,"/rna/dimensionality_reduction")
 ```
 

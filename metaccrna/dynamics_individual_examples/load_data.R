@@ -10,9 +10,9 @@ load_data <- function(rna.id, met.id, met.anno, acc.id, acc.anno, min.cpg=1, min
   ################
   
   io <- list()
-  io$met.dir <- "/Users/ricard/data/gastrulation/met/parsed"
-  io$acc.dir <- "/Users/ricard/data/gastrulation/acc/parsed"
-  io$rna.file <- "/Users/ricard/data/gastrulation/rna/parsed/SingleCellExperiment.rds"
+  io$met.dir <- "/Users/ricard/data/gastrulation/met/feature_level"
+  io$acc.dir <- "/Users/ricard/data/gastrulation/acc/feature_level"
+  io$rna.file <- "/Users/ricard/data/gastrulation/rna/SingleCellExperiment.rds"
   
   ##########
   ## Load ##

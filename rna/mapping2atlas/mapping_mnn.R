@@ -31,7 +31,7 @@ meta_atlas <- readRDS(paste0(io$path2atlas, "/sample_metadata_atlas.rds"))
 ## Load scNMT-seq ##
 ####################
 
-sce_nmt  <- readRDS(paste0(io$path2scNMT, "/rna/parsed/SingleCellExperiment.rds"))
+sce_nmt  <- readRDS(paste0(io$path2scNMT, "/rna/SingleCellExperiment.rds"))
 meta_nmt <- read.table(file = paste0(io$path2scNMT, "/sample_metadata.txt"), header = TRUE, sep = "\t", stringsAsFactors = F)
 
 # Filter

@@ -15,12 +15,15 @@ if (grepl("ricard",Sys.info()['nodename'])) {
   io$outdir <- "/homes/ricard/gastrulation/metaccrna/mesendoderm_commitment/mesoderm/out"
 }
 io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
-io$met.dir <- paste0(io$basedir,"/met/parsed")
-io$acc.dir <- paste0(io$basedir,"/acc/parsed")
-io$met.stats <- paste0(io$basedir,"/met/stats/samples/sample_stats.txt")
-io$acc.stats <- paste0(io$basedir,"/acc/stats/samples/sample_stats.txt")
-io$rna.file <- paste0(io$basedir,"/rna/parsed/SingleCellExperiment.rds")
+io$met.dir <- paste0(io$basedir,"/met/feature_level")
+io$acc.dir <- paste0(io$basedir,"/acc/feature_level")
+io$met.stats <- paste0(io$basedir,"/met/results/stats/samples/sample_stats.txt")
+io$acc.stats <- paste0(io$basedir,"/acc/results/stats/samples/sample_stats.txt")
+io$rna.file <- paste0(io$basedir,"/rna/SingleCellExperiment.rds")
 io$annos_dir  <- paste0(io$basedir, "/features/filt")
+
+io$diff.met <- "/Users/ricard/data/gastrulation/met/differential/feature_level"
+io$diff.acc <- "/Users/ricard/data/gastrulation/acc/differential/feature_level"
 
 # Previously computed pseudotime estimates
 io$pseudotime  <- paste0(io$outdir, "/destiny_mesoderm.tsv")

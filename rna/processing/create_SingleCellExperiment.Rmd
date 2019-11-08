@@ -28,7 +28,7 @@ io <- list()
 io$gene_metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
 io$sample_metadata <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
 io$raw_counts <- "/Users/ricard/data/gastrulation/rna/counts/counts.txt.gz"
-io$outfile <- "/Users/ricard/data/gastrulation/rna/parsed/SingleCellExperiment.rds"
+io$outfile <- "/Users/ricard/data/gastrulation/rna/SingleCellExperiment.rds"
 ```
 
 <!-- Define Options -->

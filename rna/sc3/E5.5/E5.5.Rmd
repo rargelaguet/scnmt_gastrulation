@@ -22,7 +22,7 @@ source("/Users/ricard/gastrulation/rna/sc3/utils.R")
 io <- list()
 io$basedir <- "/Users/ricard/data/gastrulation"
 io$sample_metadata <- paste0(io$basedir,"/sample_metadata.txt")
-io$rna <- paste0(io$basedir,"/rna/parsed/SingleCellExperiment.rds")
+io$rna <- paste0(io$basedir,"/rna/SingleCellExperiment.rds")
 io$outdir <- paste0(io$basedir,"/rna/sc3/E5.5")
 
 ## Define options ##

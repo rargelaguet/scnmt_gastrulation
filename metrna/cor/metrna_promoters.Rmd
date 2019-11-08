@@ -30,7 +30,7 @@ io   <- list()
 io$basedir   <- "/Users/ricard/data/gastrulation"
 io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
 io$annos_dir  <- paste0(io$basedir, "/features/filt")
-io$rna_file   <- paste0(io$basedir, "/rna/feature_level/SingleCellExperiment.rds")
+io$rna_file   <- paste0(io$basedir, "/rna/SingleCellExperiment.rds")
 io$met_dir   <- paste0(io$basedir, "/met/feature_level")
 io$outdir <- paste0(io$basedir,"/metrna/cor")
 io$gene_metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
