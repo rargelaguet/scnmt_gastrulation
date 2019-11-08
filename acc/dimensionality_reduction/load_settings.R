@@ -11,7 +11,7 @@ if (grepl("ricard",Sys.info()['nodename'])) {
   io$basedir <- "/hps/nobackup/stegle/users/ricard/gastrulation"
 }
 io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
-io$data.dir <- paste0(io$basedir,"/acc/parsed")
+io$data.dir <- paste0(io$basedir,"/acc/feature_level")
 io$outdir <- paste0(io$basedir,"/acc/dimensionality_reduction")
 
 ####################

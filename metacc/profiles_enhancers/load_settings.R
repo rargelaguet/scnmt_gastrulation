@@ -17,12 +17,12 @@ io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
 io$annos_dir <- paste0(io$basedir,"/features/filt")
 
 # DNA methylation and chromatin accessibility data
-io$met.dir <- paste0(io$basedir,"/met/raw")
-io$acc.dir <- paste0(io$basedir,"/acc/raw")
+io$met.dir <- paste0(io$basedir,"/met/cpg_level")
+io$acc.dir <- paste0(io$basedir,"/acc/gpc_level")
 
 # Folders with the global statistics per cell
-io$met.stats <- paste0(io$basedir,"/met/stats/samples/sample_stats.txt")
-io$acc.stats <- paste0(io$basedir,"/acc/stats/samples/sample_stats.txt")
+io$met.stats <- paste0(io$basedir,"/met/results/stats/samples/sample_stats.txt")
+io$acc.stats <- paste0(io$basedir,"/acc/results/stats/samples/sample_stats.txt")
 
 # Output directory
 io$pdfdir <- paste0(io$basedir,"/metacc/profiles_enhancers")

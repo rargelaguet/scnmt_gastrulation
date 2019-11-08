@@ -41,7 +41,7 @@ if (grepl("ricard",Sys.info()['nodename'])) {
   io$basedir <- "/Users/ricard/data/gastrulation"
 }
 io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
-io$acc.dir <- paste0(io$basedir,"/acc/raw")
+io$acc.dir <- paste0(io$basedir,"/acc/gpc_level")
 io$outdir <- paste0(io$basedir,"/acc/stats/samples")
 io$annos_dir <- paste0(io$basedir,"/features/filt")
 

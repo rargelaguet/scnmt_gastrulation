@@ -166,7 +166,7 @@ if (opts$overlapGenes) {
 met_dt <- met_dt[N>=opts$met_min.CpGs]
 
 # Filter features by  minimum number of cells
-met_dt[,N:=.N,by=c("id","anno","gene")]  %>% .[N>=opts$met_min.cells] %>% .[,N:=NULL]
+met_dt <- met_dt[,N:=.N,by=c("id","anno","gene")]  %>% .[N>=opts$met_min.cells] %>% .[,N:=NULL]
 
 # Filter features by  minimum number of cells (by stage_lineage)
 # for (i in unique(met_dt$stage_lineage)) {
@@ -187,7 +187,7 @@ met_dt <- met_dt[,var:=var(m), by=c("id","anno")] %>% .[var>0] %>% .[,var:=NULL]
 acc_dt <- acc_dt[N>=opts$acc_min.GpCs]
 
 # Filter features by  minimum number of cells
-acc_dt[,N:=.N,by=c("id","anno","gene")]  %>% .[N>=opts$acc_min.cells] %>% .[,N:=NULL]
+acc_dt <- acc_dt[,N:=.N,by=c("id","anno","gene")]  %>% .[N>=opts$acc_min.cells] %>% .[,N:=NULL]
 
 # Filter features by  minimum number of cells (by stage_lineage)
 # for (i in unique(acc_dt$stage_lineage)) {

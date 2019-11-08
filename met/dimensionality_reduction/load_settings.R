@@ -11,7 +11,7 @@ if (grepl("ricard",Sys.info()['nodename'])) {
 } else {
   io$basedir <- "/hps/nobackup/stegle/users/ricard/gastrulation"
 }
-io$data.dir <- paste0(io$basedir,"/met/parsed")
+io$data.dir <- paste0(io$basedir,"/met/feature_level")
 io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
 io$met.stats <- paste0(io$basedir,"/met/stats/samples/sample_stats.txt")
 io$outdir <- paste0(io$basedir,"/met/dimensionality_reduction")
@@ -89,7 +89,7 @@ io$outfile = sprintf("%s/hdf5/model_%s_%s.hdf5",io$outdir,paste(names(opts$annos
 ## Load sample metadata ##
 ##########################
 
-sample_metadata <- fread(io$sample.metadata, stringsAsFactors=T, showProgress=F) %>% 
+sample_metadata <- fread(io$sample.metadata) %>% 
   .[id_met%in%opts$cells] %>%
   .[,c("id_met","stage","lineage10x_2")] %>%
   .[,stage_lineage:=as.factor(paste(stage,lineage10x_2,sep="_"))] %>% droplevels()

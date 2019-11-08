@@ -34,16 +34,16 @@ if (grepl("ricard",Sys.info()['nodename'])) {
 ## Cluster ##
 } else {
   # Mouse
-  # io$anno.folder <- "/hps/nobackup/stegle/users/ricard/Ecker_2017_parsed/mouse/features/filt"
-  # io$in.sample_metadata <- "/hps/nobackup/stegle/users/ricard/Ecker_2017_parsed/mouse/sample_metadata.txt"
-  # io$in.folder <- "/hps/nobackup/stegle/users/ricard/Ecker_2017_parsed/mouse/raw_CCH"
-  # io$out.folder <- "/hps/nobackup/stegle/users/ricard/Ecker_2017_parsed/mouse/parsed_CCH"
+  # io$anno.folder <- "/hps/nobackup/stegle/users/ricard/Ecker_2017_feature_level/mouse/features/filt"
+  # io$in.sample_metadata <- "/hps/nobackup/stegle/users/ricard/Ecker_2017_feature_level/mouse/sample_metadata.txt"
+  # io$in.folder <- "/hps/nobackup/stegle/users/ricard/Ecker_2017_feature_level/mouse/cpg_level_CCH"
+  # io$out.folder <- "/hps/nobackup/stegle/users/ricard/Ecker_2017_feature_level/mouse/feature_level_CCH"
   
   # Human
-  # io$anno.folder <- "/hps/nobackup/stegle/users/ricard/Ecker_2017_parsed/human/features/filt"
-  # io$in.sample_metadata <- "/hps/nobackup/stegle/users/ricard/Ecker_2017_parsed/human/sample_metadata.txt"
-  # io$in.folder <- "/hps/nobackup/stegle/users/ricard/Ecker_2017_parsed/human/raw_CCH"
-  # io$out.folder <- "/hps/nobackup/stegle/users/ricard/Ecker_2017_parsed/human/parsed_CCH"
+  # io$anno.folder <- "/hps/nobackup/stegle/users/ricard/Ecker_2017_feature_level/human/features/filt"
+  # io$in.sample_metadata <- "/hps/nobackup/stegle/users/ricard/Ecker_2017_feature_level/human/sample_metadata.txt"
+  # io$in.folder <- "/hps/nobackup/stegle/users/ricard/Ecker_2017_feature_level/human/cpg_level_CCH"
+  # io$out.folder <- "/hps/nobackup/stegle/users/ricard/Ecker_2017_feature_level/human/feature_level_CCH"
 }
 
 
@@ -135,7 +135,7 @@ for (i in 1:length(samples_keep)) {
   } else {
     cat(sprintf("Sample %s has not been processed, annotating...\n",sample))  
     
-    # Read and parse raw methylation data
+    # Read and parse cpg_level methylation data
     dat_sample <- fread(sprintf("%s/%s.tsv.gz",io$in.folder,sample), sep="\t", verbose=F, showProgress=F) %>%
       .[,c("chr","pos","met_reads","nonmet_reads","rate")] %>%
       .[,total_reads:=met_reads+nonmet_reads]

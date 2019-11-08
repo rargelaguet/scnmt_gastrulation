@@ -19,7 +19,7 @@ library(ggpubr)
 ## Define I/O ##
 io <- list()
 io$sample.metadata <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
-io$data <- "/Users/ricard/data/gastrulation/met/parsed"
+io$data <- "/Users/ricard/data/gastrulation/met/feature_level"
 io$outdir <- "/Users/ricard/data/gastrulation/met/distributions"
 
 ## Define options ##

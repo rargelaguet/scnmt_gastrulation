@@ -12,8 +12,8 @@ if (grepl("ricard",Sys.info()['nodename'])) {
 io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
 
 # Data folders
-io$met.dir <- paste0(io$basedir,"/met/parsed")
-io$acc.dir <- paste0(io$basedir,"/acc/parsed")
+io$met.dir <- paste0(io$basedir,"/met/feature_level")
+io$acc.dir <- paste0(io$basedir,"/acc/feature_level")
 
 # File with global statistics per cell
 io$acc.stats <- paste0(io$basedir,"/acc/stats/samples/sample_stats.txt")

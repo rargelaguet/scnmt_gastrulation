@@ -27,7 +27,7 @@ fwrite_tsv <- partial(fwrite, sep = "\t")
 io <- list()
 io$data_dir <- "/bi/scratch/Stephen_Clark/gastrulation_data"
 io$liftover_url <- "http://hgdownload.soe.ucsc.edu/goldenPath/mm9/liftOver/mm9ToMm10.over.chain.gz"
-io$tsv_files <- paste0(io$data_dir, "/public_data/Dai_2016/raw")
+io$tsv_files <- paste0(io$data_dir, "/public_data/Dai_2016/cpg_level")
 
 
 

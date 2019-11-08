@@ -35,19 +35,19 @@ io$data_out <- paste0(io$data_dir, "/public_data/Dai_2016")
 
 
 
-raw_dir <- paste0(io$data_out, "/raw")
-dir.create(raw_dir, recursive = TRUE)
-tar <- paste0(raw_dir, "/tar.tar")
+cpg_level_dir <- paste0(io$data_out, "/cpg_level")
+dir.create(cpg_level_dir, recursive = TRUE)
+tar <- paste0(cpg_level_dir, "/tar.tar")
 
 download.file(io$data_url, destfile = tar)
 
-untar(tar, exdir = paste0(raw_dir, "/tar"))
+untar(tar, exdir = paste0(cpg_level_dir, "/tar"))
 file.remove(tar)
 
 
 # convert to tsv format
 
-files <- dir(paste0(raw_dir, "/tar"), pattern = "SingleCmet.txt.gz", full = TRUE)
+files <- dir(paste0(cpg_level_dir, "/tar"), pattern = "SingleCmet.txt.gz", full = TRUE)
 
 walk(files, ~{
   outfile <- gsub(".SingleCmet.txt.gz", ".tsv", .) %>% sub("/tar/", "/", .)

@@ -43,9 +43,9 @@ theme_pub <- function() {
 io <- list()
 io$basedir <- "/Users/ricard/data/gastrulation"
 io$metadata <- paste0(io$basedir,"/sample_metadata.txt")
-io$data <- paste0(io$basedir,"/met/raw")
+io$data <- paste0(io$basedir,"/met/cpg_level")
 io$annos_dir  <- "/Users/ricard/data/gastrulation/features/filt"
-io$outdir <- "/Users/ricard/data/gastrulation/met/stats/samples"
+io$outdir <- paste0(io$outdir,"/met/stats/samples")
 
 ####################
 ## Define options ##
@@ -150,7 +150,7 @@ if (!is.null(opts$annos)) {
 # fwrite(stats, file=paste0(io$outdir,"/sample_stats.txt"), sep="\t", row.names=F, col.names=T)
 ```
 
-
+<!-- Load pre-computed statistics -->
 ```{r read_stats, echo=FALSE}
 stats <- fread(paste0(io$outdir,"/sample_stats.txt")) %>% .[,mean:=mean*100]
 stats <- stats %>% merge(metadata, by="id_met")
@@ -161,20 +161,6 @@ stats <- stats %>% merge(metadata, by="id_met")
 # stats[,mean_regressed := lm(formula=mean~log(coverage))[["coefficients"]][1] + lm(formula=mean~log(coverage))[["residuals"]], by=c("stage_lineage")]
 stats[,mean_regressed := mean(mean) + lm(formula=mean~log(coverage))[["residuals"]], by=c("stage_lineage")]
 ```
-
-```{r}
-# foo <- stats[stage_lineage=="E7.5_Mature_mesoderm"] %>%
-#   .[,mean_regressed := mean(mean) + lm(formula=mean~log(coverage))[["residuals"]], by=c("stage_lineage")]
-# 
-# ggplot(foo, aes(x=log(coverage), y=mean_regressed)) +
-#   geom_point() +
-#   stat_smooth(method="lm") +
-#   theme_bw()
-# 
-# var(foo$mean)
-# var(foo$mean_regressed)
-```
-
 
 <!-- Boxplots with mean methylation rate per stage and lineage -->
 ```{r}

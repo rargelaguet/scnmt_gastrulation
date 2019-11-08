@@ -25,7 +25,7 @@ if (grepl("ricard",Sys.info()['nodename'])) {
   source("/homes/ricard/gastrulation/met/differential/utils.R")
 }
 io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
-io$data.dir <- paste0(io$basedir,"/acc/parsed")
+io$data.dir <- paste0(io$basedir,"/acc/feature_level")
 io$annos_dir  <- paste0(io$basedir, "/features/filt")
 io$stats <- paste0(io$basedir,"/acc/stats/samples/sample_stats.txt")
 io$outfile <- args$outfile
@@ -49,10 +49,6 @@ if (opts$regress.mean) {
 # Define stage and lineage
 opts$groupA <- args$stage_lineage1
 opts$groupB <- args$stage_lineage2
-
-# Overlap genomic features with nearby genes?
-# opts$OverlapWithGenes <- TRUE
-# opts$gene_window <- 5e4       # window length for the overlap
 
 # Subset top most variable sites
 opts$number_features <- 5000

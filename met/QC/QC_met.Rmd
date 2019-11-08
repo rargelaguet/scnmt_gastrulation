@@ -1,5 +1,5 @@
 ---
-title: "Gastrulation: quality control of methylation data"
+title: "Gastrulation scNMT-seq: quality control of methylation data"
 output: 
   BiocStyle::html_document: 
     fig_width: 10
@@ -9,9 +9,7 @@ output:
 ```{r load_modules, include=FALSE, echo=FALSE}
 library(data.table)
 library(purrr)
-library(tidyr)
 library(ggplot2)
-library(cowplot)
 ```
 
 
@@ -39,18 +37,12 @@ barplot_theme <- function() {
 
 ## I/O ##
 io <- list()
-io$sample.metadata <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
-io$in.metdir <- "/Users/ricard/data/gastrulation/met/raw"
-io$stats <- "/Users/ricard/gastrulation/met/stats/samples/out/samples.txt"
-io$outdir <- "/Users/ricard/gastrulation/met/QC/out"
-
-# io$sample.metadata <- "/Users/ricard/data/gastrulation_norsync_stuff/new_cells/sample_metadata_PS_VE_dec18_filt_annotated_2.txt"
-# io$in.metdir <- "/Users/ricard/data/gastrulation/met/raw/scNMT/dec18"
-
-# io$sample.metadata <- "/Users/ricard/data/gastrulation_scBS/sample_metadata.txt"
-# io$in.metdir <- "/Users/ricard/data/gastrulation_scBS/met/raw/E5.5_scBS"
-# io$outdir <- "/Users/ricard/gastrulation/met/QC/out"
-
+io$basedir <- "/Users/ricard/data/gastrulation"
+io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
+io$data <- paste0(io$basedir,"/met/cpg_level")
+io$stats <- paste0(io$basedir,"/met/results/stats/samples/sample_stats.txt")
+io$annos_dir <- paste0(io$basedir,"/features/filt")
+io$outdir <- paste0(io$basedir,"/met/results/stats/samples")
 
 ## Options ##
 opts <- list()
@@ -74,9 +66,9 @@ sample_metadata <- fread(io$sample.metadata) %>%
 stats <- data.table(id_met=opts$cells, coverage=as.numeric(NA))
 
 for (cell in opts$cells) {
-  if (file.exists(sprintf("%s/%s.tsv.gz",io$in.metdir,cell))) {
+  if (file.exists(sprintf("%s/%s.tsv.gz",io$data,cell))) {
     # print(sprintf("Loading %s...",cell))
-    tmp <- fread(cmd=sprintf("zcat < %s/%s.tsv.gz",io$in.metdir,cell), sep="\t", verbose=F, showProgress=F) %>% .[,c(1,2,5)] %>% setnames(c("chr","pos","rate"))
+    tmp <- fread(cmd=sprintf("zcat < %s/%s.tsv.gz",io$data,cell), sep="\t", verbose=F, showProgress=F) %>% .[,c(1,2,5)] %>% setnames(c("chr","pos","rate"))
     stats[id_met==cell,coverage:=nrow(tmp)]
     stats[id_met==cell,mean:=mean(tmp$rate, na.rm=T)]
   } else {
@@ -84,11 +76,12 @@ for (cell in opts$cells) {
   }
 }
 stats <- stats[!is.na(coverage)]
+
+# fwrite(stats,file=io$stats, sep="\t", row.names=F, col.names=T)
 ```
 
-<!-- Load statistics -->
+<!-- Load pre-computed statistics -->
 ```{r read_stats, echo=FALSE}
-fwrite(stats,file=io$stats, sep="\t", row.names=F, col.names=T)
 # stats <- fread(io$stats) %>% merge(sample_metadata,by="sample")
 ```
 
@@ -128,34 +121,10 @@ print(length(failqc))
 
 <!-- Update sample metadata -->
 ```{r}
-sample_metadata_updated <- fread(io$sample.metadata)
-sample_metadata_updated <- sample_metadata_updated[id_met%in%stats$id_met, pass_metQC:=ifelse(id_met%in%failqc,F,T)]
-
-table(sample_metadata_updated$pass_metQC)
-
-fwrite(sample_metadata_updated, io$sample.metadata, sep="\t", col.names=T, row.names=F, quote=F, na="NA")
-```
-
-```{r}
-# # metadata_all <- fread(io$sample.metadata)
-# metadata_modified <- sample_metadata
-# metadata_modified <- metadata_modified[,c("id_met","id_acc"):=NA]
-# metadata_modified[sample%in%stats$id_met,c("id_met","id_acc"):=sample] %>% .[,c("pass_metQC","pass_accQC"):=list(NA)]
-# # metadata_modified <- metadata_modified[id_met %in% stats$id_met]
-# metadata_modified[!is.na(id_met), pass_metQC:=ifelse(id_met%in%failqc,"FALSE","TRUE")]
+# sample_metadata_updated <- fread(io$sample.metadata)
+# sample_metadata_updated <- sample_metadata_updated[id_met%in%stats$id_met, pass_metQC:=ifelse(id_met%in%failqc,F,T)]
 # 
-# tmp <- metadata_modified %>% 
-#   .[,c("sample","id_rna","id_met","id_acc","embryo","plate","pass_rnaQC","pass_metQC","pass_accQC","lineage")]
+# table(sample_metadata_updated$pass_metQC)
 # 
-# outfile = "/Users/ricard/data/gastrulation_norsync_stuff/new_cells/sample_metadata_PS_VE_dec18_filt_annotated_2.txt"
-# fwrite(tmp, outfile, sep="\t", col.names = T, row.names = F, quote=F, na="NA")
+# fwrite(sample_metadata_updated, io$sample.metadata, sep="\t", col.names=T, row.names=F, quote=F, na="NA")
 ```
-
-<!-- Save results -->
-```{r, echo=FALSE, include=FALSE}
-# p <- cowplot::plot_grid(p1, p2, ncol=2, nrow=1)
-# pdf(file=paste0(io$outdir,"/metacc.pdf"), width=19, height=7)
-# print(p)
-# dev.off()
-```
-

@@ -55,11 +55,11 @@ if (grepl("ricard",Sys.info()['nodename'])) {
 }
 
 if (opts$context == "GC") {
-  io$in.folder <- paste0(io$basedir,"/acc/raw")
-  io$out.folder <- paste0(io$basedir,"/acc/parsed")
+  io$in.folder <- paste0(io$basedir,"/acc/gpc_level")
+  io$out.folder <- paste0(io$basedir,"/acc/feature_level")
 } else if (opts$context=="CG") {
-  io$in.folder <- paste0(io$basedir,"/met/raw")
-  io$out.folder <- paste0(io$basedir,"/met/parsed")
+  io$in.folder <- paste0(io$basedir,"/met/cpg_level")
+  io$out.folder <- paste0(io$basedir,"/met/feature_level")
 }
 io$anno.folder <- paste0(io$basedir,"/features/filt")
 io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
