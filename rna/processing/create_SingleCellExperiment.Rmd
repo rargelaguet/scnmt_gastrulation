@@ -13,7 +13,6 @@ library(purrr)
 library(scater)
 library(scran)
 library(ggplot2)
-# source("/Users/ricard/NMT-seq_ESC/Rutils/stats_utils.R")
 
 matrix.please <- function(x) {
     m<-as.matrix(x[,-1])
@@ -27,7 +26,7 @@ matrix.please <- function(x) {
 io <- list()
 io$gene_metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
 io$sample_metadata <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
-io$raw_counts <- "/Users/ricard/data/gastrulation/rna/counts/counts.txt.gz"
+io$counts <- "/Users/ricard/data/gastrulation/rna/counts.txt.gz"
 io$outfile <- "/Users/ricard/data/gastrulation/rna/SingleCellExperiment.rds"
 ```
 
@@ -38,12 +37,11 @@ opts$coverage_threshold <- 1e5    # Minimum library size (coverage)
 opts$features_threshold <- 500   # Minimum number of expressed features
 opts$top50_threshold <- 0.75      # Maximum fraction of reads accounting for the top 50 features
 opts$MT_threshold <- 0.25         # Maximum fraction of reads mapping to mithocondrial genes
-
 ```
 
 <!-- Load count matrix -->
 ```{r load_data, echo=FALSE}
-counts <- fread(sprintf("%s",io$raw_counts)) %>% matrix.please
+counts <- fread(io$counts) %>% matrix.please
 ```
 
 <!-- Load sample metadata -->

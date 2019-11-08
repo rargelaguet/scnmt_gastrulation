@@ -1,6 +1,6 @@
 Content
 -------
-* `/cor/`: plot the two types of correlations (Met/RNA and Acc/RNA)
+* `/cor/`: plot the two types of correlations (Met/RNA and Acc/RNA) (Figure 1g)
 * `/differnetial/`: plot results of differential analysis
 * `/mesendoderm_commitment/`: Epigenetic dynamics associated with mesendoderm commitment (Figure S11)
 * `/mofa/`: MOFA analysis (Figure 2a-b, Figure 3c, and Figure S8)

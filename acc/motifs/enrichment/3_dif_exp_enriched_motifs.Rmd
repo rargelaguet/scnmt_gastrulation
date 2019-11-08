@@ -1,0 +1,223 @@
+---
+title: "Plots of differentially expressed TFs and corresponding motif enrichment score"
+author: "Stephen Clark"
+date: "10/02/2019"
+output: html_document
+---
+
+```{r load_modules, echo=FALSE, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(cowplot)
+```
+
+```{r define_opts, echo=FALSE, include=FALSE}
+
+
+# in/out
+io                  <- list()
+io$data_dir         <- "/bi/scratch/Stephen_Clark/gastrulation_data"
+io$dif_exp_dir      <- paste0(io$data_dir, "/rna/differential")
+io$motif_enrichment <- paste0(io$data_dir,
+                              "/acc/differential/feature_level/motif_enrichment/background_all_k27ac")
+
+io$plot_out         <- "/bi/home/clarks/gastrulation/plots/motifs/diffexp_diffacc/background_all_k27ac"
+
+opts                <- list()
+opts$motifs_regex   <- "K27ac" # use this to specify annotation in the name of the motif enrichment file
+opts$comparisons    <- c("E7.5Mesoderm_vs_E7.5EndodermEctoderm",
+                         "E7.5Endoderm_vs_E7.5MesodermEctoderm",
+                         "E7.5Ectoderm_vs_E7.5MesodermEndoderm")
+
+opts$up_down_both   <- "up"   # which sig hits to include - 
+#                                 "up" = sites high in lineage 1 vs lineage 2
+#                                 "down" = sites low in lineage 1 vs lineage 2
+#                                 "both" = all significant hits
+
+
+```
+
+```{r functions}
+adj_p <- partial(p.adjust, method = "fdr")
+
+# Differences in how files are named prevent proper matching - this function corrects names to a standard format
+name_comparisons <- function(file_names){
+  renames <- gsub(".tsv|.bed|.fa|.txt|.gz", "", basename(file_names)) %>%
+    gsub("Primitive_endoderm", "PE", .) %>%
+    gsub("Visceral_endoderm", "VE", .) %>%
+    gsub("Primitive_Streak", "PS", .) %>%
+    gsub("Endoderm", "End", .) %>%
+    gsub("Ectoderm", "Ect", .) %>%
+    gsub("Mesoderm", "Mes", .) %>%
+    gsub("Epiblast", "EPI", .) %>%
+    gsub("EndEct", "EctEnd", .) %>%
+    gsub("MesEct", "EctMes", .) %>%
+    gsub("MesEnd", "EndMes", .) %>%
+    gsub("E5.5PE", "E5.5VE", .) 
+  
+  
+  renames <- strsplit(renames, "_") 
+  # search for position of "vs"
+  pos <- map(renames, ~grep("vs", .)) %>%
+    map_int(~{
+      p <- .
+      if (length(p) == 0) p <- as.integer(2)
+      p
+    })
+  # now extract either side of "vs"
+  renames <- map2_chr(renames, pos, ~.x[c(.y-1, .y, .y+1)] %>% paste(collapse = "_"))
+
+  setNames(file_names, renames)
+}
+
+# Read gz compressed file
+fread_gz <- function(filename, ...){
+    f <- file(filename)
+    type <- summary(f)$class
+    close.connection(f)
+    if (type == "gzfile") {
+        filename <- paste("zcat", filename)
+        return(fread(cmd = filename, ...))
+    }
+    fread(filename, ...)
+}
+
+# Write as .tsv
+fwrite_tsv <- partial(fwrite, sep = "\t", na = "NA")
+```
+
+```{r load_data}
+# Re-name comparisons for consistency
+opts$comparisons <- gsub("Primitive_endoderm", "PE", opts$comparisons) %>%
+    gsub("E7.5_Ectoderm_E4.5_Epiblast", "E7.5_Ectoderm_vs_E4.5_Epiblast", .) %>%
+    gsub("E7.5_Endoderm_E4.5_Epiblast", "E7.5_Endoderm_vs_E4.5_Epiblast", .) %>%
+    gsub("E7.5_Mesoderm_E4.5_Epiblast", "E7.5_Mesoderm_vs_E4.5_Epiblast", .) %>%
+    gsub("Visceral_endoderm", "VE", .) %>%
+    gsub("Endoderm", "End", .) %>%
+    gsub("Ectoderm", "Ect", .) %>%
+    gsub("Mesoderm", "Mes", .) %>%
+    gsub("Epiblast", "EPI", .) %>%
+    gsub("EndEct", "EctEnd", .) %>%
+    gsub("MesEct", "EctMes", .) %>%
+    gsub("MesEnd", "EndMes", .) %>%
+    gsub("E5.5PE", "E5.5VE", .)
+
+
+dif_exp <- dir(io$dif_exp_dir, pattern = ".txt.gz", full = TRUE) %>%
+  name_comparisons() %>%
+  .[names(.) %in% opts$comparisons] %>%
+  map(fread_gz) %>%
+  map2(names(.), ~.x[, comparison := .y]) %>%
+  rbindlist() %>%
+  .[, tf := toupper(symbol)]
+
+
+
+(comparisons <- dif_exp[, unique(comparison)])
+
+
+
+# Need to now find all the RNA comparisons within the different annotations we have i.e. map by annotation then by comparisons
+
+
+annotations <- dir(io$motif_enrichment, pattern = opts$motifs_regex, full = TRUE) %>%
+  paste0("/", opts$up_down_both) %>%
+  .[dir.exists(.)]
+
+motifs <- map(annotations, ~{
+  ame_dirs <- dir(., full = TRUE, pattern = ".fa") %>%
+    name_comparisons() %>%
+    .[names(.) %in% opts$comparisons]
+  
+  union <- names(ame_dirs)[names(ame_dirs) %in% comparisons]
+  
+  if (length(union) == 0) return(NULL)
+  
+  ame <- map(union, ~{
+    dt <- dir(ame_dirs[.], pattern = "ame.txt", full = TRUE) %>%
+      fread() %>%
+      .[, .(motif = toupper(V9), p = as.numeric(V13), q = as.numeric(gsub(")", "", V16)))]  %>%
+      .[, log_q := -log10((q))] %>%
+      .[, fdr := adj_p(p)] %>%
+      .[, log_fdr := -log10(fdr)] %>%
+      tidyr::separate(motif, c("tf1", "tf2", "tf3", "tf4"), sep = "::", fill = "right", extra = "drop", remove = FALSE) %>%
+      melt(id.vars = c("p", "q", "log_q", "fdr", "log_fdr", "motif"),
+           variable.name = "numb", value.name = "tf")
+    dt[, comparison := .]
+  }) %>%
+    rbindlist()
+  
+  anno_name <- dirname(.) %>% basename()
+    
+  ame[, anno := anno_name]
+}) %>%
+  compact() %>%
+  rbindlist()
+
+
+
+# combine 
+toplot <- merge(dif_exp[complete.cases(dif_exp)], motifs, by = c("tf", "comparison"))
+
+if (opts$up_down_both == "up") {
+  toplot <- toplot[, sig_rna := ifelse(logFC < -1 & sig, TRUE, FALSE)]
+} else if (opts$up_down_both == "down"){
+  toplot <- toplot[, sig_rna := ifelse(logFC > 1 & sig, TRUE, FALSE)]
+} else {
+  toplot <- toplot[, sig_rna := ifelse(logFC < -1 | logFC > 1 & sig, TRUE, FALSE)]
+}
+
+toplot <- toplot[ , sig_motif := ifelse(fdr < 0.05, TRUE, FALSE)] %>%
+  .[, sig_both := ifelse(sig_rna == TRUE & sig_motif == TRUE, TRUE, FALSE)] %>%
+  .[, sig_either := ifelse(sig_rna == TRUE | sig_motif == TRUE, TRUE, FALSE)] %>%
+  .[, logFC := -logFC] %>%
+  .[, lab := tf] %>%
+  .[grepl("::", motif), lab := paste(motif, tf, sep = "\n")]
+
+```
+
+```{r plot}
+
+# 1 plot per facet
+io$plot_out <- paste0(io$plot_out, "/", opts$up_down_both)
+dir.create(io$plot_out, recursive = TRUE)
+
+comp_subset <- toplot[, unique(comparisons)]
+anno_subset <- toplot[, unique(anno)]
+
+
+walk(comp_subset, ~{
+  comp = .
+  walk(anno_subset, ~{
+    annot <- .
+    title <- paste0(comp, "\n", annot)
+    p <- ggplot(toplot[comparison %in% comp & anno %in% annot], 
+            aes(logFC, log_fdr, colour = sig_both, label = lab)) +
+      geom_point() +
+      ggrepel::geom_text_repel(data = toplot[comparison %in% comp & anno %in% annot][sig_motif == TRUE], #[order(fdr)][1:20], 
+                               size = 4, 
+                               segment.size = 0.1, 
+                               segment.alpha = 0.5, 
+                               box.padding = 0.5) +
+      scale_colour_manual(values = c("black", "red")) +
+      scale_size_manual(values = c(0.5, 1)) +
+      scale_alpha_manual(values = c(0.25, 1)) +
+      geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
+      ylab("-log (q-value) motif enrichment") +
+      xlab("log fold change in RNA expression") +
+#       xlim(-1, 8) +
+      guides(colour = FALSE) +
+      ggtitle(title)
+    
+  print(p)
+  
+  out_file <- paste0(io$plot_out, "/", comp,"_", annot, ".pdf")
+  save_plot(out_file, p, base_height = 6, base_width = 6)
+  fwrite_tsv(toplot[comparison %in% comp & anno %in% annot], gsub(".pdf", ".tsv", out_file))
+  })
+})
+```
+
+

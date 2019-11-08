@@ -4,4 +4,5 @@ Content
 * `/differential/`: differential analysis between germ layers (Figure S6)
 * `/dimensionality_reduction/`: dimensionality reduction (Figure S3f)
 * `/distributions/`: plotting genome-wide distributions (Figure S3b)
+* `/motif/`: motif analysis 
 * `/stats/`: global statistics (Figure S3d)
