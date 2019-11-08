@@ -14,7 +14,7 @@ if (grepl("ricard",Sys.info()['nodename'])) {
 io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
 
 # Genomic contects
-io$annos_dir <- paste0(io$basedir,"/features/filt")
+io$annos_dir <- paste0(io$basedir,"/features/genomic_contexts")
 
 # DNA methylation and chromatin accessibility data
 io$met.dir <- paste0(io$basedir,"/met/cpg_level")

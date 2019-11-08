@@ -13,7 +13,7 @@ if (grepl("ricard",Sys.info()['nodename'])) {
   io$outdir <- "/Users/stapelc/Documents/GastrulaProject/Results/revisions/H3K27ac"
 }
 io$sample_metadata <- paste0(io$basedir,"/sample_metadata.txt")
-io$features.dir <- paste0(io$basedir,"/features/filt")
+io$features.dir <- paste0(io$basedir,"/features/genomic_contexts")
 io$gene.metadata <- paste0(io$basedir,"/features/genes/Mmusculus_genes_BioMart.87.txt")
 io$rna <- paste0(io$basedir,"/rna/SingleCellExperiment.rds")
 

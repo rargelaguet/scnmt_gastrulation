@@ -17,7 +17,7 @@ io$acc.dir <- paste0(io$basedir,"/acc/feature_level")
 io$met.stats <- paste0(io$basedir,"/met/results/stats/samples/sample_stats.txt")
 io$acc.stats <- paste0(io$basedir,"/acc/results/stats/samples/sample_stats.txt")
 io$rna.file <- paste0(io$basedir,"/rna/SingleCellExperiment.rds")
-io$annos_dir  <- paste0(io$basedir, "/features/filt")
+io$annos_dir  <- paste0(io$basedir, "/features/genomic_contexts")
 io$outdir <- paste0(io$basedir,"/metaccrna/mesendoderm_commitment/ectoderm")
 
 io <- list()

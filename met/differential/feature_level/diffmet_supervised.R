@@ -29,7 +29,7 @@ if (grepl("ricard",Sys.info()['nodename'])) {
 }
 io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
 io$data.dir <- paste0(io$basedir,"/met/feature_level")
-io$annos_dir  <- paste0(io$basedir, "/features/filt")
+io$annos_dir  <- paste0(io$basedir, "/features/genomic_contexts")
 io$stats <- paste0(io$basedir,"/met/results/stats/samples/sample_stats.txt")
 io$outfile <- args$outfile
 

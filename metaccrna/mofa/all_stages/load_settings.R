@@ -16,7 +16,7 @@ io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
 io$met.dir <- paste0(io$basedir,"/met/feature_level")
 io$acc.dir <- paste0(io$basedir,"/acc/feature_level")
 io$rna.file <- paste0(io$basedir,"/rna/SingleCellExperiment.rds")
-io$annos_dir  <- paste0(io$basedir, "/features/filt")
+io$annos_dir  <- paste0(io$basedir, "/features/genomic_contexts")
 
 # Folders with the global statistics per cell
 io$met.stats <- paste0(io$basedir,"/met/stats/samples/sample_stats.txt")

@@ -20,7 +20,7 @@ opts <- list()
 
 ## Define I/O ##
 io$gene.metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
-io$features.dir <- "/Users/ricard/data/gastrulation/features/filt"
+io$features.dir <- "/Users/ricard/data/gastrulation/features/genomic_contexts"
 io$outdir <- "/Users/ricard/gastrulation/met/stats/features/out"
 
 ## Define options ##

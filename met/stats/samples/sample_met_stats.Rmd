@@ -44,7 +44,7 @@ io <- list()
 io$basedir <- "/Users/ricard/data/gastrulation"
 io$metadata <- paste0(io$basedir,"/sample_metadata.txt")
 io$data <- paste0(io$basedir,"/met/cpg_level")
-io$annos_dir  <- "/Users/ricard/data/gastrulation/features/filt"
+io$annos_dir  <- "/Users/ricard/data/gastrulation/features/genomic_contexts"
 io$outdir <- paste0(io$outdir,"/met/stats/samples")
 
 ####################

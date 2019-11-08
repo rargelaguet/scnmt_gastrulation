@@ -61,7 +61,7 @@ if (opts$context == "GC") {
   io$in.folder <- paste0(io$basedir,"/met/cpg_level")
   io$out.folder <- paste0(io$basedir,"/met/feature_level")
 }
-io$anno.folder <- paste0(io$basedir,"/features/filt")
+io$anno.folder <- paste0(io$basedir,"/features/genomic_contexts")
 io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
 
 ## Options ##

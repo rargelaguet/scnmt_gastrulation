@@ -29,7 +29,7 @@ source("/Users/ricard/gastrulation/metrna/cor/utils.R")
 io   <- list()
 io$basedir   <- "/Users/ricard/data/gastrulation"
 io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
-io$annos_dir  <- paste0(io$basedir, "/features/filt")
+io$annos_dir  <- paste0(io$basedir, "/features/genomic_contexts")
 io$rna_file   <- paste0(io$basedir, "/rna/SingleCellExperiment.rds")
 io$met_dir   <- paste0(io$basedir, "/met/feature_level")
 io$outdir <- paste0(io$basedir,"/metrna/cor")

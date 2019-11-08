@@ -26,7 +26,7 @@ io <- list()
 ## Own computer ##
 if (grepl("ricard",Sys.info()['nodename'])) {
   io$basedir <- "/Users/ricard/data/gastrulation/public_data/Dai_2016"
-  io$anno.folder <- "/Users/ricard/data/gastrulation/features/filt"
+  io$anno.folder <- "/Users/ricard/data/gastrulation/features/genomic_contexts"
   io$sample.metadata <- str_c(io$basedir,"/sample_metadata.txt")
   io$in.folder <- str_c(io$basedir,"/met/cpg_level")
   io$out.folder <- str_c(io$basedir,"/met/feature_level")
@@ -34,13 +34,13 @@ if (grepl("ricard",Sys.info()['nodename'])) {
 ## Cluster ##
 } else {
   # Mouse
-  # io$anno.folder <- "/hps/nobackup/stegle/users/ricard/Ecker_2017_feature_level/mouse/features/filt"
+  # io$anno.folder <- "/hps/nobackup/stegle/users/ricard/Ecker_2017_feature_level/mouse/features/genomic_contexts"
   # io$sample.metadata <- "/hps/nobackup/stegle/users/ricard/Ecker_2017_feature_level/mouse/sample_metadata.txt"
   # io$in.folder <- "/hps/nobackup/stegle/users/ricard/Ecker_2017_feature_level/mouse/cpg_level_CCH"
   # io$out.folder <- "/hps/nobackup/stegle/users/ricard/Ecker_2017_feature_level/mouse/feature_level_CCH"
   
   # Human
-  # io$anno.folder <- "/hps/nobackup/stegle/users/ricard/Ecker_2017_feature_level/human/features/filt"
+  # io$anno.folder <- "/hps/nobackup/stegle/users/ricard/Ecker_2017_feature_level/human/features/genomic_contexts"
   # io$sample.metadata <- "/hps/nobackup/stegle/users/ricard/Ecker_2017_feature_level/human/sample_metadata.txt"
   # io$in.folder <- "/hps/nobackup/stegle/users/ricard/Ecker_2017_feature_level/human/cpg_level_CCH"
   # io$out.folder <- "/hps/nobackup/stegle/users/ricard/Ecker_2017_feature_level/human/feature_level_CCH"
