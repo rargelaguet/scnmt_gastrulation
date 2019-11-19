@@ -122,7 +122,7 @@ sce_filt@reducedDims$PCA <- sce_filt@reducedDims$PCA[,2:ncol(sce_filt@reducedDim
 
 <!-- Run UMAP -->
 ```{r}
-set.seed(1)
+set.seed(42)
 sce_filt <- runUMAP(sce_filt, use_dimred="PCA", n_neighbors=20, min_dist=0.7)
 ```
 

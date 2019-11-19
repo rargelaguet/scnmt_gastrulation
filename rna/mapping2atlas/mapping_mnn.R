@@ -24,8 +24,8 @@ source("/Users/ricard/gastrulation/rna/mapping2atlas/Mapping2gastrulationAtlas.R
 ## Load 10x atlas ##
 ####################
 
-sce_atlas  <- readRDS(paste0(io$path2atlas, "/SingleCellExperimentAtlas.rds"))
-meta_atlas <- readRDS(paste0(io$path2atlas, "/sample_metadata_atlas.rds"))
+sce_atlas  <- readRDS(paste0(io$path2atlas, "/SingleCellExperiment.rds"))
+meta_atlas <- readRDS(paste0(io$path2atlas, "/sample_metadata.rds"))
 
 ####################
 ## Load scNMT-seq ##

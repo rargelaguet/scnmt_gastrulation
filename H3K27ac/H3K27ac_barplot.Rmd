@@ -57,7 +57,7 @@ p <- ggplot(data_plot, aes(anno)) +
   labs(x="") +
   theme_pub()
 
-pdf(paste0(io$outdir,"/Proportion_marked.pdf"), width=7, height=8, useDingbats=F)
+# pdf(paste0(io$outdir,"/Proportion_marked.pdf"), width=7, height=8, useDingbats=F)
 print(p)
-dev.off()
+# dev.off()
 ```

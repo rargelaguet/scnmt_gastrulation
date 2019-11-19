@@ -25,7 +25,7 @@ met_dt <- lapply(names(opts$annos), function(n)
 ## Merge methylation data and sample metadata ##
 ################################################
 
-met_dt <- met_dt %>% merge(sample_metadata, by="id_met") %>% droplevels()
+met_dt <- met_dt %>% merge(sample_metadata, by="id_met")
 
 #######################################
 ## Calculate M value from Beta value ##

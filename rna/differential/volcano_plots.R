@@ -15,8 +15,8 @@ library(ggplot2)
 ## I/O ##
 io <- list()
 if (grepl("ricard",Sys.info()['nodename'])) {
-	io$input.dir <- "/Users/ricard/data/gastrulation/rna/differential"
-	io$outdir <- "/Users/ricard/data/gastrulation/rna/differential/pdf"
+	io$input.dir <- "/Users/ricard/data/gastrulation/rna/results/differential"
+	io$outdir <- "/Users/ricard/data/gastrulation/rna/results/differential/pdf"
 	source("/Users/ricard/gastrulation/rna/differential/utils.R")
 }
 
@@ -36,7 +36,7 @@ opts$comparisons <- c(
 
 # Load precomputed differential results
 diff.results <- lapply(opts$comparisons, function(i) 
-  fread(cmd=sprintf("zcat < %s/%s.txt.gz",io$input.dir,i)) %>% .[,comparison:=i] 
+  fread(sprintf("%s/%s.txt.gz",io$input.dir,i)) %>% .[,comparison:=i] 
 ) %>% rbindlist
 
 ###################
@@ -47,8 +47,8 @@ for (i in unique(diff.results$comparison)) {
   
     p <- gg_volcano_plot(diff.results[comparison==i], top_genes = 0)
     
-    pdf(sprintf("%s/%s.pdf",io$outdir,i), width=6, height=4)
+    # pdf(sprintf("%s/%s.pdf",io$outdir,i), width=6, height=4)
     print(p)
-    dev.off()
+    # dev.off()
 }
 

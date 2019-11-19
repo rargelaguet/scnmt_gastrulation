@@ -21,19 +21,19 @@ library(scran)
 ## Define I/O ##
 io <- list()
 io$rna <- "/Users/ricard/data/gastrulation/rna/SingleCellExperiment.rds"
-io$metadata.file <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
+io$sample.metadata <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
 io$outdir <- "/Users/ricard/data/gastrulation/rna/cell_cycle"
 
 ## Define options ##
 opts <- list()
 
 # Define which cells to use
-opts$cells <- fread(io$metadata.file) %>% .[pass_rnaQC==T,id_rna]
+opts$cells <- fread(io$sample.metadata) %>% .[pass_rnaQC==T,id_rna]
 ```
 
 <!-- Load sample metadata -->
 ```{r load_metadata, echo=FALSE}
-sample_metadata <- fread(io$metadata.file) %>% 
+sample_metadata <- fread(io$sample.metadata) %>% 
   .[id_rna %in% opts$cells] %>%
   .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")]
 ```

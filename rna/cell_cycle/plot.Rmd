@@ -9,39 +9,62 @@ output:
 ```{r load_modules, echo=FALSE, include=FALSE}
 library(data.table)
 library(purrr)
+library(ggpubr)
 ```
 
-<!-- Load pre-computed results -->
+```{r define_opts, echo=FALSE}
+
+## Define I/O ##
+io <- list()
+io$cell.cycle <- "/Users/ricard/data/gastrulation/rna/results/cell_cycle/cell_cycle_scran.txt.gz"
+io$sample.metadata <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
+
+## Define options ##
+opts <- list()
+
+# Define which cells to use
+opts$stage_lineage <- c(
+
+  # E4.5
+  # "E4.5_Epiblast",
+  # "E4.5_Primitive_endoderm"
+
+  # E5.5
+  # "E5.5_Epiblast",
+  # "E5.5_Visceral_endoderm"
+
+  # E6.5
+  # "E6.5_Epiblast",
+  # "E6.5_Primitive_Streak",
+  # "E6.5_Mesoderm",
+  # "E6.5_Visceral_endoderm"
+  
+  # E7.5
+  "E7.5_Endoderm",
+  "E7.5_Mesoderm",
+  "E7.5_Ectoderm"
+)
+
+# Define which cells to  use
+opts$cells <- fread(io$sample.metadata) %>% 
+  .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")] %>%
+  .[pass_rnaQC==T & stage_lineage%in%opts$stage_lineage,id_rna]
+```
+
+<!-- Load sample metadata -->
+```{r load_metadata, echo=FALSE}
+sample_metadata <- fread(io$sample.metadata) %>% 
+  .[id_rna%in%opts$cells] %>%
+  .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")]
+```
+
+<!-- Load pre-computed cell cycle assignments -->
 ```{r}
-df <- fread(paste0(io$outdir,"/cell_cycle.txt"))
+df <- fread(io$cell.cycle) %>% as.data.table %>% 
+  merge(sample_metadata, by="id_rna")
 ```
 
-
-<!-- Plot proportion of cell cycle states per lineage -->
-
-```{r}
-df <- df %>% as.data.table %>% merge(sample_metadata, by=c("id_rna"))
-```
-
-```{r}
-to.plot <- df %>% copy %>%
-  .[phase2!="unknown"] %>%
-  .[,sum:=.N,by=c("stage_lineage")] %>%
-  .[,.(prop=.N/unique(sum), N=.N), by=c("stage_lineage","phase2")] %>%
-  .[complete.cases(.)]
-
-for (i in unique(to.plot$stage_lineage)) {
-  p <- ggpie(to.plot[stage_lineage==i], "prop", label = "N", fill="phase2",
-        palette = c("#00AFBB", "#E7B800", "#FC4E07"), color="black", title=i) +
-    theme(
-      legend.position = "right",
-      legend.title = element_blank()
-    )
-  pdf(sprintf("%s/pieplot_%s.pdf",io$outdir,i), width=5, height=5)
-  print(p)
-  dev.off()
-}
-```
+<!-- Plot proportion of cell cycle states per stage -->
 
 ```{r}
 to.plot <- df %>% copy %>%
@@ -57,8 +80,31 @@ for (i in unique(to.plot$stage)) {
       legend.position = "right",
       legend.title = element_blank()
     )
-  pdf(sprintf("%s/pieplot_%s.pdf",io$outdir,i), width=5, height=5)
+  # pdf(sprintf("%s/pieplot_%s.pdf",io$outdir,i), width=5, height=5)
   print(p)
-  dev.off()
+  # dev.off()
 }
 ```
+
+<!-- Plot proportion of cell cycle states per lineage -->
+
+```{r}
+to.plot <- df %>% copy %>%
+  .[phase2!="unknown"] %>%
+  .[,sum:=.N,by=c("stage_lineage")] %>%
+  .[,.(prop=.N/unique(sum), N=.N), by=c("stage_lineage","phase2")] %>%
+  .[complete.cases(.)]
+
+for (i in unique(to.plot$stage_lineage)) {
+  p <- ggpie(to.plot[stage_lineage==i], "prop", label = "N", fill="phase2",
+        palette = c("#00AFBB", "#E7B800", "#FC4E07"), color="black", title=i) +
+    theme(
+      legend.position = "right",
+      legend.title = element_blank()
+    )
+  # pdf(sprintf("%s/pieplot_%s.pdf",io$outdir,i), width=5, height=5)
+  print(p)
+  # dev.off()
+}
+```
+

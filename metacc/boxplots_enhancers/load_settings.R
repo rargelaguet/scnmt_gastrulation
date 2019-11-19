@@ -19,8 +19,8 @@ io$acc.stats <- paste0(io$basedir,"/acc/stats/samples/sample_stats.txt")
 io$met.stats <- paste0(io$basedir,"/met/stats/samples/sample_stats.txt")
 
 # Folders with the differential analysis results
-io$diff.met <- "/Users/ricard/data/gastrulation/met/differential/feature_level"
-io$diff.acc <- "/Users/ricard/data/gastrulation/acc/differential/feature_level"
+io$diff.met <- paste0(io$basedir,"/met/results/differential")
+io$diff.acc <- paste0(io$basedir,"/acc/results/differential")
 
 # Output directory
 io$outdir <- paste0(io$basedir,"/metacc/boxplots_enhancers")
