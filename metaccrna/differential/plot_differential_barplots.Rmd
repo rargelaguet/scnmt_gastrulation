@@ -18,6 +18,18 @@ source("/Users/ricard/gastrulation/metaccrna/differential/load_settings.R")
 source("/Users/ricard/gastrulation/metaccrna/differential/load_data.R")
 ```
 
+```{r}
+diff.metacc <- rbind(
+  diff.met[,type:="met"], 
+  diff.acc[,type:="acc"]
+)# %>% dcast(id+lineage+anno~type, value.var=c("diff","sig")) %>% .[complete.cases(.)]
+```
+
+CURRENTLY DOES NOT WORK, I NEED TO FIX THIS
+```{r}
+stop()
+```
+
 <!-- Bar plots with the fraction of hits per genomic context -->
 ```{r}
 tmp <- diff.metacc %>%
@@ -25,7 +37,6 @@ tmp <- diff.metacc %>%
   melt(id.vars=c("anno","lineage"), variable.name="assay", value.name="N")
 
 # Mesoderm
-# foo <- tmp[grep("End|Ect",anno,invert=T)] %>% .[lineage=="Mesoderm"]
 foo <- tmp[lineage=="Mesoderm"]
 p_mes <- ggplot(foo, aes(x=anno, y=N, group=assay)) +
   geom_bar(aes(fill=assay), stat="identity", position="dodge", color="black", size=0.25) +
@@ -34,9 +45,9 @@ p_mes <- ggplot(foo, aes(x=anno, y=N, group=assay)) +
   coord_cartesian(ylim=c(0,0.26)) +
   theme_pub() + theme(legend.position = "none")
 
-pdf(paste0(io$outdir,"/mes_fractionsigcor.pdf"), width=8, height=5)
+# pdf(paste0(io$outdir,"/mes_fractionsigcor.pdf"), width=8, height=5)
 print(p_mes)
-dev.off()
+# dev.off()
   
 # Endoderm
 foo <- tmp[lineage=="Endoderm"]
@@ -47,9 +58,9 @@ p_end <- ggplot(foo, aes(x=anno, y=N, group=assay)) +
   coord_cartesian(ylim=c(0,0.26)) +
   theme_pub() + theme(legend.position = "none")
 
-pdf(paste0(io$outdir,"/end_fractionsigcor.pdf"), width=8, height=5)
+# pdf(paste0(io$outdir,"/end_fractionsigcor.pdf"), width=8, height=5)
 print(p_end)
-dev.off()
+# dev.off()
 
 # Ectoderm
 foo <- tmp[lineage=="Ectoderm"]
@@ -60,9 +71,9 @@ p_ect <- ggplot(foo, aes(x=anno, y=N, group=assay)) +
   coord_cartesian(ylim=c(0,0.26)) +
   theme_pub() + theme(legend.position = "none")
 
-pdf(paste0(io$outdir,"/ect_fractionsigcor.pdf"), width=8, height=5)
+# pdf(paste0(io$outdir,"/ect_fractionsigcor.pdf"), width=8, height=5)
 print(p_ect)
-dev.off()
+# dev.off()
 ```
 
 <!-- Barplots with the number of significant hits per annotation -->
@@ -82,8 +93,8 @@ for (i in unique(tmp$lineage)) {
   p <- gg_barplot(tmp[lineage==i], title=i, ylim=ylim) +
     theme(axis.text.x = element_blank())
   
-  pdf(sprintf("%s/%s_barplotsN.pdf",io$outdir,i), width=8, height=4)
+  # pdf(sprintf("%s/%s_barplotsN.pdf",io$outdir,i), width=8, height=4)
   print(p)
-  dev.off()
+  # dev.off()
 }
 ```

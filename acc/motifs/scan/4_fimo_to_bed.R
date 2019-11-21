@@ -9,7 +9,7 @@ library(purrr)
 ## Define I/O ##
 io           <- list()
 io$data_dir  <- "/bi/scratch/Stephen_Clark/gastrulation_data"
-io$fimo_dir  <- paste0(io$data_dir, "/acc/differential/feature_level/motif_scan/")
+io$fimo_dir  <- paste0(io$data_dir, "/acc/results/differential/motif_scan/")
 io$pwm_file  <- paste0(io$data_dir, "/features/sjc/PWM/JASPAR2018_CORE_vertebrates_non-redundant_pfms_meme.txt")
 io$anno_dir  <- paste0(io$data_dir, "/features/filt")
 io$out_dir   <- paste0(io$data_dir, "/features/motifs")

@@ -2,7 +2,8 @@ library(ggplot2)
 library(RColorBrewer)
 library(data.table)
 library(purrr)
-source("/Users/ricard/gastrulation/metaccrna/bubble_plots/load_data.R")
+
+source("/Users/ricard/gastrulation/metaccrna/dynamics_individual_examples/load_data.R")
 
 scale <- function(value, min.data, max.data, min.scaled, max.scaled) {
   stopifnot(is.numeric(value))
@@ -15,7 +16,7 @@ scale <- function(value, min.data, max.data, min.scaled, max.scaled) {
 ################
 
 io <- list()
-io$outdir <- "/Users/ricard/data/gastrulation_norsync_stuff/metaccrna/dynamics"
+io$outdir <- "/Users/ricard/data/gastrulation/metaccrna/plot_dynamics_individual_examples"
 io$sample.metadata <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
 
 ####################
@@ -48,7 +49,7 @@ opts$stage_lineage <- c(
   
   # E7.5
   "E7.5_Epiblast",
-  # "E7.5_Ectoderm",
+  "E7.5_Ectoderm",
   "E7.5_Endoderm",
   "E7.5_Primitive_Streak",
   "E7.5_Mesoderm"
@@ -77,28 +78,25 @@ opts$acc_cells <- tmp %>% .[pass_accQC==T & stage_lineage%in%opts$stage_lineage,
 ###############
 
 # Load sample metadata
-sample_metadata <- fread(io$sample.metadata,stringsAsFactors=F) %>%
+sample_metadata <- fread(io$sample.metadata) %>%
   .[,c("sample","id_met","id_rna","id_acc","stage","lineage10x","lineage10x_2")] %>%
   .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")] %>%
-  .[id_met%in%opts$met_cells | id_rna %in% opts$rna_cells | id_acc %in% opts$acc_cells ] %>%
-  droplevels()
+  .[id_met%in%opts$met_cells | id_rna %in% opts$rna_cells | id_acc %in% opts$acc_cells ]
 
 sample_metadata %>%
-  # .[lineage10x_2=="Endoderm",lineage10x_2:=ifelse(lineage10x=="Notochord","Endoderm (notochord)","Endoderm (not notochord)")] %>%
-  # .[lineage10x_2=="Mesoderm",lineage10x_2:=ifelse(lineage10x=="Nascent_mesoderm","Nascent mesoderm","Mature mesoderm")] %>%
   .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")]
 
 # Load the three omics
 dt <- load_data(rna.id, met.id, met.anno, acc.id, acc.anno, opts$min.cpg, opts$min.gpc)
 
 # Merge data with sample metadata
-dt$acc <- merge(dt$acc, sample_metadata, by="id_acc") %>% droplevels()
-dt$met <- merge(dt$met, sample_metadata, by="id_met") %>% droplevels()
-dt$rna <- merge(dt$rna, sample_metadata, by="id_rna") %>% droplevels()
+dt$acc <- merge(dt$acc, sample_metadata, by="id_acc")
+dt$met <- merge(dt$met, sample_metadata, by="id_met")
+dt$rna <- merge(dt$rna, sample_metadata, by="id_rna")
 
 # bind in a single data table
 dt_all <- do.call("rbind",list(
-  dt$rna[,c("sample","gene","stage","stage_lineage","lineage10x_2","value")] %>% .[,assay:="RNA expression"] %>% setnames("gene","id"),
+  dt$rna[,c("sample","id","stage","stage_lineage","lineage10x_2","value")] %>% .[,assay:="RNA expression"],
   dt$met[,c("sample","id","stage","stage_lineage","lineage10x_2","value")] %>% .[,assay:="DNA methylation"],
   dt$acc[,c("sample","id","stage","stage_lineage","lineage10x_2","value")] %>% .[,assay:="Chromatin accessibility"]
 ))
@@ -147,6 +145,6 @@ print(p)
 ## Save ##
 ##########
 
-pdf(sprintf("%s/mofaplus/boxplot_rna%s_met%s_acc%s.pdf",io$outdir,rna.id,met.id,acc.id), useDingbats=F, width=6, height=5)
+# pdf(sprintf("%s/boxplot_rna%s_met%s_acc%s.pdf",io$outdir,rna.id,met.id,acc.id), useDingbats=F, width=6, height=5)
 print(p)
-dev.off()
+# dev.off()

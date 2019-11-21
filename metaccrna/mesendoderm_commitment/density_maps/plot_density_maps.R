@@ -21,8 +21,8 @@ opts$comparisons <- c(
 
 # Lineage-defining elements are defined as ChIP-seq peaks that show differential activity during germ layer commitment
 
-io$diff.met <- "/Users/ricard/data/gastrulation/met/differential/feature_level"
-io$diff.acc <- "/Users/ricard/data/gastrulation/acc/differential/feature_level"
+io$diff.met <- "/Users/ricard/data/gastrulation/met/results/differential"
+io$diff.acc <- "/Users/ricard/data/gastrulation/acc/results/differential"
 
 opts$diff.type <- 2
 opts$min.fdr <- 0.10
@@ -59,12 +59,12 @@ diff.acc.ps <- lapply(opts$comparisons, function(i)
 # Methylation
 diff.met.ps <- diff.met.ps %>% split(.$anno) %>%
   map2(.,names(.), function(x,y) x[id%in%diff.met[sig==T & anno==y,id]]) %>%
-  rbindlist %>% droplevels()
+  rbindlist
 
 # Accessibility
 diff.acc.ps <- diff.acc.ps %>% split(.$anno) %>%
   map2(.,names(.), function(x,y) x[id%in%diff.acc[sig==T & anno==y,id]]) %>%
-  rbindlist %>% droplevels()
+  rbindlist
 
 #################################################
 ## Merge methylation and accessibility results ##
@@ -121,8 +121,7 @@ p <- ggplot(to.plot, aes(x=diff_met, y=diff_acc)) +
     strip.background = element_blank(),
     panel.background = element_blank()
   )
-print(p)
 
-pdf(sprintf("%s/mesendoderm_density_enhancers.pdf",io$outdir), width=10, height=11, useDingbats = F)
+# pdf(sprintf("%s/mesendoderm_density_enhancers.pdf",io$outdir), width=10, height=11, useDingbats = F)
 print(p)
-dev.off()
+# dev.off()

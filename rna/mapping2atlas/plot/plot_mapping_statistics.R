@@ -18,7 +18,7 @@ io$outdir <- "/Users/ricard/data/gastrulation/rna/mapping_10x/pdf"
 # Define options ##
 ###################
 
-source("/Users/ricard/gastrulation_clean/rna/mapping2atlas/plot/utils.R")
+source("/Users/ricard/gastrulation/rna/mapping2atlas/plot/utils.R")
 
 #########################
 # Load sample metadata ##

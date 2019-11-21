@@ -11,7 +11,6 @@ output:
 library(data.table)
 library(purrr)
 library(ggplot2)
-library(scater)
 ```
 
 <!-- Define I/O and options -->
@@ -36,21 +35,21 @@ sample_metadata <- fread(io$sample.metadata) %>%
 <!-- Load methylation data -->
 ```{r load_data, echo=FALSE, include=FALSE}
 met_dt <- lapply(names(opts$met.annos), function(n) {
-  data <- fread(sprintf("%s/%s.tsv.gz",io$met.dir,n)) %>% .[V1%in%opts$met_cells]
+  fread(sprintf("%s/%s.tsv.gz",io$met.dir,n)) %>% .[V1%in%opts$met_cells]
 }) %>% rbindlist %>% setnames(c("id_met","id","anno","Nmet","Ntotal","rate"))
 ```
 
 <!-- Load accessibility data -->
 ```{r load_data, echo=FALSE, include=FALSE}
 acc_dt <- lapply(names(opts$acc.annos), function(n) {
-  data <- fread(sprintf("%s/%s.tsv.gz",io$acc.dir,n)) %>% .[V1%in%opts$acc_cells]
+  fread(sprintf("%s/%s.tsv.gz",io$acc.dir,n)) %>% .[V1%in%opts$acc_cells]
 }) %>% rbindlist %>% setnames(c("id_acc","id","anno","Nmet","Ntotal","rate"))
 ```
 
 <!-- Merge data with metadata -->
 ```{r merge}
-acc_dt <- merge(acc_dt, sample_metadata, by="id_acc") %>% droplevels()
-met_dt <- merge(met_dt, sample_metadata, by="id_met") %>% droplevels()
+acc_dt <- merge(acc_dt, sample_metadata, by="id_acc")
+met_dt <- merge(met_dt, sample_metadata, by="id_met")
 ```
 
 <!-- Rename annotations -->
@@ -88,8 +87,8 @@ acc_dt <- acc_dt %>% split(.$anno) %>%
 ```
 
 ```{r}
-# fwrite(diff.met[sig==T], "/Users/ricard/data/gastrulation/met/differential/diffmet.txt", sep="\t")
-# fwrite(diff.acc[sig==T], "/Users/ricard/data/gastrulation/met/differential/diffacc.txt", sep="\t")
+# fwrite(diff.met[sig==T], "/Users/ricard/data/gastrulation/met/results/differential/diffmet.txt", sep="\t")
+# fwrite(diff.acc[sig==T], "/Users/ricard/data/gastrulation/met/results/differential/diffacc.txt", sep="\t")
 ```
 
 <!-- Filter by minimum number of measurements per cell -->

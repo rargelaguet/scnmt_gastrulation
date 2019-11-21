@@ -32,21 +32,21 @@ sample_metadata <- fread(io$sample.metadata) %>%
 <!-- Load methylation data -->
 ```{r load_data, echo=FALSE, include=FALSE}
 met_dt <- lapply(names(opts$met.annos), function(n) {
-  data <- fread(sprintf("%s/%s.tsv.gz",io$met.dir,n)) %>% .[V1%in%opts$met_cells]
+  fread(sprintf("%s/%s.tsv.gz",io$met.dir,n)) %>% .[V1%in%opts$met_cells]
 }) %>% rbindlist %>% setnames(c("id_met","id","anno","Nmet","Ntotal","rate"))
 ```
 
 <!-- Load accessibility data -->
 ```{r load_data, echo=FALSE, include=FALSE}
 acc_dt <- lapply(names(opts$acc.annos), function(n) {
-  data <- fread(sprintf("%s/%s.tsv.gz",io$acc.dir,n)) %>% .[V1%in%opts$acc_cells]
+  fread(sprintf("%s/%s.tsv.gz",io$acc.dir,n)) %>% .[V1%in%opts$acc_cells]
 }) %>% rbindlist %>% setnames(c("id_acc","id","anno","Nmet","Ntotal","rate"))
 ```
 
 <!-- Merge data with metadata -->
 ```{r merge}
-acc_dt <- merge(acc_dt, sample_metadata, by="id_acc") %>% droplevels()
-met_dt <- merge(met_dt, sample_metadata, by="id_met") %>% droplevels()
+acc_dt <- merge(acc_dt, sample_metadata, by="id_acc")
+met_dt <- merge(met_dt, sample_metadata, by="id_met")
 ```
 
 <!-- Rename genomic contexts -->
@@ -106,9 +106,9 @@ p <- ggboxplot(foo.met, x = "stage_lineage", y = "rate", fill="grey80", coef=1, 
     legend.position = "none"
   )
 
-pdf(paste0(io$outdir,"/boxplots_met_top250.pdf"), width=opts$width, height=opts$height/1.5)
+# pdf(paste0(io$outdir,"/boxplots_met_top250.pdf"), width=opts$width, height=opts$height/1.5)
 print(p)
-dev.off()
+# dev.off()
 ```
 
 Chromatin accessibility
@@ -132,13 +132,9 @@ p <- ggboxplot(foo.acc, x = "stage_lineage", y = "rate", fill="grey80", outlier.
     legend.position = "none"
   )
 
-pdf(paste0(io$outdir,"/boxplots_acc_top250.pdf"), width=opts$width, height=opts$height/1.5)
+# pdf(paste0(io$outdir,"/boxplots_acc_top250.pdf"), width=opts$width, height=opts$height/1.5)
 print(p)
-dev.off()
-```
-
-```{r}
-stop()
+# dev.off()
 ```
 
 
@@ -182,9 +178,9 @@ p <- ggboxplot(foo.met, x = "stage_lineage", y = "norm_rate", fill="grey80", out
     legend.position = "none"
   )
 
-pdf(paste0(io$outdir,"/boxplots_met_top250_scaled.pdf"), width=opts$width, height=opts$height)
+# pdf(paste0(io$outdir,"/boxplots_met_top250_scaled.pdf"), width=opts$width, height=opts$height)
 print(p)
-dev.off()
+# dev.off()
 ```
 
 Chromatin accessibility
@@ -212,8 +208,7 @@ p <- ggboxplot(foo.acc, x = "stage_lineage", y = "norm_rate", fill="grey80", coe
   )
 
 # pdf(paste0(io$outdir,"/boxplots_acc_top250_scaled.pdf"), width=opts$width, height=opts$height)
-pdf(paste0(io$outdir,"/foo.pdf"), width=opts$width, height=opts$height)
 print(p)
-dev.off()
+# dev.off()
 ```
 

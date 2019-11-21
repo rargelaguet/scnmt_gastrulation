@@ -14,18 +14,15 @@ if (grepl("ricard",Sys.info()['nodename'])) {
 io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
 io$met.dir <- paste0(io$basedir,"/met/feature_level")
 io$acc.dir <- paste0(io$basedir,"/acc/feature_level")
-io$met.stats <- paste0(io$basedir,"/met/results/stats/samples/sample_stats.txt")
-io$acc.stats <- paste0(io$basedir,"/acc/results/stats/samples/sample_stats.txt")
-io$rna.file <- paste0(io$basedir,"/rna/SingleCellExperiment.rds")
+io$met.stats <- paste0(io$basedir,"/met/results/stats/sample_stats.txt")
+io$acc.stats <- paste0(io$basedir,"/acc/results/stats/sample_stats.txt")
 io$annos_dir  <- paste0(io$basedir, "/features/genomic_contexts")
 io$outdir <- paste0(io$basedir,"/metaccrna/mesendoderm_commitment/ectoderm")
 
-io <- list()
-
 # Folders with the differential analysis results
-io$diff.met <- "/Users/ricard/data/gastrulation/met/results/differential"
-io$diff.acc <- "/Users/ricard/data/gastrulation/acc/results/differential"
-io$diff.rna <- "/Users/ricard/data/gastrulation/rna/results/differential"
+io$diff.met <- paste0(io$basedir,"/met/results/differential")
+io$diff.acc <- paste0(io$basedir,"/acc/results/differential")
+io$diff.rna <- paste0(io$basedir,"/rna/results/differential")
 
 ## Define options ##
 opts <- list()
@@ -57,6 +54,8 @@ opts$acc.annos <- c(
   # "H3K4me3_E7.5_End"="End- H3K4me3",
   # "H3K4me3_E7.5_Ect"="Ect- H3K4me3"
 )
+
+opts$annos <- opts$met.annos <- opts$acc.annos
 
 # Overlap differential sites with nearby genes
 opts$overlapGenes <- FALSE

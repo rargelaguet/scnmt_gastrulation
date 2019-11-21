@@ -14,8 +14,8 @@ library(RColorBrewer)
 
 ## I/O ##
 io <- list()
-io$input.dir <- "/Users/ricard/data/gastrulation/met/differential/feature_level/test"
-io$outdir <- "/Users/ricard/data/gastrulation/met/differential/feature_level/pdf"
+io$input.dir <- "/Users/ricard/data/gastrulation/met/results/differential/test"
+io$outdir <- "/Users/ricard/data/gastrulation/met/results/differential/pdf"
 
 ## Options ##
 opts <- list()

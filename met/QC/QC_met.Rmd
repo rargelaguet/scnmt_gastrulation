@@ -40,9 +40,9 @@ io <- list()
 io$basedir <- "/Users/ricard/data/gastrulation"
 io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
 io$data <- paste0(io$basedir,"/met/cpg_level")
-io$stats <- paste0(io$basedir,"/met/results/stats/samples/sample_stats.txt")
+io$stats <- paste0(io$basedir,"/met/results/stats/sample_stats.txt")
 io$annos_dir <- paste0(io$basedir,"/features/genomic_contexts")
-io$outdir <- paste0(io$basedir,"/met/results/stats/samples")
+io$outdir <- paste0(io$basedir,"/met/results/stats")
 
 ## Options ##
 opts <- list()

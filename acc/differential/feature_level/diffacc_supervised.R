@@ -19,15 +19,15 @@ args <- p$parse_args(commandArgs(TRUE))
 io <- list()
 if (grepl("ricard",Sys.info()['nodename'])) {
   io$basedir <- "/Users/ricard/data/gastrulation"
-  source("/Users/ricard/gastrulation/met/differential/utils.R")
+  source("/Users/ricard/gastrulation/met/results/differential/utils.R")
 } else {
   io$basedir <- "/hps/nobackup/stegle/users/ricard/gastrulation"
-  source("/homes/ricard/gastrulation/met/differential/utils.R")
+  source("/homes/ricard/gastrulation/met/results/differential/utils.R")
 }
 io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
 io$data.dir <- paste0(io$basedir,"/acc/feature_level")
 io$annos_dir  <- paste0(io$basedir, "/features/genomic_contexts")
-io$stats <- paste0(io$basedir,"/acc/stats/samples/sample_stats.txt")
+io$stats <- paste0(io$basedir,"/acc/results/stats/sample_stats.txt")
 io$outfile <- args$outfile
 
 ## Define options ##

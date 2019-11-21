@@ -86,15 +86,13 @@ tmp <- fread(io$sample.metadata) %>%
   .[pass_metQC==T & pass_rnaQC==T & stage_lineage%in%opts$stage_lineage] 
 opts$rna.cells <- tmp$id_rna
 opts$met.cells <- tmp$id_met
-
-rm(tmp)
 ```
 
 <!-- Load sample metadata -->
 ```{r}
 sample_metadata <- fread(io$sample.metadata) %>% 
   .[,c("sample","id_rna","id_met","stage","lineage10x_2")] %>%
-  .[,stage_lineage:=as.factor(paste(stage,lineage10x_2,sep="_"))] %>%
+  .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")] %>%
   .[sample%in%tmp$sample]
 ```
 
@@ -125,8 +123,7 @@ rna_dt <- rna_dt[,var:=var(expr), by="gene"] %>% .[var>0.5] %>% .[,var:=NULL]
 <!-- Load methylation data -->
 ```{r load_met, echo=FALSE, include=FALSE}
 met_dt <- lapply(names(opts$annos), function(n) {
-  data <- fread(sprintf("%s/%s.tsv.gz",io$met_dir,n)) %>%
-  .[V1%in%opts$met.cells]
+  fread(sprintf("%s/%s.tsv.gz",io$met_dir,n)) %>% .[V1%in%opts$met.cells]
 }) %>% rbindlist %>% setnames(c("sample","id","anno","Nmet","N","rate"))
 ```
 
@@ -139,13 +136,8 @@ met_dt <- met_dt[N>=opts$min.CpGs]
 met_dt <- met_dt %>% .[,N:=.N, by=c("id","anno")] %>% .[N>=opts$min.cells] %>% .[,N:=NULL]
 ```
 
-<!-- Load genomic contexts -->
+<!-- Load gene metadata  -->
 ```{r load_genomiccontexts}
-feature_metadata <- lapply(names(opts$annos), function(anno) 
-  fread(sprintf("%s/%s.bed",io$annos_dir,anno))[,c(1,2,3,4,5,6)]) %>%
-  rbindlist %>% setnames(c("chr","start","end","strand","id","anno"))
-
-# Load gene metadata 
 gene_metadata <- fread(io$gene_metadata) %>% 
   setnames(c("ens_id","symbol"),c("id","gene")) %>% 
   .[,chr:=stringr::str_replace_all(chr,"chr","")] 
@@ -173,8 +165,6 @@ keep_hv_genes <- metrna_dt %>% split(.$anno) %>%
   map(~ .[,.(var=var(expr)), by=c("gene","id")] %>% setorder(-var) %>% head(n=opts$max.genes) %>% .[,gene_id:=paste(gene,id,sep="_")] %>% .$gene_id %>% as.character())
 metrna_dt <- metrna_dt %>% .[,gene_id:=paste(gene,id,sep="_")] %>% split(.$anno) %>%
   map2(.,names(.), function(x,y) x[gene_id %in% keep_hv_genes[[y]]]) %>% rbindlist %>% .[,gene_id:=NULL]
-
-metrna_dt <- metrna_dt %>% droplevels()
 ```
 
 <!-- Compute correlations and do multiple testing correction -->
@@ -199,7 +189,7 @@ cor[,sum(sig),by="anno"]
 
 <!-- Save results -->
 ```{r}
-fwrite(cor, paste0(io$outdir,"/metrna_cor_promoters.txt"), quote=F, sep="\t")
+# fwrite(cor, paste0(io$outdir,"/metrna_cor_promoters.txt"), quote=F, sep="\t")
 # cor <- fread(paste0(io$outdir,"/metrna_cor_promoters.txt"))
 ```
 

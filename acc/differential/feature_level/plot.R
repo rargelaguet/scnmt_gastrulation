@@ -42,8 +42,8 @@ gg_barplot <- function(tmp, title = "", ylim=NULL) {
 
 ## I/O ##
 io <- list()
-io$input.dir <- "/Users/ricard/data/gastrulation/acc/differential/feature_level/test"
-io$outdir <- "/Users/ricard/data/gastrulation/acc/differential/feature_level/pdf"
+io$input.dir <- "/Users/ricard/data/gastrulation/acc/results/differential/test"
+io$outdir <- "/Users/ricard/data/gastrulation/acc/results/differential/pdf"
 
 ## Options ##
 opts <- list()

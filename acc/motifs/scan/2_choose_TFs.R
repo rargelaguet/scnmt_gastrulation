@@ -10,8 +10,8 @@ library(purrr)
 io             <- list()
 io$data_dir    <- "/bi/scratch/Stephen_Clark/gastrulation_data"
 io$pwm         <- paste0(io$data_dir, "/features/sjc/PWM/JASPAR2018_CORE_vertebrates_non-redundant_pfms_meme.txt")
-io$ame_dir     <- paste0(io$data_dir, "/acc/differential/feature_level/motif_enrichment/background_all_k27ac/")
-io$out_dir     <- paste0(io$data_dir, "/acc/differential/feature_level/motif_scan")
+io$ame_dir     <- paste0(io$data_dir, "/acc/results/differential/motif_enrichment/background_all_k27ac/")
+io$out_dir     <- paste0(io$data_dir, "/acc/results/differential/motif_scan")
 
 
 ## Define options ##

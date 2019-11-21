@@ -50,23 +50,10 @@ diff.met[,diff:=-diff]
 diff.acc[,diff:=-diff]
 ```
 
-```{r}
-# foo <- c(
-#   "^Mesoderm$" = "Mesoderm_vs_EctodermEndoderm",
-#   "^Endoderm$" = "Endoderm_vs_EctodermMesoderm",
-#   "^Ectoderm$" = "Ectoderm_vs_EndodermMesoderm"
-# )
-# diff.met[,lineage:=stringr::str_replace_all(lineage,foo)]
-# fwrite(diff.met, file="/Users/ricard/Downloads/diffmet.txt", sep="\t", row.names=F, col.names=T)
-# 
-# diff.acc[,lineage:=stringr::str_replace_all(lineage,foo)]
-# fwrite(diff.acc, file="/Users/ricard/Downloads/diffacc.txt", sep="\t", row.names=F, col.names=T)
-```
-
 <!-- Load annotation metadata -->
 ```{r}
 # Load genomic context metadata
-feature_metadata <- lapply(names(opts$annos), function(anno) 
+feature_metadata <- lapply(names(opts$met.annos), function(anno) 
   fread(sprintf("%s/%s.bed",io$annos_dir,anno))[,c(1,2,3,4,5,6)]) %>%
   rbindlist %>% setnames(c("chr","start","end","strand","id","anno"))
 
@@ -83,7 +70,6 @@ feature_metadata_filt <- feature_metadata %>% split(.$anno) %>%
   rbindlist
 
 gene_metadata_filt <- gene_metadata %>% .[,c("chr","start","end","gene")] %>% 
-  # .[,c("start", "end") := list(start-opts$gene_window, end+opts$gene_window)] %>% 
   setkey(chr,start,end)
 ```
 
@@ -167,22 +153,15 @@ diff.acc <- rbindlist(acc_list)
 
 <!-- Merge methylation and accessibility results -->
 ```{r}
-diff.met %>% .[,anno:=stringr::str_replace_all(anno,opts$annos)]
-diff.acc %>% .[,anno:=stringr::str_replace_all(anno,opts$annos)]
+diff.met %>% .[,anno:=stringr::str_replace_all(anno,opts$met.annos)]
+diff.acc %>% .[,anno:=stringr::str_replace_all(anno,opts$acc.annos)]
 ```
 
 <!-- Parse results -->
-If a gene has multiple enhancer hits, just keep the most significant for visualisation
-```{r}
-# diff.acc <- diff.acc %>% split(.$anno) %>% map(~ .[,.SD[which.min(padj_fdr)], by=c("gene")]) %>% rbindlist
-# diff.met <- diff.met %>% split(.$anno) %>% map(~ .[,.SD[which.min(padj_fdr)], by=c("gene")]) %>% rbindlist
-```
-
 ```{r}
 diff.metacc <- rbind(
   diff.met[,type:="met"], 
   diff.acc[,type:="acc"]
-# ) %>% dcast(gene+anno~type, value.var=c("padj_fdr","diff","sig")) %>% .[complete.cases(.)]
 ) %>% dcast(id+gene+lineage+anno~type, value.var=c("diff","sig")) %>% .[complete.cases(.)]
 ```
 
@@ -229,11 +208,10 @@ for (i in unique(to.plot$lineage)) {
       axis.text = element_text(size=rel(1.1), color="black"),
       axis.title = element_text(size=rel(1.2), color="black")
     )
-  # print(p)
   
-  pdf(sprintf("%s/diffmetaccrna_%s_enhancers.pdf",io$outdir,i), width=5, height=4, useDingbats = F)
+  # pdf(sprintf("%s/diffmetaccrna_%s_enhancers.pdf",io$outdir,i), width=5, height=4, useDingbats = F)
   print(p)
-  dev.off()
+  # dev.off()
 }
 ```
 
@@ -247,6 +225,9 @@ foo <- c(
 
 plot_list <- list()
 for (i in unique(to.plot$lineage)) {
+  
+  print(nrow(to.plot.i))
+  
   to.plot.i <- to.plot[lineage==i & anno==foo[[i]]] %>% setorder(sig, na.last=F)
   to.label.i <- to.plot.i[sig==T] %>% setorder(rna_diff, na.last=T) %>% head(n=opts$top_genes)
   
@@ -270,10 +251,11 @@ for (i in unique(to.plot$lineage)) {
   # dev.off()
 }
 
-pdf(sprintf("%s/diffmetaccrna_promoters.pdf",io$outdir), width=12, height=4, useDingbats=F)
-cowplot::plot_grid(plotlist=plot_list, nrow=1)
-dev.off()
+# pdf(sprintf("%s/diffmetaccrna_promoters.pdf",io$outdir), width=12, height=4, useDingbats=F)
+# cowplot::plot_grid(plotlist=plot_list, nrow=1)
+# dev.off()
 ```
+
 
 <!-- Bivariate density plots of differential methylation versus differential accessibiliy -->
 

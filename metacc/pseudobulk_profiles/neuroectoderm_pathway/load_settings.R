@@ -21,12 +21,14 @@ io$met.dir <- paste0(io$basedir,"/met/cpg_level")
 io$acc.dir <- paste0(io$basedir,"/acc/gpc_level")
 
 # Folders with the global statistics per cell
-io$met.stats <- paste0(io$basedir,"/met/results/stats/samples/sample_stats.txt")
-io$acc.stats <- paste0(io$basedir,"/acc/results/stats/samples/sample_stats.txt")
+io$met.stats <- paste0(io$basedir,"/met/results/stats/sample_stats.txt")
+io$acc.stats <- paste0(io$basedir,"/acc/results/stats/sample_stats.txt")
+
+# Pluripotency vs Midbrain H3K27ac data
+io$esc_vs_brain <- paste0(io$basedir,"/H3K27ac/E7.5_enhancers_Ect_ESC_brain_top250.txt")
 
 # Output directory
-io$pdfdir <- paste0(io$basedir,"/metacc/profiles_enhancers")
-
+io$pdfdir <- paste0(io$basedir,"/metacc/pseudobulked_profiles/profiles_neuroectoderm_enhancers")
 
 ####################
 ## Define options ##
@@ -38,29 +40,34 @@ opts <- list()
 opts$stage_lineage <- c(
   
   "E4.5_Epiblast",
+  # "E4.5_Primitive_endoderm",
   
   "E5.5_Epiblast",
+  # "E5.5_Visceral_endoderm",
 
   "E6.5_Epiblast",
-  "E6.5_Primitive_Streak",
+  # "E6.5_Primitive_Streak",
+  # "E6.5_Nascent_mesoderm",
+  # "E6.5_Visceral_endoderm",
 
   # "E7.5_Epiblast",
-  "E7.5_Ectoderm",
-  "E7.5_Mesoderm",
-  "E7.5_Endoderm"
+  "E7.5_Ectoderm"
+  # "E7.5_Mesoderm",
+  # "E7.5_Primitive_Streak",
+  # "E7.5_Endoderm"
   
 )
 
 # Define genomic contexts
 opts$annos <- c(
-  "H3K27ac_distal_E7.5_Mes_intersect12"="Mesoderm enhancers",
+  # "H3K27ac_distal_E7.5_Mes_intersect12"="Mesoderm enhancers",
   "H3K27ac_distal_E7.5_End_intersect12"="Endoderm enhancers",
   "H3K27ac_distal_E7.5_Ect_intersect12"="Ectoderm enhancers"
 )
 
 # Define window positions and characteristics
 opts$positions <- c(
-  "H3K27ac_distal_E7.5_Mes_intersect12"="center",
+  # "H3K27ac_distal_E7.5_Mes_intersect12"="center",
   "H3K27ac_distal_E7.5_End_intersect12"="center",
   "H3K27ac_distal_E7.5_Ect_intersect12"="center"
 )

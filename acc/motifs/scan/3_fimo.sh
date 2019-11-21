@@ -5,8 +5,8 @@ module load meme
 # iterates over every .fa file within the specified directory
 
 indir="/bi/scratch/Stephen_Clark/gastrulation_data/features/fasta"
-outdir="/bi/scratch/Stephen_Clark/gastrulation_data/acc/differential/feature_level/motif_scan/"
-pwm="/bi/scratch/Stephen_Clark/gastrulation_data/acc/differential/feature_level/motif_scan/pwm_subset.txt"
+outdir="/bi/scratch/Stephen_Clark/gastrulation_data/acc/results/differential/motif_scan/"
+pwm="/bi/scratch/Stephen_Clark/gastrulation_data/acc/results/differential/motif_scan/pwm_subset.txt"
 
 mkdir -p $outdir
 

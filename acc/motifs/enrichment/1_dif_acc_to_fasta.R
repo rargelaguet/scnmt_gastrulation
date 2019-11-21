@@ -10,9 +10,9 @@ library(BSgenome.Mmusculus.UCSC.mm10)
 ## Define I/O ##
 io            <- list()
 io$data_dir   <- "/bi/scratch/Stephen_Clark/gastrulation_data"                # base directory       
-io$in_dir     <- paste0(io$data_dir, "/acc/differential/feature_level/")      # results of differential accessibility
+io$in_dir     <- paste0(io$data_dir, "/acc/results/differential/")      # results of differential accessibility
 io$anno       <- paste0(io$data_dir, "/features/filt")                        # feature bed files
-io$out_dir    <- paste0(io$data_dir, "/acc/differential/feature_level/fasta") # where to save output
+io$out_dir    <- paste0(io$data_dir, "/acc/results/differential/fasta") # where to save output
 
 ## Define options ##
 opts            <- list()

@@ -5,12 +5,12 @@
 ## I/O ##
 io <- list()
 if (grepl("ricard",Sys.info()['nodename'])) {
-  io$script <- "/Users/ricard/gastrulation/met/differential/feature_level/diffmet_supervised.R"
-  io$outdir <- "/Users/ricard/data/gastrulation/met/differential/feature_level/test"
+  io$script <- "/Users/ricard/gastrulation/met/results/differential/diffmet_supervised.R"
+  io$outdir <- "/Users/ricard/data/gastrulation/met/results/differential/test"
 } else {
-  io$script <- "/homes/ricard/gastrulation/met/differential/feature_level/diffmet_supervised.R"
-  io$outdir <- "/hps/nobackup/stegle/users/ricard/gastrulation/met/differential/feature_level/test"
-  io$tmpdir <- "/hps/nobackup/stegle/users/ricard/gastrulation/met/differential/feature_level/tmp"
+  io$script <- "/homes/ricard/gastrulation/met/results/differential/diffmet_supervised.R"
+  io$outdir <- "/hps/nobackup/stegle/users/ricard/gastrulation/met/results/differential/test"
+  io$tmpdir <- "/hps/nobackup/stegle/users/ricard/gastrulation/met/results/differential/tmp"
 }
 dir.create(io$outdir, showWarnings=F)
 

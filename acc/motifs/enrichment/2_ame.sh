@@ -6,10 +6,10 @@ module load meme
 # background file is the same for all and needs to be specified 
 
 
-indir="/bi/scratch/Stephen_Clark/gastrulation_data/acc/differential/feature_level/fasta/"
+indir="/bi/scratch/Stephen_Clark/gastrulation_data/acc/results/differential/fasta/"
 pwm="/bi/scratch/Stephen_Clark/gastrulation_data/features/sjc/PWM/JASPAR2018_CORE_vertebrates_non-redundant_pfms_meme.txt"
-outdir="/bi/scratch/Stephen_Clark/gastrulation_data/acc/differential/feature_level/motif_enrichment/background_all_k27ac"
-bckg="/bi/scratch/Stephen_Clark/gastrulation_data/acc/differential/feature_level/fasta/H3K27ac_distal_E7.5_union_intersect12/background/H3K27ac_distal_E7.5_union_intersect12.fa"
+outdir="/bi/scratch/Stephen_Clark/gastrulation_data/acc/results/differential/motif_enrichment/background_all_k27ac"
+bckg="/bi/scratch/Stephen_Clark/gastrulation_data/acc/results/differential/fasta/H3K27ac_distal_E7.5_union_intersect12/background/H3K27ac_distal_E7.5_union_intersect12.fa"
 
 cd $indir
 # for d in */;

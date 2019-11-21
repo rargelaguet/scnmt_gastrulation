@@ -21,16 +21,16 @@ io <- list()
 if (grepl("ricard",Sys.info()['nodename'])) {
   io$basedir <- "/Users/ricard/data/gastrulation"
   io$gene.metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
-  source("/Users/ricard/gastrulation/met/differential/utils.R")
+  source("/Users/ricard/gastrulation/met/results/differential/utils.R")
 } else {
   io$basedir <- "/hps/nobackup/stegle/users/ricard/gastrulation"
   io$gene.metadata <- "/hps/nobackup/stegle/users/ricard/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
-  source("/homes/ricard/gastrulation/met/differential/utils.R")
+  source("/homes/ricard/gastrulation/met/results/differential/utils.R")
 }
 io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
 io$data.dir <- paste0(io$basedir,"/met/feature_level")
 io$annos_dir  <- paste0(io$basedir, "/features/genomic_contexts")
-io$stats <- paste0(io$basedir,"/met/results/stats/samples/sample_stats.txt")
+io$stats <- paste0(io$basedir,"/met/results/stats/sample_stats.txt")
 io$outfile <- args$outfile
 
 ## Define options ##

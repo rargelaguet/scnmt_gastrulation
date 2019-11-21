@@ -21,7 +21,7 @@ io                  <- list()
 io$data_dir         <- "/bi/scratch/Stephen_Clark/gastrulation_data"
 io$dif_exp_dir      <- paste0(io$data_dir, "/rna/differential")
 io$motif_enrichment <- paste0(io$data_dir,
-                              "/acc/differential/feature_level/motif_enrichment/background_all_k27ac")
+                              "/acc/results/differential/motif_enrichment/background_all_k27ac")
 
 io$plot_out         <- "/bi/home/clarks/gastrulation/plots/motifs/diffexp_diffacc/background_all_k27ac"
 

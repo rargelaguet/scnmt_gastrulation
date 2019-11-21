@@ -13,7 +13,7 @@ if (grepl("ricard",Sys.info()['nodename'])) {
 }
 io$data.dir <- paste0(io$basedir,"/met/feature_level")
 io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
-io$met.stats <- paste0(io$basedir,"/met/stats/samples/sample_stats.txt")
+io$met.stats <- paste0(io$basedir,"/met/results/stats/sample_stats.txt")
 io$outdir <- paste0(io$basedir,"/met/dimensionality_reduction")
 
 ####################
@@ -79,7 +79,6 @@ opts$colors <- c(
 opts$min.CpGs <- 1          # minimum number of CpG sites per feature and cell
 opts$min.coverage <- 0.10   # minimum coverage (fraction of cells with at least min.CpG measurements)
 opts$nfeatures <- 5000     # number of features per view (filter based on variance)
-# opts$nfeatures <- 10000     # number of features per view (filter based on variance)
 
 # Output file
 io$outfile = sprintf("%s/hdf5/model_%s_%s.hdf5",io$outdir,paste(names(opts$annos), collapse="_"), paste(opts$stage_lineage, collapse="_"))

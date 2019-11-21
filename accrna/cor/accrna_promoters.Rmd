@@ -92,7 +92,7 @@ opts$acc.cells <- tmp$id_acc
 ```{r}
 sample_metadata <- fread(io$sample.metadata) %>% 
   .[,c("sample","id_rna","id_acc","stage","lineage10x_2")] %>%
-  .[,stage_lineage:=as.factor(paste(stage,lineage10x_2,sep="_"))] %>%
+  .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")] %>%
   .[sample%in%tmp$sample]
 ```
 
@@ -105,11 +105,11 @@ sce <- readRDS(file=io$rna_file)[,opts$rna.cells]
 rna_dt <- exprs(sce) %>% t %>% as.data.table(keep.rownames="id_rna") %>% 
   melt(id.vars="id_rna", value.name="expr", variable.name="id") %>%
   merge(sample_metadata[,c("sample","id_rna")]) %>%
-  merge(rowData(sce) %>% as.data.frame(row.names=rownames(sce)) %>% tibble::rownames_to_column("ens_id") %>%
+  merge(rowData(sce) %>% as.data.frame(row.names=rownames(sce)) %>% 
+          tibble::rownames_to_column("ens_id") %>%
           .[,c("symbol","ens_id")] %>% as.data.table %>% setnames(c("ens_id","symbol"),c("id","gene")),
         by=c("id")
         )
-rna_dt[,c("id","gene"):=list(as.factor(id),as.factor(gene))]
 ```
 
 <!-- Filter RNA data -->
@@ -121,8 +121,7 @@ rna_dt <- rna_dt[,var:=var(expr), by="gene"] %>% .[var>0.1] %>% .[,var:=NULL]
 <!-- Load accessibility data -->
 ```{r load_acc, echo=FALSE, include=FALSE}
 acc_dt <- lapply(names(opts$annos), function(n) {
-  data <- fread(sprintf("%s/%s.tsv.gz",io$acc_dir,n)) %>%
-  .[V1%in%opts$acc.cells]
+  fread(sprintf("%s/%s.tsv.gz",io$acc_dir,n)) %>% .[V1%in%opts$acc.cells]
 }) %>% rbindlist %>% setnames(c("sample","id","anno","Nacc","N","rate"))
 ```
 
@@ -138,13 +137,8 @@ acc_dt <- acc_dt %>% .[,N:=.N, by=c("id","anno")] %>% .[N>=opts$min.cells] %>% .
 acc_dt <- acc_dt[,var:=var(rate), by=c("id","anno")] %>% .[var>0] %>% .[,var:=NULL]
 ```
 
-<!-- Load genomic contexts -->
+<!-- Load gene metadata -->
 ```{r load_genomiccontexts}
-feature_metadata <- lapply(names(opts$annos), function(anno) 
-  fread(sprintf("%s/%s.bed",io$annos_dir,anno))[,c(1,2,3,4,5,6)]) %>%
-  rbindlist %>% setnames(c("chr","start","end","strand","id","anno"))
-
-# Load gene metadata 
 gene_metadata <- fread(io$gene_metadata) %>% 
   setnames(c("ens_id","symbol"),c("id","gene")) %>% 
   .[,chr:=stringr::str_replace_all(chr,"chr","")]
@@ -173,7 +167,7 @@ keep_hv_genes <- accrna_dt %>% split(.$anno) %>%
 accrna_dt <- accrna_dt %>% .[,gene_id:=paste(gene,id,sep="_")] %>% split(.$anno) %>%
   map2(.,names(.), function(x,y) x[gene_id %in% keep_hv_genes[[y]]]) %>% rbindlist %>% .[,gene_id:=NULL]
 
-accrna_dt <- accrna_dt %>% droplevels()
+accrna_dt <- accrna_dt
 ```
 
 <!-- Compute correlations and do multiple testing correction -->
@@ -198,7 +192,7 @@ cor[,sum(sig),by="anno"]
 
 <!-- Save results -->
 ```{r}
-fwrite(cor, paste0(io$outdir,"/accrna_cor_promoters.txt"), quote=F, sep="\t")
+# fwrite(cor, paste0(io$outdir,"/accrna_cor_promoters.txt"), quote=F, sep="\t")
 # cor <- fread(paste0(io$outdir,"/accrna_cor_promoters.txt"))
 ```
 

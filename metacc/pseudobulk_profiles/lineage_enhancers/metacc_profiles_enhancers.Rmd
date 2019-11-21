@@ -14,7 +14,7 @@ library(ggplot2)
 
 <!-- Define I/O and options -->
 ```{r define_options, echo=FALSE}
-source("/Users/ricard/gastrulation_clean/metacc/profiles_enhancers/load_settings.R")
+source("/Users/ricard/gastrulation/metacc/pseudobulk_profiles/lineage_enhancers/load_settings.R")
 ```
 
 <!-- Load sample metadata -->
@@ -47,6 +47,7 @@ source("/Users/ricard/gastrulation/metacc/pseudobulk_profiles/load_annotations.R
 ```
 
 <!-- Load data -->
+This takes a long time, if you want to run the default options, see code chunk later where we load a pre-computed object
 ```{r load_data, echo=FALSE}
 anno_df.met <- anno_df
 anno_df.acc <- anno_df
@@ -67,6 +68,7 @@ data[,rate:=rate*100]
 data[,anno:=stringr::str_replace_all(anno,opts$annos)]
 ```
 
+Load pre-computed object
 ```{r}
 # saveRDS(data, "/Users/ricard/data/gastrulation/metacc/profiles_neuroectoderm_enhancers/data.rds")
 # data <- readRDS("/Users/ricard/data/gastrulation/metacc/profiles_neuroectoderm_enhancers/data.rds")
@@ -85,22 +87,6 @@ stats <- rbind(
   acc.stats[,c("sample","mean","context")]
 ) %>% merge(sample_metadata[,c("sample","stage","stage_lineage")],by="sample") %>%
   .[,.(mean=mean(mean)),by=c("stage_lineage","context")]
-```
-
-<!-- Split ectoderm enhancers into Midbrain or Pluripotency -->
-```{r}
-tmp <- fread(io$esc_vs_brain) %>% 
-  .[,c("chr","start","end","class","id")] %>%
-  .[,class:=stringr::str_replace_all(class,"brain","Neuroectoderm enhancers")] %>%
-  .[,class:=stringr::str_replace_all(class,"esc","Pluripotency enhancers")]
-
-data.1 <- data[anno!="Ectoderm enhancers"]
-data.2 <- data[anno=="Ectoderm enhancers"] %>% merge(tmp[,c("id","class")], by="id") %>% 
-  .[,anno:=class] %>% .[,class:=NULL]
-
-data <- rbind(data.1,data.2)
-
-rm(data.1,data.2)
 ```
 
 ```{r}

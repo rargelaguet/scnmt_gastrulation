@@ -42,7 +42,7 @@ if (grepl("ricard",Sys.info()['nodename'])) {
 }
 io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
 io$acc.dir <- paste0(io$basedir,"/acc/gpc_level")
-io$stats <- paste0(io$basedir,"/acc/stats/samples/sample_stats.txt")
+io$stats <- paste0(io$basedir,"/acc/results/stats/sample_stats.txt")
 
 ## Options ##
 opts <- list()

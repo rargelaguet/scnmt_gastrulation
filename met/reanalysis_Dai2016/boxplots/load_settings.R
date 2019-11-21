@@ -9,8 +9,8 @@ io$met.dir <- "/Users/ricard/data/gastrulation/public_data/Dai_2016/met/feature_
 io$outdir <- "/Users/ricard/gastrulation/public_datasets/Dai2016/boxplots/out"
 
 # Folders with the differential analysis results
-io$diff.met <- "/Users/ricard/data/gastrulation/met/differential/feature_level"
-io$diff.acc <- "/Users/ricard/data/gastrulation/acc/differential/feature_level"
+io$diff.met <- "/Users/ricard/data/gastrulation/met/results/differential"
+io$diff.acc <- "/Users/ricard/data/gastrulation/acc/results/differential"
 
 ## Define options ##
 opts <- list()
