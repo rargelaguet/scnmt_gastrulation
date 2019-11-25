@@ -1,0 +1,88 @@
+---
+title: "Gastrulation scNMT-seq: quantification of DNA accessibility in mithocondrial DNA"
+output: 
+  BiocStyle::html_document: 
+    fig_width: 10
+    fig_height: 8
+---
+
+```{r load_modules, include=FALSE, echo=FALSE}
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(ggpubr)
+```
+
+```{r define_opts, echo=FALSE, include=FALSE}
+
+## I/O ##
+io <- list()
+
+io$metadata <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
+io$data <- "/Users/ricard/data/gastrulation/acc/gpc_level"
+# io$outdir <- "/Users/ricard/gastrulation/out"
+
+
+## Options ##
+opts <- list()
+
+# Define which cells to use
+opts$cells <- fread(io$metadata) %>% 
+  .[!is.na(id_acc),id_acc]
+
+# opts$cells <- head(opts$cells,n=10)
+```
+
+<!-- Load metadata -->
+
+```{r load_metadata}
+metadata <- fread(io$metadata) %>% 
+  .[id_acc%in%opts$cells]
+```
+
+<!-- Load accessibility data and calculate QC statistics per sample -->
+
+```{r}
+dt <- list()
+for (i in opts$cells) {
+  if (file.exists(sprintf("%s/%s.tsv.gz",io$data,i))) {
+    dt[[i]] <- fread(sprintf("%s/%s.tsv.gz",io$data,i), sep="\t", verbose=F, showProgress=F) %>% 
+      .[,c(1,2,5)] %>% setnames(c("chr","pos","rate")) %>% .[chr=="MT"] %>% .[,id_acc:=i]
+  } else {
+    print(sprintf("Sample %s not found",i))
+  }
+}
+
+dt <- rbindlist(dt)
+```
+
+<!-- Bar plots of average MT accessibility rate per id_acc -->
+
+```{r}
+tmp <- dt[,.(coverage=.N),by="id_acc"]
+```
+
+```{r}
+# Filter cells by coverage
+dt <- dt[,coverage:=.N,by="id_acc"] %>% .[coverage>50]
+```
+
+```{r}
+to.plot <- dt[,.(rate=mean(rate)), by="id_acc"] %>%
+  merge(metadata,by="id_acc")
+
+p <- ggbarplot(to.plot[pass_accQC==F], x="id_acc", y="rate", fill="#00BFC4", size=0.01,
+               facet="stage",  scales="free_x") +
+  labs(x="", y="DNA accessibility rate in MT") +
+  coord_cartesian(ylim=c(0,1)) +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+print(p)
+
+# pdf(file=paste0(io$outdir,"/qc_met.pdf"), width=8, height=5)
+# print(p)
+# dev.off()
+```
+

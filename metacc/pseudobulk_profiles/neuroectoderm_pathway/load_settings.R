@@ -28,7 +28,7 @@ io$acc.stats <- paste0(io$basedir,"/acc/results/stats/sample_stats.txt")
 io$esc_vs_brain <- paste0(io$basedir,"/H3K27ac/E7.5_enhancers_Ect_ESC_brain_top250.txt")
 
 # Output directory
-io$pdfdir <- paste0(io$basedir,"/metacc/pseudobulked_profiles/profiles_neuroectoderm_enhancers")
+io$pdfdir <- paste0(io$basedir,"/metacc/pseudobulked_profiles/neuroectoderm_enhancers")
 
 ####################
 ## Define options ##

@@ -1,0 +1,87 @@
+---
+title: "Gastrulation scNMT-seq: quantification of DNA methylation in mithocondrial DNA"
+output: 
+  BiocStyle::html_document: 
+    fig_width: 10
+    fig_height: 8
+---
+
+```{r load_modules, include=FALSE, echo=FALSE}
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(ggpubr)
+```
+
+```{r define_opts, echo=FALSE, include=FALSE}
+
+## I/O ##
+io <- list()
+
+io$metadata <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
+io$data <- "/Users/ricard/data/gastrulation/met/cpg_level"
+# io$outdir <- "/Users/ricard/gastrulation/out"
+
+
+## Options ##
+opts <- list()
+
+# Define which cells to use
+opts$cells <- fread(io$metadata) %>% 
+  .[!is.na(id_met),id_met]
+
+# opts$cells <- head(opts$cells,n=10)
+```
+
+<!-- Load metadata -->
+
+```{r load_metadata}
+metadata <- fread(io$metadata) %>% 
+  .[id_met%in%opts$cells]
+```
+
+<!-- Load methylation data and calculate QC statistics per sample -->
+
+```{r}
+dt <- list()
+for (i in opts$cells) {
+  if (file.exists(sprintf("%s/%s.tsv.gz",io$data,i))) {
+    dt[[i]] <- fread(sprintf("%s/%s.tsv.gz",io$data,i), sep="\t", verbose=F, showProgress=F) %>% 
+      .[,c(1,2,5)] %>% setnames(c("chr","pos","rate")) %>% .[chr=="MT"] %>% .[,id_met:=i]
+  } else {
+    print(sprintf("Sample %s not found",i))
+  }
+}
+
+dt <- rbindlist(dt)
+```
+
+<!-- Bar plots of average MT methylation rate per id_met -->
+
+```{r}
+tmp <- dt[,.(coverage=.N),by="id_met"]
+```
+
+```{r}
+# Filter cells by coverage
+dt <- dt[,coverage:=.N,by="id_met"] %>% .[coverage>50]
+```
+
+```{r}
+to.plot <- dt[,.(rate=mean(rate)), by="id_met"] %>%
+  merge(metadata,by="id_met")
+
+p <- ggbarplot(to.plot, x="id_met", y="rate", facet="stage", width=.05,  scales="free_x", color="#F8766D") +
+  labs(x="", y="DNA methylation rate in MT") +
+  coord_cartesian(ylim=c(0,1)) +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+print(p)
+
+# pdf(file=paste0(io$outdir,"/qc_met.pdf"), width=8, height=5)
+# print(p1)
+# dev.off()
+```
+

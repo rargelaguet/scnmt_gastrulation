@@ -22,6 +22,7 @@ for (anno in names(opts$annos)) {
 }
 
 anno_df <- rbindlist(anno_list) %>% 
-  .[,c("anno","chr"):=list(as.factor(anno),as.factor(sub("chr","",chr)))] %>% 
+  .[,chr:=sub("chr","",chr)] %>%
   setkey(chr,start,end)
+
 rm(anno_list)

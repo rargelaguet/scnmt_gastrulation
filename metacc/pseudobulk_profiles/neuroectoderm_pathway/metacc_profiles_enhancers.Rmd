@@ -14,7 +14,7 @@ library(ggplot2)
 
 <!-- Define I/O and options -->
 ```{r define_options, echo=FALSE}
-source("/Users/ricard/gastrulation/metacc/profiles_neuroectoderm_enhancers/load_settings.R")
+source("/Users/ricard/gastrulation/metacc/neuroectoderm_enhancers/load_settings.R")
 ```
 
 <!-- Load sample metadata -->
@@ -62,8 +62,8 @@ data[,anno:=stringr::str_replace_all(anno,opts$annos)]
 ```
 
 ```{r}
-# saveRDS(data, "/Users/ricard/data/gastrulation/metacc/profiles_neuroectoderm_enhancers/data.rds")
-# data <- readRDS("/Users/ricard/data/gastrulation/metacc/profiles_neuroectoderm_enhancers/data.rds")
+# saveRDS(data, "/Users/ricard/data/gastrulation/metacc/neuroectoderm_enhancers/data.rds")
+# data <- readRDS("/Users/ricard/data/gastrulation/metacc/neuroectoderm_enhancers/data.rds")
 ```
 
 <!-- Load genome-wide global methylation and accessibility rates -->

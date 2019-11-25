@@ -1,3 +1,5 @@
+library(data.table)
+library(purrr)
 
 ################
 ## Define I/O ##
@@ -24,8 +26,12 @@ io$acc.dir <- paste0(io$basedir,"/acc/gpc_level")
 io$met.stats <- paste0(io$basedir,"/met/results/stats/sample_stats.txt")
 io$acc.stats <- paste0(io$basedir,"/acc/results/stats/sample_stats.txt")
 
+# Folders with the differential analysis results
+io$diff.met <- paste0(io$basedir,"/met/results/differential")
+io$diff.acc <- paste0(io$basedir,"/acc/results/differential")
+
 # Output directory
-io$pdfdir <- paste0(io$basedir,"/metacc/pseudobulked_profiles/profiles_lineage_enhancers")
+io$pdfdir <- paste0(io$basedir,"/metacc/pseudobulked_profiles/lineage_enhancers")
 
 ####################
 ## Define options ##
@@ -61,6 +67,12 @@ opts$positions <- c(
 opts$window_size <- 2000
 opts$met.tile <- 200
 opts$acc.tile <- 150
+
+# Thresholds in the differential analysis to subset lineage-defining enhancers
+opts$diff.type <- 2
+opts$min.fdr <- 0.10
+opts$min.met.diff <- 5
+opts$min.acc.diff <- 5
 
 # Define which cells to use
 tmp <- fread(io$sample.metadata) %>% 

@@ -14,7 +14,7 @@ for (cell in opts$met.cells) {
   met_list[[cell]] <- tmp
 }
 met <- rbindlist(met_list) %>%
-  .[,c("id_met","id","context"):=list(as.factor(id_met),as.factor(id),"CG")]
+  .[,c("id_met","id","context"):=list(as.factor(id_met),as.factor(id),as.factor("CG"))]
   
 rm(met_list)
 
@@ -33,7 +33,7 @@ for (cell in opts$acc.cells) {
   acc_list[[cell]] <- tmp
 }
 acc <- rbindlist(acc_list) %>%
-  .[,c("id_acc","id","context"):=list(as.factor(id_acc),as.factor(id),"GC")]
+  .[,c("id_acc","id","context"):=list(as.factor(id_acc),as.factor(id),as.factor("GC"))]
   
 rm(acc_list)
 
