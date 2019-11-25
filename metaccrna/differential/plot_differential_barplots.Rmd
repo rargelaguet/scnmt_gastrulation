@@ -14,31 +14,45 @@ library(ggplot2)
 ```
 
 ```{r}
-source("/Users/ricard/gastrulation/metaccrna/differential/load_settings.R")
-source("/Users/ricard/gastrulation/metaccrna/differential/load_data.R")
+source("/Users/ricard/scnmt_gastrulation/metaccrna/differential/load_settings.R")
+
+opts$annos <- c(
+  "prom_2000_2000"="Promoters",
+  "H3K27ac_distal_E7.5_Mes_intersect12"="Mes- enhancers",
+  "H3K27ac_distal_E7.5_End_intersect12"="End- enhancers",
+  "H3K27ac_distal_E7.5_Ect_intersect12"="Ect- enhancers",
+  "H3K4me3_E7.5_Mes"="Mes- H3K4me3",
+  "H3K4me3_E7.5_End"="End- H3K4me3",
+  "H3K4me3_E7.5_Ect"="Ect- H3K4me3"
+)
+opts$met.annos <- opts$acc.annos <- opts$annos
+
+opts$diff.type <- 2
+opts$min.fdr <- 0.10
+opts$min.acc.diff <- 10
+opts$min.met.diff <- 10
+```
+
+```{r}
+source("/Users/ricard/scnmt_gastrulation/metaccrna/differential/load_data.R")
 ```
 
 ```{r}
 diff.metacc <- rbind(
-  diff.met[,type:="met"], 
-  diff.acc[,type:="acc"]
-)# %>% dcast(id+lineage+anno~type, value.var=c("diff","sig")) %>% .[complete.cases(.)]
-```
-
-CURRENTLY DOES NOT WORK, I NEED TO FIX THIS
-```{r}
-stop()
+  diff.met[,type:="met"] %>% .[,c("id","anno","diff","sig","lineage","type")], 
+  diff.acc[,type:="acc"] %>% .[,c("id","anno","diff","sig","lineage","type")] 
+) %>% dcast(id+lineage+anno~type, value.var=c("diff","sig")) %>% .[complete.cases(.)] %>%
+  .[,anno:=stringr::str_replace_all(anno,opts$annos)]
 ```
 
 <!-- Bar plots with the fraction of hits per genomic context -->
 ```{r}
 tmp <- diff.metacc %>%
-  .[,.(Nmet=mean(met,na.rm=T), Nacc=mean(acc,na.rm=T)), by=c("anno","lineage")] %>%
+  .[,.(Nmet=mean(sig_met,na.rm=T), Nacc=mean(sig_acc,na.rm=T)), by=c("anno","lineage")] %>%
   melt(id.vars=c("anno","lineage"), variable.name="assay", value.name="N")
 
 # Mesoderm
-foo <- tmp[lineage=="Mesoderm"]
-p_mes <- ggplot(foo, aes(x=anno, y=N, group=assay)) +
+p_mes <- ggplot(tmp[lineage=="Mesoderm"], aes(x=anno, y=N, group=assay)) +
   geom_bar(aes(fill=assay), stat="identity", position="dodge", color="black", size=0.25) +
   scale_fill_manual(values=c("Nmet"="#F37A71", "Nacc"="#00BFC4")) +
   labs(x="", y="Fraction of differential sites") +
@@ -50,8 +64,7 @@ print(p_mes)
 # dev.off()
   
 # Endoderm
-foo <- tmp[lineage=="Endoderm"]
-p_end <- ggplot(foo, aes(x=anno, y=N, group=assay)) +
+p_end <- ggplot(tmp[lineage=="Endoderm"], aes(x=anno, y=N, group=assay)) +
   geom_bar(aes(fill=assay), stat="identity", position="dodge", color="black", size=0.25) +
   scale_fill_manual(values=c("Nmet"="#F37A71", "Nacc"="#00BFC4")) +
   labs(x="", y="Fraction of differential sites") +
@@ -63,8 +76,7 @@ print(p_end)
 # dev.off()
 
 # Ectoderm
-foo <- tmp[lineage=="Ectoderm"]
-p_ect <- ggplot(foo, aes(x=anno, y=N, group=assay)) +
+p_ect <- ggplot(tmp[lineage=="Ectoderm"], aes(x=anno, y=N, group=assay)) +
   geom_bar(aes(fill=assay), stat="identity", position="dodge", color="black", size=0.25) +
   scale_fill_manual(values=c("Nmet"="#F37A71", "Nacc"="#00BFC4")) +
   labs(x="", y="Fraction of differential sites") +
@@ -79,7 +91,7 @@ print(p_ect)
 <!-- Barplots with the number of significant hits per annotation -->
 
 ```{r}
-diff.metacc <- rbind(diff.met, diff.acc)
+diff.metacc <- rbind(diff.met, diff.acc) %>% setnames("type","assay")
 
 tmp <- diff.metacc %>%
   .[,.(number_positive_hits=sum(sig==T & diff>0, na.rm=T), 

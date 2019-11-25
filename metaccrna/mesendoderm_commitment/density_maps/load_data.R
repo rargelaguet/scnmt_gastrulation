@@ -5,10 +5,10 @@
 
 # Load precomputed differential results
 diff.met <- lapply(opts$comparisons, function(i) 
-  lapply(opts$annos, function(j)
+  lapply(names(opts$annos), function(j)
     fread(sprintf("%s/%s_%s.txt.gz",io$diff.met,i,j))
   ) %>% rbindlist %>% .[,comparison:=i] 
-) %>% rbindlist %>% .[,sig:=padj_fdr<opts$min.fdr & abs(diff)>opts$min.diff]
+) %>% rbindlist %>% .[,sig:=padj_fdr<opts$min.fdr & abs(diff)>opts$min.met.diff]
 
 
 ######################################################
@@ -16,10 +16,10 @@ diff.met <- lapply(opts$comparisons, function(i)
 ######################################################
 
 diff.acc <- lapply(opts$comparisons, function(i) 
-  lapply(opts$annos, function(j)
+  lapply(names(opts$annos), function(j)
     fread(sprintf("%s/%s_%s.txt.gz",io$diff.acc,i,j))
   ) %>% rbindlist %>% .[,comparison:=i] 
-) %>% rbindlist %>% .[,sig:=padj_fdr<opts$min.fdr & abs(diff)>opts$min.diff]
+) %>% rbindlist %>% .[,sig:=padj_fdr<opts$min.fdr & abs(diff)>opts$min.acc.diff]
 
 
 
@@ -37,5 +37,5 @@ diff.acc <- diff.acc %>%
 diff.metacc <- rbind(
   diff.met[,type:="met"], 
   diff.acc[,type:="acc"]
-) %>% dcast(id+gene+lineage+anno~type, value.var=c("diff","sig")) %>% .[complete.cases(.)]
+) %>% dcast(id+lineage+anno~type, value.var=c("diff","sig")) %>% .[complete.cases(.)]
 

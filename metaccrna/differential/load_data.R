@@ -21,7 +21,7 @@ if (!is.null(io$diff.rna)) {
     diff.rna.end <- fread(sprintf("%s/E7.5Endoderm_vs_E7.5MesodermEctoderm.txt.gz",io$diff.rna)) %>%
       .[,lineage:="Endoderm"] %>% .[,sig:=padj_fdr<opts$min.fdr & abs(logFC)>opts$min.rna.diff]
     
-  } else if (opts$diff.type==2) {
+  } else if (opts$diff.type%in%c(2,3)) {
     
     # Mesoderm-specific
     diff.rna.mes <- rbind(
@@ -94,8 +94,45 @@ if (!is.null(io$diff.met)) {
   if (opts$diff.type==2) {
     
     # Mesoderm-specific
+    diff.met.mes <- lapply(names(opts$met.annos), function(x)
+      rbind(
+        fread(sprintf("%s/E7.5Mesoderm_vs_E7.5Endoderm_%s.txt.gz",io$diff.met,x)) %>% .[,lineage2:="Endoderm"],
+        fread(sprintf("%s/E7.5Mesoderm_vs_E7.5Ectoderm_%s.txt.gz",io$diff.met,x)) %>% .[,lineage2:="Ectoderm"]
+      )) %>% rbindlist %>% .[,lineage1:="Mesoderm"] %>% 
+      .[,sig:=padj_fdr<opts$min.fdr & abs(diff)>opts$min.met.diff] %>%
+      data.table::dcast(id+anno+lineage1~lineage2, value.var=c("diff","padj_fdr","sig")) %>%
+      .[,sig:=sig_Endoderm==T & sig_Ectoderm==T & sign(diff_Ectoderm)==sign(diff_Endoderm)] %>%
+      .[,diff:=(diff_Endoderm+diff_Ectoderm)/2] %>%
+      .[,c("id","anno","lineage1","diff","sig")] %>% setnames("lineage1","lineage")
+  
+    # Ectoderm-specific
+    diff.met.ect <- lapply(names(opts$met.annos), function(x)
+      rbind(
+        fread(sprintf("%s/E7.5Ectoderm_vs_E7.5Endoderm_%s.txt.gz",io$diff.met,x)) %>% .[,lineage2:="Endoderm"],
+        fread(sprintf("%s/E7.5Ectoderm_vs_E7.5Mesoderm_%s.txt.gz",io$diff.met,x)) %>% .[,lineage2:="Mesoderm"]
+      )) %>% rbindlist() %>% .[,lineage1:="Ectoderm"] %>% 
+      .[,sig:=padj_fdr<opts$min.fdr & abs(diff)>opts$min.met.diff] %>%
+      data.table::dcast(id+anno+lineage1~lineage2, value.var=c("diff","padj_fdr","sig")) %>%
+      .[,sig:=sig_Endoderm==T & sig_Mesoderm==T & sign(diff_Endoderm)==sign(diff_Mesoderm)] %>%
+      .[,diff:=(diff_Endoderm+diff_Mesoderm)/2] %>%
+      .[,c("id","anno","lineage1","diff","sig")] %>% setnames("lineage1","lineage")
+  
+    # Endoderm-specific
+    diff.met.end <- lapply(names(opts$met.annos), function(x)
+      rbind(
+        fread(sprintf("%s/E7.5Endoderm_vs_E7.5Mesoderm_%s.txt.gz",io$diff.met,x)) %>% .[,lineage2:="Mesoderm"],
+        fread(sprintf("%s/E7.5Endoderm_vs_E7.5Ectoderm_%s.txt.gz",io$diff.met,x)) %>% .[,lineage2:="Ectoderm"]
+      )) %>% rbindlist() %>% .[,lineage1:="Endoderm"] %>% 
+      .[,sig:=padj_fdr<opts$min.fdr & abs(diff)>opts$min.met.diff] %>%
+      data.table::dcast(id+anno+lineage1~lineage2, value.var=c("diff","padj_fdr","sig")) %>%
+      .[,sig:=sig_Mesoderm==T & sig_Ectoderm==T & sign(diff_Ectoderm)==sign(diff_Mesoderm)] %>%
+      .[,diff:=(diff_Mesoderm+diff_Ectoderm)/2] %>%
+      .[,c("id","anno","lineage1","diff","sig")] %>% setnames("lineage1","lineage")
+    }
+    if (opts$diff.type==3) {
+    
+    # Mesoderm-specific
     diff.met.mes <- lapply(list("H3K27ac_distal_E7.5_Mes_intersect12"), function(x)
-    # diff.met.mes <- lapply(names(opts$met.annos), function(x)
       rbind(
         fread(sprintf("%s/E7.5Mesoderm_vs_E7.5Endoderm_%s.txt.gz",io$diff.met,x)) %>% .[,lineage2:="Endoderm"],
         fread(sprintf("%s/E7.5Mesoderm_vs_E7.5Ectoderm_%s.txt.gz",io$diff.met,x)) %>% .[,lineage2:="Ectoderm"]
@@ -108,7 +145,6 @@ if (!is.null(io$diff.met)) {
   
     # Ectoderm-specific
     diff.met.ect <- lapply(list("H3K27ac_distal_E7.5_Ect_intersect12"), function(x)
-    # diff.met.ect <- lapply(names(opts$met.annos), function(x)
       rbind(
         fread(sprintf("%s/E7.5Ectoderm_vs_E7.5Endoderm_%s.txt.gz",io$diff.met,x)) %>% .[,lineage2:="Endoderm"],
         fread(sprintf("%s/E7.5Ectoderm_vs_E7.5Mesoderm_%s.txt.gz",io$diff.met,x)) %>% .[,lineage2:="Mesoderm"]
@@ -121,7 +157,6 @@ if (!is.null(io$diff.met)) {
   
     # Endoderm-specific
     diff.met.end <- lapply(list("H3K27ac_distal_E7.5_End_intersect12"), function(x)
-    # diff.met.end <- lapply(names(opts$met.annos), function(x)
       rbind(
         fread(sprintf("%s/E7.5Endoderm_vs_E7.5Mesoderm_%s.txt.gz",io$diff.met,x)) %>% .[,lineage2:="Mesoderm"],
         fread(sprintf("%s/E7.5Endoderm_vs_E7.5Ectoderm_%s.txt.gz",io$diff.met,x)) %>% .[,lineage2:="Ectoderm"]
@@ -149,21 +184,18 @@ if (!is.null(io$diff.acc)) {
     
     # Mesoderm-specific
     diff.acc.mes <- lapply(names(opts$acc.annos), function(x)
-    # diff.acc.mes <- lapply(list("H3K27ac_distal_E7.5_Mes_intersect12"), function(x)
       fread(sprintf("%s/E7.5Mesoderm_vs_E7.5EndodermEctoderm_%s.txt.gz",io$diff.acc,x))
     ) %>% rbindlist() %>% .[,lineage:="Mesoderm"] %>%
       .[,sig:=padj_fdr<opts$min.fdr & abs(diff)>opts$min.acc.diff]
   
     # Ectoderm-specific
     diff.acc.ect <- lapply(names(opts$acc.annos), function(x)
-    # diff.acc.ect <- lapply(list("H3K27ac_distal_E7.5_Ect_intersect12"), function(x)
       fread(sprintf("%s/E7.5Ectoderm_vs_E7.5MesodermEndoderm_%s.txt.gz",io$diff.acc,x))
     ) %>% rbindlist() %>% .[,lineage:="Ectoderm"] %>%
       .[,sig:=padj_fdr<opts$min.fdr & abs(diff)>opts$min.acc.diff]
   
     # Endoderm-specific
     diff.acc.end <- lapply(names(opts$acc.annos), function(x)
-    # diff.acc.end <- lapply(list("H3K27ac_distal_E7.5_End_intersect12"), function(x)
       fread(sprintf("%s/E7.5Endoderm_vs_E7.5MesodermEctoderm_%s.txt.gz",io$diff.acc,x))
     ) %>% rbindlist() %>% .[,lineage:="Endoderm"] %>%
       .[,sig:=padj_fdr<opts$min.fdr & abs(diff)>opts$min.acc.diff]
@@ -172,7 +204,49 @@ if (!is.null(io$diff.acc)) {
   
   if (opts$diff.type==2) {
     # Mesoderm-specific
-    # diff.acc.mes <- lapply(names(opts$acc.annos), function(x)
+    diff.acc.mes <- lapply(names(opts$acc.annos), function(x)
+    # diff.acc.mes <- lapply(list("H3K27ac_distal_E7.5_Mes_intersect12"), function(x)
+      rbind(
+        fread(sprintf("%s/E7.5Mesoderm_vs_E7.5Endoderm_%s.txt.gz",io$diff.acc,x)) %>% .[,lineage2:="Endoderm"],
+        fread(sprintf("%s/E7.5Mesoderm_vs_E7.5Ectoderm_%s.txt.gz",io$diff.acc,x)) %>% .[,lineage2:="Ectoderm"]
+      )) %>% rbindlist() %>% .[,lineage1:="Mesoderm"] %>% 
+      .[,sig:=padj_fdr<opts$min.fdr & abs(diff)>opts$min.acc.diff] %>%
+      data.table::dcast(id+anno+lineage1~lineage2, value.var=c("diff","padj_fdr","sig")) %>%
+      .[,sig:=sig_Endoderm==T & sig_Ectoderm==T & sign(diff_Endoderm)==sign(diff_Ectoderm)] %>%
+      .[,diff:=(diff_Endoderm+diff_Ectoderm)/2] %>%
+      .[,c("id","anno","lineage1","diff","sig")] %>% setnames("lineage1","lineage")
+  
+    # Ectoderm-specific
+    # diff.acc.ect <- lapply(list("H3K27ac_distal_E7.5_Ect_intersect12"), function(x)
+    diff.acc.ect <- lapply(names(opts$acc.annos), function(x)
+      rbind(
+        fread(sprintf("%s/E7.5Ectoderm_vs_E7.5Endoderm_%s.txt.gz",io$diff.acc,x)) %>% .[,lineage2:="Endoderm"],
+        fread(sprintf("%s/E7.5Ectoderm_vs_E7.5Mesoderm_%s.txt.gz",io$diff.acc,x)) %>% .[,lineage2:="Mesoderm"]
+      )) %>% rbindlist() %>% .[,lineage1:="Ectoderm"] %>% 
+      .[,sig:=padj_fdr<opts$min.fdr & abs(diff)>opts$min.acc.diff] %>%
+      data.table::dcast(id+anno+lineage1~lineage2, value.var=c("diff","padj_fdr","sig")) %>%
+      .[,sig:=sig_Endoderm==T & sig_Mesoderm==T & sign(diff_Endoderm)==sign(diff_Mesoderm)] %>%
+      .[,diff:=(diff_Endoderm+diff_Mesoderm)/2] %>%
+      .[,c("id","anno","lineage1","diff","sig")] %>% setnames("lineage1","lineage")
+  
+    # Endoderm-specific
+    # diff.acc.end <- lapply(list("H3K27ac_distal_E7.5_End_intersect12"), function(x)
+    diff.acc.end <- lapply(names(opts$acc.annos), function(x)
+      rbind(
+        fread(sprintf("%s/E7.5Endoderm_vs_E7.5Mesoderm_%s.txt.gz",io$diff.acc,x)) %>% .[,lineage2:="Mesoderm"],
+        fread(sprintf("%s/E7.5Endoderm_vs_E7.5Ectoderm_%s.txt.gz",io$diff.acc,x)) %>% .[,lineage2:="Ectoderm"]
+      )) %>% rbindlist() %>% .[,lineage1:="Endoderm"] %>% 
+      .[,sig:=padj_fdr<opts$min.fdr & abs(diff)>opts$min.acc.diff] %>%
+      data.table::dcast(id+anno+lineage1~lineage2, value.var=c("diff","padj_fdr","sig")) %>%
+      .[,sig:=sig_Mesoderm==T & sig_Ectoderm==T & sign(diff_Mesoderm)==sign(diff_Ectoderm)] %>%
+      .[,diff:=(diff_Mesoderm+diff_Ectoderm)/2] %>%
+      .[,c("id","anno","lineage1","diff","sig")] %>% setnames("lineage1","lineage")
+  }
+
+  
+  if (opts$diff.type==3) {
+    
+    # Mesoderm-specific
     diff.acc.mes <- lapply(list("H3K27ac_distal_E7.5_Mes_intersect12"), function(x)
       rbind(
         fread(sprintf("%s/E7.5Mesoderm_vs_E7.5Endoderm_%s.txt.gz",io$diff.acc,x)) %>% .[,lineage2:="Endoderm"],
@@ -186,7 +260,6 @@ if (!is.null(io$diff.acc)) {
   
     # Ectoderm-specific
     diff.acc.ect <- lapply(list("H3K27ac_distal_E7.5_Ect_intersect12"), function(x)
-    # diff.acc.ect <- lapply(names(opts$acc.annos), function(x)
       rbind(
         fread(sprintf("%s/E7.5Ectoderm_vs_E7.5Endoderm_%s.txt.gz",io$diff.acc,x)) %>% .[,lineage2:="Endoderm"],
         fread(sprintf("%s/E7.5Ectoderm_vs_E7.5Mesoderm_%s.txt.gz",io$diff.acc,x)) %>% .[,lineage2:="Mesoderm"]
@@ -199,7 +272,6 @@ if (!is.null(io$diff.acc)) {
   
     # Endoderm-specific
     diff.acc.end <- lapply(list("H3K27ac_distal_E7.5_End_intersect12"), function(x)
-    # diff.acc.end <- lapply(names(opts$acc.annos), function(x)
       rbind(
         fread(sprintf("%s/E7.5Endoderm_vs_E7.5Mesoderm_%s.txt.gz",io$diff.acc,x)) %>% .[,lineage2:="Mesoderm"],
         fread(sprintf("%s/E7.5Endoderm_vs_E7.5Ectoderm_%s.txt.gz",io$diff.acc,x)) %>% .[,lineage2:="Ectoderm"]

@@ -7,18 +7,17 @@ sample_metadata <- fread(io$sample.metadata) %>%
   .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")] %>%
   .[id_rna %in% opts$rna_cells]
 
-
 ###############
 ## Load data ##
 ###############
 
 # Load Methylation data
-met_dt <- lapply(opts$met.annos, function(n) {
+met_dt <- lapply(names(opts$met.annos), function(n) {
   fread(sprintf("%s/%s.tsv.gz",io$met.dir,n)) %>% .[V1%in%opts$met_cells]
 }) %>% rbindlist %>% setnames(c("id_met","id","anno","Nmet","N","rate"))
 
 # Load Accessibility data
-acc_dt <- lapply(opts$acc.annos, function(n) {
+acc_dt <- lapply(names(opts$acc.annos), function(n) {
   fread(sprintf("%s/%s.tsv.gz",io$acc.dir,n)) %>% .[V1%in%opts$acc_cells]
 }) %>% rbindlist %>% setnames(c("id_acc","id","anno","Nmet","N","rate"))
 

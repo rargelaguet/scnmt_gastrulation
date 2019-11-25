@@ -8,11 +8,9 @@ io <- list()
 if (grepl("ricard",Sys.info()['nodename'])) {
   io$basedir <- "/Users/ricard/data/gastrulation"
   io$gene_metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
-  io$outdir <- "/Users/ricard/gastrulation/metaccrna/mesendoderm_commitment/mesoderm/out"
 } else {
   io$basedir <- "/hps/nobackup/stegle/users/ricard/gastrulation"
   io$gene_metadata <- "/hps/nobackup/stegle/users/ricard/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
-  io$outdir <- "/homes/ricard/gastrulation/metaccrna/mesendoderm_commitment/mesoderm/out"
 }
 io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
 io$met.dir <- paste0(io$basedir,"/met/feature_level")
@@ -21,9 +19,9 @@ io$met.stats <- paste0(io$basedir,"/met/results/stats/sample_stats.txt")
 io$acc.stats <- paste0(io$basedir,"/acc/results/stats/sample_stats.txt")
 io$rna.file <- paste0(io$basedir,"/rna/SingleCellExperiment.rds")
 io$annos_dir  <- paste0(io$basedir, "/features/genomic_contexts")
-
-io$diff.met <- "/Users/ricard/data/gastrulation/met/results/differential"
-io$diff.acc <- "/Users/ricard/data/gastrulation/acc/results/differential"
+io$diff.met <- paste0(io$basedir,"/met/results/differential")
+io$diff.acc <- paste0(io$basedir,"/met/results/differential")
+io$outdir <- paste0(io$basedir,"/metaccrna/mesendoderm_commitment/mesoderm")
 
 # Previously computed pseudotime estimates
 io$pseudotime  <- paste0(io$outdir, "/destiny_mesoderm.tsv")
@@ -32,18 +30,12 @@ io$pseudotime  <- paste0(io$outdir, "/destiny_mesoderm.tsv")
 opts <- list()
 
 # Define which annotations to look at
-opts$met.annos <- c(
-  "H3K27ac_distal_E7.5_Mes_intersect12",
-  "H3K27ac_distal_E7.5_Ect_intersect12",
-  "H3K27ac_distal_E7.5_End_intersect12"
+opts$annos <- c(
+  "H3K27ac_distal_E7.5_Mes_intersect12" = "Mesoderm enhancers",
+  "H3K27ac_distal_E7.5_Ect_intersect12" = "Ectoderm enhancers",
+  "H3K27ac_distal_E7.5_End_intersect12" = "Endoderm enhancers"
 )
-
-opts$acc.annos <- c(
-  "H3K27ac_distal_E7.5_Mes_intersect12",
-  "H3K27ac_distal_E7.5_Ect_intersect12",
-  "H3K27ac_distal_E7.5_End_intersect12"
-)
-
+opts$met.annos <- opts$acc.annos <- opts$annos
 
 # Define which stage and lineages to look at 
 opts$stage_lineage <- c(
@@ -54,6 +46,11 @@ opts$stage_lineage <- c(
   "E7.5_Primitive_Streak",
   "E7.5_Mesoderm"
 )
+
+opts$diff.type <- 2
+opts$min.fdr <- 0.10
+opts$min.acc.diff <- 5
+opts$min.met.diff <- 5
 
 
 # Filtering options for methylation
@@ -74,12 +71,6 @@ opts$colors <- c(
   Mesoderm="#CD3278",
   Primitive_Streak="#F4A460",
   Endoderm="#43CD80"
-)
-
-opts$views_names <- c(
-  "H3K27ac_distal_E7.5_Ect_intersect12"="Ectoderm Enhancers",
-  "H3K27ac_distal_E7.5_Mes_intersect12"="Mesoderm Enhancers",
-  "H3K27ac_distal_E7.5_End_intersect12"="Endoderm Enhancers"
 )
 
 # Define which cells to use

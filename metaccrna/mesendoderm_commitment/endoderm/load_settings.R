@@ -7,45 +7,32 @@
 io <- list()
 if (grepl("ricard",Sys.info()['nodename'])) {
   io$basedir <- "/Users/ricard/data/gastrulation"
-  io$outdir <- "/Users/ricard/gastrulation/metaccrna/mesendoderm_commitment/endoderm/out"
 } else {
   io$basedir <- "/hps/nobackup/stegle/users/ricard/gastrulation"
-  io$outdir <- "/homes/ricard/gastrulation/metaccrna/mesendoderm_commitment/endoderm/out"
 }
 io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
 io$met.dir <- paste0(io$basedir,"/met/feature_level")
 io$acc.dir <- paste0(io$basedir,"/acc/feature_level")
 io$met.stats <- paste0(io$basedir,"/met/results/stats/sample_stats.txt")
 io$acc.stats <- paste0(io$basedir,"/acc/results/stats/sample_stats.txt")
-
-io$diff.met <- "/Users/ricard/data/gastrulation/met/results/differential"
-io$diff.acc <- "/Users/ricard/data/gastrulation/acc/results/differential"
+io$diff.met <- paste0(io$basedir,"/met/results/differential")
+io$diff.acc <- paste0(io$basedir,"/met/results/differential")
+io$outdir <- paste0(io$basedir,"/metaccrna/mesendoderm_commitment/endoderm")
 
 # Previously computed pseudotime estimates
 io$pseudotime  <- paste0(io$outdir, "/destiny_endoderm.tsv")
+
 
 ## Define options ##
 opts <- list()
 
 # Define which annotations to look at
-opts$met.annos <- c(
-  "H3K27ac_distal_E7.5_Mes_intersect12",
-  "H3K27ac_distal_E7.5_Ect_intersect12",
-  "H3K27ac_distal_E7.5_End_intersect12"
+opts$annos <- c(
+  "H3K27ac_distal_E7.5_Mes_intersect12" = "Mesoderm enhancers",
+  "H3K27ac_distal_E7.5_Ect_intersect12" = "Ectoderm enhancers",
+  "H3K27ac_distal_E7.5_End_intersect12" = "Endoderm enhancers"
 )
-
-opts$acc.annos <- c(
-  "H3K27ac_distal_E7.5_Mes_intersect12",
-  "H3K27ac_distal_E7.5_Ect_intersect12",
-  "H3K27ac_distal_E7.5_End_intersect12"
-)
-
-opts$views_names <- c(
-  "H3K27ac_distal_E7.5_Ect_intersect12"="Ectoderm Enhancers",
-  "H3K27ac_distal_E7.5_Mes_intersect12"="Mesoderm Enhancers",
-  "H3K27ac_distal_E7.5_End_intersect12"="Endoderm Enhancers"
-)
-
+opts$met.annos <- opts$acc.annos <- opts$annos
 
 # Define which stage and lineages to look at 
 opts$stage_lineage <- c(
@@ -56,6 +43,10 @@ opts$stage_lineage <- c(
   "E7.5_Endoderm"
 )
 
+opts$diff.type <- 3
+opts$min.fdr <- 0.10
+opts$min.acc.diff <- 5
+opts$min.met.diff <- 5
 
 # Filtering options for methylation
 opts$met_min.CpGs <- 1        # minimum number of CpG sites per feature

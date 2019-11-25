@@ -17,7 +17,6 @@ io$acc.dir <- paste0(io$basedir,"/acc/feature_level")
 io$met.stats <- paste0(io$basedir,"/met/results/stats/sample_stats.txt")
 io$acc.stats <- paste0(io$basedir,"/acc/results/stats/sample_stats.txt")
 io$annos_dir  <- paste0(io$basedir, "/features/genomic_contexts")
-io$outdir <- paste0(io$basedir,"/metaccrna/mesendoderm_commitment/ectoderm")
 
 # Folders with the differential analysis results
 io$diff.met <- paste0(io$basedir,"/met/results/differential")
@@ -67,7 +66,6 @@ opts$gene_window <- 25000
 #   Option 1 (more liberal): (lineage_A) vs (lineage_B,lineage_C)
 #   Option 2 (more conservative): (lineage_A vs lineage_B) AND (lineageA vs lineage_C)
 opts$diff.type <- 2
-
 opts$min.fdr <- 0.10
 opts$min.acc.diff <- 5
 opts$min.met.diff <- 5

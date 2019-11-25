@@ -1,5 +1,5 @@
 ---
-title: "Gastrulation: pseudotime estimation using destiny"
+title: "Gastrulation scNMT-seq: pseudotime estimation using diffusion pseudotime"
 output: 
   BiocStyle::html_document: 
   fig_width: 10
@@ -175,9 +175,9 @@ p <- ggplot(tmp, aes(rank_x,rank_z)) +
   )
 print(p)
 
-pdf(paste0(io$outdir,"/destiny_endoderm_v2.pdf"), useDingbats = F, width=4.75, height=4.25)
+# pdf(paste0(io$outdir,"/destiny_endoderm_v2.pdf"), useDingbats = F, width=4.75, height=4.25)
 print(p)
-dev.off()
+# dev.off()
 ```
 
 <!-- Save results -->
@@ -186,5 +186,5 @@ tmp <- data.frame(
   id_rna=colnames(sce), 
   DC1=round(dm$DC1,4)
 )
-write.table(tmp, paste0(io$outdir,"/destiny_endoderm.tsv"), quote=F, sep="\t", row.names = F, col.names = T)
+# write.table(tmp, paste0(io$outdir,"/destiny_endoderm.tsv"), quote=F, sep="\t", row.names = F, col.names = T)
 ```

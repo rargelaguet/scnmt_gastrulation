@@ -1,5 +1,5 @@
 ---
-title: "Gastrulation: plot DNA methylation and chromatin accessibiliy dynamics associated with endoderm commitment"
+title: "Gastrulation scNMT-seq: DNA methylation and chromatin accessibiliy dynamics associated with endoderm commitment"
 output: 
   BiocStyle::html_document: 
     fig_width: 10
@@ -13,7 +13,6 @@ library(purrr)
 library(ggplot2)
 library(RColorBrewer)
 library(splines)
-library(scater)
 ```
 
 ```{r}
@@ -23,18 +22,11 @@ source("/Users/ricard/gastrulation/metaccrna/mesendoderm_commitment/endoderm/loa
 
 <!-- Load results from differential methylation and accessibility analysis -->
 ```{r}
-opts$diff.type <- 2
-opts$min.fdr <- 0.10
-opts$min.acc.diff <- 5
-opts$min.met.diff <- 5
-
 source("/Users/ricard/gastrulation/metaccrna/differential/load_data.R")
 ```
 
 <!-- Subset differential sites from the data -->
 Lineage-defining elements are defined as ChIP-seq peaks that show differential activity during germ layer commitment.
-At 10% FDR, this represents around 25% of Endoderm and Mesoderm putative enhancers, as defined by the ChIP-seq.
-Ectoderm enhancers show very few associations with germ layer commitment, so there is no point in subsetting them.
 
 ```{r}
 # Methylation
@@ -50,8 +42,8 @@ acc_dt <- acc_dt %>% split(.$anno) %>%
 
 <!-- Rename annotations for plotting -->
 ```{r}
-met_dt %>% .[,anno:=stringr::str_replace_all(anno,opts$views_names)] 
-acc_dt %>% .[,anno:=stringr::str_replace_all(anno,opts$views_names)] 
+met_dt %>% .[,anno:=stringr::str_replace_all(anno,opts$annos)] 
+acc_dt %>% .[,anno:=stringr::str_replace_all(anno,opts$annos)] 
 ```
 
 <!-- Aggregate signal per cell (across all enhancers) -->
@@ -92,7 +84,8 @@ Z <- fread(io$pseudotime) %>%
   .[,rank:=1:.N]
 ```
 
-<!-- Plot RNA pseudotime rank vs met/acc  -->
+<!-- Plot RNA pseudotime rank vs Met/Acc  -->
+
 ```{r}
 to.plot <- merge(met_dt.aggregated, acc_dt.aggregated, by=c("sample","anno","stage")) %>% 
   setnames(c("rate.x","rate.y"),c("met","acc")) %>%
@@ -119,10 +112,9 @@ p <- ggplot(to.plot, aes(x=`rank`, y=value)) +
     axis.text.x = element_blank(),
     axis.title = element_text(color="black", size=rel(1.2))
   )
-# print(p)
 
 # pdf(paste0(io$outdir,"/pseudotime_endoderm.pdf"), useDingbats = F, width=9, height=4)
-# p
+print(p)
 # dev.off()
 ```
 
@@ -158,11 +150,10 @@ for (i in unique(to.plot$assay)) {
       geom_segment(aes(x=ps_to_endo, xend=ps_to_endo, y=25, yend=52), size=0.25, color="black", linetype="dashed") +
       coord_cartesian(ylim=c(25,52))
   }
-  print(p)
   
-  pdf(sprintf("%s/pseudotime_endoderm_%s.pdf",io$outdir,i), useDingbats = F, width=9, height=2.5)
+  # pdf(sprintf("%s/pseudotime_endoderm_%s.pdf",io$outdir,i), useDingbats = F, width=9, height=2.5)
   print(p)
-  dev.off()
+  # dev.off()
 }
 ```
 
