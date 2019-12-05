@@ -3,14 +3,14 @@ library(purrr)
 
 ## Define I/O ##
 io <- list()
-if (grepl("ricard",Sys.info()['nodename'])) {
+if (grepl("C02RF23NFVH8",Sys.info()['nodename'])) {
   io$basedir <- "/Users/ricard/data/gastrulation"
   io$gene_metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
-  io$outdir <- "/Users/ricard/data/gastrulation_norsync_stuff/metaccrna/mofa/full"
+  io$outdir <- "/Users/ricard/data/gastrulation/metaccrna/mofa/all_stages"
 } else {
   io$basedir <- "/hps/nobackup/stegle/users/ricard/gastrulation"
   io$gene_metadata <- "/hps/nobackup/stegle/users/ricard/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
-  io$outdir <- "/hps/nobackup/stegle/users/ricard/gastrulation/metaccrna/mofa/full"
+  io$outdir <- "/hps/nobackup/stegle/users/ricard/gastrulation/metaccrna/mofa/all_stages"
 }
 io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
 io$met.dir <- paste0(io$basedir,"/met/feature_level")
@@ -106,6 +106,10 @@ opts$met_cells <- tmp %>% .[pass_metQC==T, id_met]
 opts$rna_cells <- tmp %>% .[pass_rnaQC==T, id_rna]
 opts$acc_cells <- tmp %>% .[pass_accQC==T, id_acc]
 
+
+##########################
+## Load sample metadata ##
+##########################
 
 sample_metadata <- fread(io$sample.metadata) %>%
   .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")] %>%

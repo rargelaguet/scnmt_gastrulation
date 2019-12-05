@@ -18,29 +18,24 @@ theme_pub <- function() {
 }
 ```
 
+<!-- Define algorithm options -->
+
 ```{r}
 algorithms <- c("umap")
-views <- viewNames(model)
 
-umap.defaults$n_neighbors <- 20
-umap.defaults$min_dist <- 0.6
+# umap.defaults$n_neighbors <- 20
+# umap.defaults$min_dist <- 0.6
 
-
-samples <- MOFA::sampleNames(model)
+umap.defaults$n_neighbors <- 25
+umap.defaults$min_dist <- 0.55
 ```
 
 <!-- Non-linear dimensionality reduction from MOFA factors -->
+
 ```{r}
 # Fetch factors
 factors <- c(1,2,4,8)
 Z <- getFactors(model) %>% .[,factors]
-
-# Scale Z by the variance explained
-# r2 <- apply(calculateVarianceExplained(model, factors=factors)$R2PerFactor,1,sum)
-# Z <- Z %*% diag(r2*100)
-
-umap.defaults$n_neighbors <- 25
-umap.defaults$min_dist <- 0.55
 
 for (algorithm in algorithms) {
 
@@ -66,24 +61,28 @@ for (algorithm in algorithms) {
     labs(x="UMAP Dimension 1", y="UMAP Dimension 2") +
     theme_pub() + theme(legend.position = "none")
   
-  pdf(sprintf("%s/MOFA_%s.pdf",io$outdir,algorithm), width=5, height=7, useDingbats = F)
+  # pdf(sprintf("%s/MOFA_%s.pdf",io$outdir,algorithm), width=5, height=7, useDingbats = F)
   print(p1)
-  dev.off()
+  # dev.off()
   
   # Save coordinates
   # fwrite(to.plot[,c("sample","V1","V2")], sprintf("%s/%s_coordinates.txt",io$outdir,algorithm))
 }
 ```
 
-Imputation
+<!-- Imputation of missing values -->
+
 ```{r}
 model <- impute(model)
 ```
+
+<!-- Plot non-linear dimensionality reduction coloured by DNA methylation of lineage-defining enhancers -->
 
 ```{r}
 view <- "Mesoderm enhancers (met)"
 factor <- 1
 
+# Select top 50 enhancers with largest loading (Factor 1 for mesoderm enhancers, Factor 2 for endoderm enhancers)
 tmp <- names(tail(sort(abs(getWeights(model, views=view, factor=factor)[[1]][,1])), n=50))
 if (length(model@ImputedData)>0) {
   met <- colMeans(model@ImputedData[[view]][tmp,], na.rm=T)
@@ -91,18 +90,9 @@ if (length(model@ImputedData)>0) {
   met <- colMeans(model@TrainData[[view]][tmp,], na.rm=T)
 }
 
-if (view=="Ectoderm enhancers (met)") {
-  min_met <- (-6)
-  max_met <- 5
-} else if (view=="Mesoderm enhancers (met)") {
-  min_met <- (-6)
-  max_met <- 5
-} else if (view=="Endoderm enhancers (met)") {
-  min_met <- (-6)
-  max_met <- 5
-}
-met[met<(min_met)] <- min_met
-met[met>(max_met)] <- max_met
+# for better visualisation
+met[met<((-6) )] <- (-6) 
+met[met>(5)] <- 5
 
 # Convert M-values to B-values
 met <- 100*2**met/(1+2**met)
@@ -118,15 +108,18 @@ p <- ggplot(foo, aes(x=V1, y=V2, color=met)) +
   theme_pub() 
 # print(p)
 
-pdf(sprintf("%s/MOFA_%s_%d.pdf",io$outdir,view,factor), width=6, height=6, useDingbats = F)
+# pdf(sprintf("%s/MOFA_%s_%d.pdf",io$outdir,view,factor), width=6, height=6, useDingbats = F)
 print(p)
-dev.off()
+# dev.off()
 ```
+
+<!-- Plot non-linear dimensionality reduction coloured by chromatin accessibility of lineage-defining enhancers -->
 
 ```{r}
 view <- "Mesoderm enhancers (acc)"
 factor <- 1
 
+# Select top 50 enhancers with largest loading (Factor 1 for mesoderm enhancers, Factor 2 for endoderm enhancers)
 tmp <- names(tail(sort(abs(getWeights(model, views=view, factor=factor)[[1]][,1])), n=50))
 if (length(model@ImputedData)>0) {
   acc <- colMeans(model@ImputedData[[view]][tmp,], na.rm=T)
@@ -134,18 +127,9 @@ if (length(model@ImputedData)>0) {
   acc <- colMeans(model@TrainData[[view]][tmp,], na.rm=T)
 }
 
-if (view=="Ectoderm enhancers (acc)") {
-  min_acc <- (-1.5)
-  max_acc <- 0.5
-} else if (view=="Mesoderm enhancers (acc)") {
-  min_acc <- (-1.5)
-  max_acc <- 0.5
-} else if (view=="Endoderm enhancers (acc)") {
-  min_acc <- (-1.5)
-  max_acc <- 0.5
-}
-acc[acc<(min_acc)] <- min_acc
-acc[acc>(max_acc)] <- max_acc
+# For better visualisation
+acc[acc<(-1.5)] <- (-1.5)
+acc[acc>(0.5)] <- 0.5
 
 # Convert M-values to B-values
 acc <- 100*2**acc/(1+2**acc)
@@ -160,30 +144,7 @@ p <- ggplot(foo, aes(x=V1, y=V2, color=acc)) +
   labs(x="UMAP Dimension 1", y=" UMAP Dimension 2") +
   theme_pub() 
 
-pdf(sprintf("%s/MOFA_%s_%d.pdf",io$outdir,view,factor), width=6, height=6, useDingbats = F)
+# pdf(sprintf("%s/MOFA_%s_%d.pdf",io$outdir,view,factor), width=6, height=6, useDingbats = F)
 print(p)
-dev.off()
-```
-
-<!-- Plot Primitive Streak RNA signature -->
-```{r}
-PS_markers <- c("Fgf8", "Fst", "Eomes", "Mixl1", "T")
-rna.test <- scale(t(rna_matrix[PS_markers,sampleNames(model)]), center = T, scale=T)
-foo <- to.plot %>% merge(
-  data.table(
-    sample = sampleNames(model),
-    PS_markers = apply(rna.test,1,mean,na.rm=F)), by="sample"
-    # PS_markers = rna_matrix["Meis2",sampleNames(model)]), by="sample"
-)
-p <- ggplot(foo, aes(x=V1, y=V2, color=PS_markers)) +
-  geom_point(alpha=0.7, size=1.5) +
-  scale_colour_gradientn(colours = rev(brewer.pal(9, "Greens"))) +
-  labs(x="UMAP Dimension 1", y=" UMAP Dimension 2") +
-  theme_pub() 
-print(p)
-
-# pdf(sprintf("%s/MOFA_PS_RNA.pdf",io$outdir), width=5, height=5.5, useDingbats = F)
-# print(p)
 # dev.off()
 ```
-

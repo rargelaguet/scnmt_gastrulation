@@ -1,5 +1,5 @@
 ---
-title: "Gastrulation: MOFA applied to E7.5 stage"
+title: "Gastrulation: MOFA applied to all cells"
 output: 
   BiocStyle::html_document: 
     fig_width: 10
@@ -8,17 +8,15 @@ output:
 
 
 ```{r}
-devtools::load_all("/Users/ricard/mofa")
+library(MOFA)
 library(data.table)
 library(purrr)
 library(ggplot2)
-library(scater)
-library(reticulate)
 library(RColorBrewer)
 ```
 
 ```{r}
-source("/Users/ricard/gastrulation/metaccrna/mofa/full/load_settings.R")
+source("/Users/ricard/gastrulation/metaccrna/mofa/all_stages/load_settings.R")
 ```
 
 <!-- Load pretrained model -->
@@ -71,7 +69,7 @@ p <- plotFactorScatter(model,
   factors=c(1,2), 
   color_by=sample_metadata_filt$lineage10x_2,
   # shape_by=sample_metadata_filt$stage,
-  dot_size = 0.5
+  dot_size = 1
 )
 p <- p + scale_color_manual(values=opts$colors)
 
@@ -79,8 +77,3 @@ p <- p + scale_color_manual(values=opts$colors)
 print(p)
 # dev.off()
 ```
-
-```{r}
-plotWeights(model, view="RNA expression", factor=3, abs=F, nfeatures = 10, scale=T)
-```
-
