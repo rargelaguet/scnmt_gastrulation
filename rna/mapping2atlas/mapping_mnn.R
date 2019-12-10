@@ -35,7 +35,8 @@ sce_nmt  <- readRDS(paste0(io$path2scNMT, "/rna/SingleCellExperiment.rds"))
 meta_nmt <- read.table(file = paste0(io$path2scNMT, "/sample_metadata.txt"), header = TRUE, sep = "\t", stringsAsFactors = F)
 
 # Filter
-meta_nmt <- meta_nmt[meta_nmt$pass_rnaQC==T & meta_nmt$stage%in%c("E6.5","E7.5") ,]
+meta_nmt <- meta_nmt[meta_nmt$pass_rnaQC==T,]
+# meta_nmt <- meta_nmt[meta_nmt$pass_rnaQC==T & meta_nmt$stage%in%c("E6.5","E7.5") ,]
 sce_nmt <- sce_nmt[,meta_nmt$id_rna] 
 
 #############
