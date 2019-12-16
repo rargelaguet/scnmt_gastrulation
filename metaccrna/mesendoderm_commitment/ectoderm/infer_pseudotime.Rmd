@@ -162,13 +162,13 @@ p <- ggplot(tmp, aes(rank_x,rank_z)) +
     # axis.text = element_text(colour="black",size=rel(1.0)),
     axis.ticks = element_blank(),
     axis.text = element_blank(),
-    legend.position="none"
+    legend.position="right"
   )
 print(p)
 
-# pdf(paste0(io$outdir,"/destiny_ectoderm_v2.pdf"), useDingbats = F, width=4.75, height=4.25)
-# print(p)
-# dev.off()
+pdf(paste0(io$outdir,"/destiny_ectoderm.pdf"), useDingbats = F, width=6.75, height=4.25)
+print(p)
+dev.off()
 ```
 
 <!-- Save results -->
@@ -177,5 +177,5 @@ tmp <- data.frame(
   id_rna=colnames(sce), 
   DC1=round(dm$DC1,4)
 )
-# write.table(tmp, paste0(io$outdir,"/destiny_ectoderm.tsv"), quote=F, sep="\t", row.names = F, col.names = T)
+write.table(tmp, paste0(io$outdir,"/destiny_ectoderm.tsv"), quote=F, sep="\t", row.names = F, col.names = T)
 ```
