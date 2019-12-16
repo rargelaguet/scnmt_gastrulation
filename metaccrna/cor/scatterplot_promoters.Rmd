@@ -1,0 +1,102 @@
+---
+title: "Gastrulation scNMT-seq: scatterplot of Met/RNA and Acc/RNA correlation coefficients in promoters"
+output: 
+  BiocStyle::html_document: 
+    fig_width: 12
+    fig_height: 8
+---
+
+```{r echo=FALSE, include=FALSE}
+suppressPackageStartupMessages(library(purrr))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(data.table))
+```
+
+<!-- Define I/O and options -->
+```{r echo=TRUE, include=FALSE}
+
+## I/O ##
+io   <- list()
+io$base_dir   <- "/Users/ricard/data/gastrulation"
+io$in.sample_metadata <- paste0(io$base_dir,"/sample_metadata.txt")
+io$annos_dir  <- paste0(io$base_dir, "/features/filt")
+io$rna_file   <- paste0(io$base_dir, "/rna/parsed/SingleCellExperiment.rds")
+io$met_dir   <- paste0(io$base_dir, "/met/parsed")
+io$metrna.cor   <- paste0(io$base_dir, "/metrna/cor/metrna_cor_promoters.txt")
+io$accrna.cor   <- paste0(io$base_dir, "/accrna/cor/accrna_cor_promoters.txt")
+io$diff.rna   <- paste0(io$base_dir, "/rna/results/differential")
+
+## Options ##
+opts <- list()
+
+# Multiple testing correction options
+opts$threshold_fdr  <- 0.10
+
+# Define annotations
+opts$met.annos <- "prom_2000_2000"
+opts$acc.annos <- "prom_2000_2000"
+
+# Top genes to label
+opts$top_genes <- 50
+```
+
+<!-- Load results of Met/RNA coupling across cells -->
+```{r}
+metrna <- fread(io$metrna.cor)
+metrna_filt <- metrna %>% .[anno%in%names(opts$met.annos)]
+```
+
+<!-- Load results of Acc/RNA coupling across cells -->
+```{r}
+accrna <- fread(io$accrna.cor)
+accrna_filt <- accrna %>% .[anno%in%names(opts$acc.annos)]
+```
+
+<!-- Load differential expression results -->
+```{r}
+diff.rna.pluripotency <- fread(sprintf("%s/E4.5Epiblast_vs_E7.5EctodermEndodermMesoderm.txt.gz", io$diff.rna)) %>%
+  .[padj_fdr<=opts$threshold_fdr]
+```
+
+<!-- Combine Met/RNA and Acc/RNA coupling -->
+```{r}
+cor <- rbind(
+  metrna_filt[,type:="metrna"], 
+  accrna_filt[,type:="accrna"]
+) %>% data.table::dcast(id+gene+anno~type, value.var=c("padj_fdr","log_padj_fdr","r","sig")) %>% .[complete.cases(.)] %>%
+  .[,sig:=sig_metrna & sig_accrna]
+
+sig_hits <- cor %>% .[sig==TRUE,gene] %>% unique()
+```
+
+<!-- Divide significant hits in terms of their RNA expression patterns -->
+```{r}
+pluripotency_hits <- diff.rna.pluripotency %>% .[logFC<(-1.5)] %>% setorder(p.value)
+early <- pluripotency_hits$symbol
+```
+
+
+<!-- Scatterplot -->
+```{r}
+to.plot <- cor %>%
+  .[,padj_min:=min(padj_fdr_metrna,padj_fdr_accrna),by=c("gene","anno")] %>%
+  setorder(padj_min) %>%
+  .[,i:=1:nrow(.)]
+
+p <- ggplot(to.plot, aes(x=r_metrna, y=r_accrna)) +
+  geom_segment(aes(x=-0.75, xend=0.25, y=0, yend=0), size=0.25, color="orange") +
+  geom_segment(aes(x=0, xend=0, y=-0.25, yend=0.55), size=0.25, color="orange") +
+  geom_point(aes(shape=anno, alpha=sig,), size=1) +
+  ggrepel::geom_text_repel(data=to.plot[sig==T & gene%in%early & i<=opts$top_genes], aes(x=r_metrna, y=r_accrna, label=gene), size=4, color="red", force=1) +
+  # coord_cartesian(xlim=c(-0.75,0.2), ylim=c(-0.2,0.60)) +
+  labs(x="Met/RNA correlation", y="Acc/RNA correlation") +
+  theme(
+    axis.text.x = element_text(size=rel(1.1), color='black'),
+    axis.text.y = element_text(size=rel(1.1), color='black'),
+    axis.title.x = element_text(size=rel(1.2), color='black'),
+    axis.title.y = element_text(size=rel(1.2), color='black'),
+    legend.position = "none",
+    panel.background = element_blank()
+  )
+print(p)
+```
