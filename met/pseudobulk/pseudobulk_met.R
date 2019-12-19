@@ -31,7 +31,7 @@ io <- list()
 if (grepl("ricard",Sys.info()['nodename'])) {
   io$basedir <- "/Users/ricard/data/gastrulation"
 } else {
-  io$basedir <- "/hps/nobackup2/research/stegle/users/ricard"
+  io$basedir <- "/hps/nobackup2/research/stegle/users/ricard/gastrulation"
 }
 io$data <- paste0(io$basedir,"/met/cpg_level")
 io$metadata <- paste0(io$basedir,"/sample_metadata.txt")
