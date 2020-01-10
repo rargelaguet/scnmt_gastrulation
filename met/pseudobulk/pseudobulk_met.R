@@ -121,6 +121,9 @@ for (i in opts$stage_lineage) {
     .[,rate:=round(100*met_cpgs/(met_cpgs+nonmet_cpgs))] %>%
     .[,.(chr,pos,met_cpgs,nonmet_cpgs,rate)]
   
+  # filter
+  data <- data[complete.cases(.)]
+  
   # Save
   outfile = sprintf("%s/%s.tsv",io$outdir,i)
   fwrite(data, file=outfile, quote=F, col.names=T, sep="\t")

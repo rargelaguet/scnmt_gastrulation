@@ -19,7 +19,7 @@ io$basedir <- "/Users/ricard/data/gastrulation"
 # io$datadir <- paste0(io$basedir,"/acc/gpc_level/pseudobulk")
 io$datadir <- paste0(io$basedir,"/met/cpg_level/pseudobulk")
 # io$acc_pseudobulk <- paste0(io$data_dir, "/acc/raw/gpc_level/pseudobulk/E7.5_all.tsv.gz")
-io$outdir <- paste0(io$basedir,"/acc/gpc_level/pseudobulk")
+io$outdir <- paste0(io$basedir,"/met/cpg_level/pseudobulk")
 
 #############
 ## Options ##

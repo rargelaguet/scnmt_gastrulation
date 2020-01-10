@@ -1,6 +1,6 @@
 # Multi-omics profiling of mouse gastrulation at single cell resolution
 
-This repository contains the scripts to reproduce the results of the manuscript [Multi-omics profiling of mouse gastrulation at single cell resolution](https://www.biorxiv.org/content/early/2019/01/13/519207).  
+This repository contains the scripts to reproduce the results of the manuscript [Multi-omics profiling of mouse gastrulation at single cell resolution](https://www.nature.com/articles/s41586-019-1825-8).  
 The source code for the second part of the paper, where we explore the effect of a Tet TKO in embryoid bodies, is available in [this repository](https://github.com/rargelaguet/scnmt_eb)
 
 

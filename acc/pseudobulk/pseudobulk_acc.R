@@ -97,32 +97,39 @@ if (opts$parallel){
 }
 
 for (i in opts$stage_lineage) {
-  print(i)
-  
-  # Define input files 
-  cells <- sample_metadata[stage_lineage%in%i,id_acc]
-  
-  # cells <- head(cells,n=2)
-  files <- paste0(io$data, "/", cells, ".tsv.gz")
-  
-  # split into chunks for parallel processing
-  if (opts$parallel) {
-    chunks <- ceiling(seq_along(files)/opts$chunk_size)
-    file_list <- split(files, chunks)
+  outfile = sprintf("%s/%s.tsv",io$outdir,i)
+  if (file.exists(outfile)) {
+    print(sprintf("%s already exists, skipping...",outfile))
   } else {
-    file_list <- list(files)
+    
+    # Define input files 
+    cells <- sample_metadata[stage_lineage%in%i,id_acc]
+    
+    # cells <- head(cells,n=2)
+    files <- paste0(io$data, "/", cells, ".tsv.gz")
+    
+    # split into chunks for parallel processing
+    if (opts$parallel) {
+      chunks <- ceiling(seq_along(files)/opts$chunk_size)
+      file_list <- split(files, chunks)
+    } else {
+      file_list <- list(files)
+    }
+    
+    # pseudobulk
+    init <- data.table(chr=as.factor(NA), pos=as.integer(NA), met_cpgs=as.integer(NA), nonmet_cpgs=as.integer(NA))
+    data <- future_map(file_list, purrr::reduce, fread_and_merge, .init=init, .progress=F) %>%
+    # data <- map(file_list, purrr::reduce, fread_and_merge, .init=init) %>%
+      purrr::reduce(merge_and_sum) %>%
+      .[,rate:=round(100*met_cpgs/(met_cpgs+nonmet_cpgs))] %>%
+      .[,.(chr,pos,met_cpgs,nonmet_cpgs,rate)]
+    
+    # filter
+    data <- data %>% .[complete.cases(.)]
+    
+    # Save
+    fwrite(data, file=outfile, quote=F, col.names=T, sep="\t")
+    system(sprintf("pigz -p %d -f %s",opts$ncores,outfile))
   }
   
-  # pseudobulk
-  init <- data.table(chr=as.factor(NA), pos=as.integer(NA), met_cpgs=as.integer(NA), nonmet_cpgs=as.integer(NA))
-  data <- future_map(file_list, purrr::reduce, fread_and_merge, .init=init, .progress=F) %>%
-  # data <- map(file_list, purrr::reduce, fread_and_merge, .init=init) %>%
-    purrr::reduce(merge_and_sum) %>%
-    .[,rate:=round(100*met_cpgs/(met_cpgs+nonmet_cpgs))] %>%
-    .[,.(chr,pos,met_cpgs,nonmet_cpgs,rate)]
-  
-  # Save
-  outfile = sprintf("%s/%s.tsv",io$outdir,i)
-  fwrite(data, file=outfile, quote=F, col.names=T, sep="\t")
-  system(sprintf("pigz -p %d -f %s",opts$ncores,outfile))
 }
