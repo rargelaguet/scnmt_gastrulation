@@ -40,7 +40,7 @@ Content
 Data
 -------
 The raw data is accessible at GEO ([GSE121708](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE121708)).  
-The parsed data can be downloaded here: ftp://ftp.ebi.ac.uk/pub/databases/scnmt_gastrulation
+The parsed data can be downloaded here: ftp://ftp.ebi.ac.uk/pub/databases/scnmt_gastrulation/scnmt_gastrulation.tar.gz
 
 Contact
 -------
