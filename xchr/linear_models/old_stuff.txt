@@ -1,0 +1,35 @@
+
+<!-- Fit linear regression model  -->
+We are going to fit a linear regression model for each gene and feature separately:
+Y = WX where 
+  X is sex assignment (a binary factor)
+  Y is the RNA expression (log norm counts) or the DNA methylation (m-values)
+Then, for each model, we are going to extract the fraction of variance explained (r-squared)
+Finally, ...
+
+Example of how to do it for a single feature
+```{r}
+rna_dt.filt <- rna_dt[id=="ENSMUSG00000000001"]
+model <- lm(formula=expr~sex, data=rna_dt.filt)
+summary(model)
+
+# extract R-squared value
+r2 <- summary(model)$r.squared
+```
+
+Methylation
+(Ignore warnings)
+```{r}
+# r2.met <- met_dt[,.(r2=summary(lm(formula=m~sex))$r.squared), by=c("id","chr","stage","anno")] %>%
+#   .[,.(r2=median(r2)),by=c("chr","stage","anno")]
+r2.met <- met_dt[,.(r2=summary(lm(formula=m~sex))$r.squared), by=c("chr","stage","anno")]
+```
+
+RNA
+(Ignore warnings)
+```{r}
+# r2.rna <- rna_dt[,.(r2=summary(lm(formula=expr~sex))$r.squared), by=c("id","chr","stage")] %>%
+#   .[,.(r2=median(r2)),by=c("chr","stage")]
+
+r2.rna <- rna_dt[,.(r2=summary(lm(formula=expr~sex))$r.squared), by=c("chr","stage")]
+```

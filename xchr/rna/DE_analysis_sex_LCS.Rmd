@@ -1,0 +1,337 @@
+---
+title: "Differential expression analysis - comparison of methods"
+output: 
+  BiocStyle::html_document:
+  toc: false
+fig_width: 10
+fig_height: 8
+---
+  
+```{r echo=FALSE, include=FALSE}
+library(scater)
+library(data.table)
+library(purrr)
+library(ggplot2)
+```
+
+```{r define_opts, echo=FALSE, include=FALSE}
+
+io <- list()
+io$basedir <- "/Users/stapelc/Documents/gastrulation_data"
+io$sample_metadata <- paste0(io$basedir,"/sample_metadata_scNMT.txt")
+io$rna.infile <- paste(io$basedir,"rna/parsed/sceset_scNMT.rds",sep="/")
+io$escape.file <- "/Users/stapelc/Documents/GastrulaProject/rna/Xi_escape_Berletch2015.txt"
+io$outdir <- "/Users/stapelc/Documents/GastrulaProject/Results/DE"
+
+## Define options
+
+opts <- list()
+
+# Define stages and lineages (only embryonic tissues! Xchr dynamics are different in extraembryonic)
+#opts$stage_lineage <- c("E3.5_ICM","E4.5_EPI","E5.5_EPI","E6.5_early_EPI","E6.5_early_PS","E6.5_late_EPI", "E6.5_late_PS","E6.75_EPI","E6.75_PS","E7.5_Ectoderm", "E7.5_Mesoderm", "E7.5_Endoderm")
+opts$stage_lineage <- c("E7.5_Ectoderm", "E7.5_Mesoderm", "E7.5_Endoderm")
+
+opts$sex <- c("female","male")
+opts$chr <- "X"
+
+opts$threshold_fdr <- 0.0001
+
+# Define which cells to use
+opts$cells <- fread(io$sample_metadata, header=T) %>% 
+  .[KO_3b=="not"] %>%
+  .[,stage_lineage:=paste(stage,lineage,sep="_")] %>% 
+  .[pass_rnaQC==T & stage_lineage%in%opts$stage_lineage,sample] 
+
+```
+
+<!-- Load sample metadata -->
+```{r}
+# sample_metadata <- fread(io$sample_metadata) %>% .[sample%in%opts$cells]
+sample_metadata <- fread(io$sample_metadata) %>% .[sample %in% opts$cells] %>% .[,stage_lineage:=paste(stage,lineage,sep="_")]
+```
+
+<!-- Load expression data -->
+```{r load_expr, echo=FALSE, include=FALSE}
+
+# Load SCEset object
+sce <- readRDS(io$rna.infile)
+colnames(sce) <- colData(sce)$sample
+
+# Filter cells
+sce <- sce[,colnames(sce) %in% opts$cells]
+
+```
+
+<!-- Extract gene metadata -->
+```{r}
+gene_metadata_1 <- ranges(sce) %>% as.data.table %>% setnames("names", "ens_id")
+gene_metadata_2 <- rowRanges(sce) %>% as.data.table %>% setnames(c("seqnames", "symbol"), c("chr", "gene")) %>% 
+  .[,c("chr", "start", "end", "gene")] %>% .[,chr:=as.factor(sub("chr","",chr))]
+
+gene_metadata_all <- merge(gene_metadata_1, gene_metadata_2, by = c("start", "end"))
+```
+
+<!-- Create data.table from SCEset object -->
+```{r}
+rna <- exprs(sce) %>% t %>% as.data.table(keep.rownames="sample") %>% melt(id.vars="sample", value.name="expr", variable.name="ens_id") #%>%
+  #merge(fData(sce) %>% tibble::rownames_to_column("gene") %>% .[,c("gene","ens_id")] %>% as.data.table %>% setnames("ens_id","id"))
+```
+
+<!-- Merge data and metadata -->
+```{r}
+rna <- merge(rna, sample_metadata[,c("sample","stage","stage_lineage","embryo","sex")], by="sample") %>%
+  merge(gene_metadata_all[,c("chr","gene","ens_id")], by="ens_id")
+
+# rna <- merge(rna, sample_metadata_rna, by="sample")
+```
+
+<!-- Filter data -->
+```{r filter, echo=FALSE}
+# Select chromosomes of interest
+rna_filt <- rna[chr %in% opts$chr]
+
+# filter genes based on dropout
+opts$max.dropout <- 0.1
+genes.keep <- rna_filt %>% .[,.(N_dropout=sum(expr>0), N=.N),  by="gene"] %>% .[,keep:=(N_dropout/N)>opts$max.dropout] %>% .[keep==TRUE] %>% .$gene
+rna_filt <- rna_filt[gene%in%genes.keep]
+
+# Filter genes based on dropout
+#rna_filt <- rna[,dropout:=mean(expr<0.1),by="gene"] %>% .[dropout<=opts$max.dropout] %>% .[,dropout:=NULL]
+
+
+# select data for DE test
+#x <- rna[stage_lineage %in% opts$stage_lineage[1]]
+#y <- rna[stage_lineage %in% opts$stage_lineage[2]]
+#x <- rna[sex %in% opts$sex[1]]
+#y <- rna[sex %in% opts$sex[2]]
+
+# filter genes based on dropout
+#genes.keep.x <- x %>% .[,.(N_dropout=sum(expr>0), N=.N),  by="gene"] %>% .[,keep:=(N-N_dropout)>5] %>% .[keep==TRUE] %>% .$gene
+#genes.keep.y <- y %>% .[,.(N_dropout=sum(expr>0), N=.N),  by="gene"] %>% .[,keep:=(N-N_dropout)>5] %>% .[keep==TRUE] %>% .$gene
+#genes.keep <- intersect(genes.keep.x, genes.keep.y)
+
+#x <- x[gene %in% genes.keep]
+#y <- y[gene %in% genes.keep]
+
+#rna_filt <- rbind(x,y)
+
+# Or should I remove all dropouts with expr>0. This would generate more normally distributed data.
+
+
+# Filter genes based on variance
+# opts$fvar <- 0.5
+# genes_var <- names(tail(sort(apply(exprs(sce_filt),1,var)), n=nrow(sce_filt)*opts$fvar))
+# sce_filt <- sce_filt[genes_var,opts$cells]
+ 
+# Filter genes based on biological overdispersion
+# opts$fvar <- 0.5
+# genes_var <- rownames(sce_filt)[tail(sort(rowData(sce_filt)$bioVar, index.return=TRUE)$ix, n=nrow(sce_filt)*opts$fvar)]
+# sce_filt <- sce_filt[genes_var,opts$cells]
+# genes_oversdispersion <- rownames(sce_filt)[rowData(sce_filt)$bioVar > 1]
+# sce_filt <- sce_filt[genes_oversdispersion,opts$cells]
+```
+
+<!-- Load list of mouse Xi escape genes -->
+```{r}
+esc_list <- fread(io$escape.file)
+```
+
+<!-- Select escape genes -->
+```{r filter, echo=FALSE}
+library(biomaRt)
+
+# Obtain ENS gene id for all genes
+GRCm38 <- useEnsembl(biomart="ensembl",dataset="mmusculus_gene_ensembl")
+gene_IDs <- getBM(attributes=c("external_gene_name","ensembl_gene_id"), mart=GRCm38)
+gene_IDs <- as.data.table(gene_IDs)
+
+# Extract escape genes
+esc_IDs <- gene_IDs[external_gene_name %in% esc_list$gene] %>% .[,gene:=external_gene_name] %>% .[,external_gene_name:=NULL]
+esc_list <- merge(esc_list, esc_IDs, by="gene")
+
+common <- esc_list[escape=="common"] 
+variable <- esc_list[escape=="variable"]
+
+rna_esc_common <- rna_filt[ens_id %in% common$ensembl_gene_id] %>% .[,escape:="common"]
+rna_esc_variable <- rna_filt[ens_id %in% variable$ensembl_gene_id] %>% .[,escape:="variable"]
+rna_noEsc <- rna_filt[!ens_id %in% esc_list$ensembl_gene_id] %>% .[,escape:="no"]
+
+rna_esc <- rbindlist(list(rna_esc_common, rna_esc_variable, rna_noEsc), use.names = TRUE)
+
+rna_esc_mean <- rna_esc %>% .[,.(mean_expr=mean(expr), N=.N), by=c("ens_id","gene","sex","escape")]
+
+#genes.keep.y <- y %>% .[,.(N_dropout=sum(expr>0), N=.N),  by="gene"] %>% .[,keep:=(N-N_dropout)>5] %>% .[keep==TRUE] %>% .$gene
+
+```
+
+<!-- Test for normality -->
+```{r}
+
+# qqplot for one gene
+test <- rna_filt[gene==unique(rna$gene)[102]]   #* rna[gene=="Snai1"] to test for gene of interest
+qqnorm(test$expr)
+
+# remove dropouts and replot qqplot
+test <- test[expr>0]
+qqnorm(test$expr)
+
+```
+
+<!-- t-test -->
+```{r}
+# Normal assumption: t-test
+DE_ttest <- rna_filt[,.(N1 = .SD[sex%in%opts$sex[1],.N], N2 = .SD[sex%in%opts$sex[2],.N], 
+    # .SD == Subset of Data
+    # .N == determine length; number of cells for each of the stage_lineages
+  mean_expr_F = mean(.SD[sex%in%opts$sex[1],expr]),
+  mean_expr_M = mean(.SD[sex%in%opts$sex[2],expr]),
+  mean_diff = mean(.SD[sex%in%opts$sex[1],expr]) - mean(.SD[sex%in%opts$sex[2],expr]),
+  log_fold_diff = log2(mean(.SD[sex%in%opts$sex[1],expr]) / mean(.SD[sex%in%opts$sex[2],expr])),
+  p.value = t.test(x=.SD[sex%in%opts$sex[1],expr], y=.SD[sex%in%opts$sex[2],expr], paired = FALSE, var.equal=FALSE)[["p.value"]]), by = "gene"] %>%   # by = c("gene","id")]
+  .[, padj_fdr := list(p.adjust(p.value, method = "fdr"))] %>%
+  .[, log_padj_fdr := list(-log10(padj_fdr))] %>%
+  .[, sig := padj_fdr <= opts$threshold_fdr] %>%
+  .[complete.cases(sig)] %>% setorder(padj_fdr) %>%
+  .[mean_expr_F >=1 | mean_expr_M >=1]
+
+DE_ttest_filt <- DE_ttest[sig==T]# & (log_fold_diff>=1 | log_fold_diff<=-1)] #& (mean_expr_ecto>(quantile(expr_TF$mean_expr, 0.5)) | mean_expr_meso>(quantile(expr_TF$mean_expr, 0.5)))]
+
+
+# Normal assumption: t-test, dropouts excluded to increase normality
+# Compare results to t-test without dropout filtering
+rna_filt_drop <- rna_filt[expr>0]
+
+a <- rna_filt_drop[sex %in% opts$sex[1]]
+b <- rna_filt_drop[sex %in% opts$sex[2]]
+
+genes.keep.a <- a %>% .[,.(N=.N),  by="gene"] %>% .[,keep:=N>5] %>% .[keep==TRUE] %>% .$gene
+genes.keep.b <- b %>% .[,.(N=.N),  by="gene"] %>% .[,keep:=N>5] %>% .[keep==TRUE] %>% .$gene
+
+genes.keep <- intersect(genes.keep.a, genes.keep.b)
+
+a <- a[gene %in% genes.keep]
+b <- b[gene %in% genes.keep]
+
+rna_filt_drop <- rbind(a,b)
+
+DE_ttest_drop <- rna_filt_drop[,.(N1 = .SD[sex%in%opts$sex[1],.N], N2 = .SD[sex%in%opts$sex[2],.N], 
+    # .SD == Subset of Data
+    # .N == determine length; number of cells for each of the sexs
+  mean_expr_F = mean(.SD[sex%in%opts$sex[1],expr]),
+  mean_expr_M = mean(.SD[sex%in%opts$sex[2],expr]),
+  mean_diff = mean(.SD[sex%in%opts$sex[1],expr]) - mean(.SD[sex%in%opts$sex[2],expr]),
+  log_fold_diff = log2(mean(.SD[sex%in%opts$sex[1],expr]) / mean(.SD[sex%in%opts$sex[2],expr])),
+  p.value = t.test(x=.SD[sex%in%opts$sex[1],expr], y=.SD[sex%in%opts$sex[2],expr], paired = FALSE, var.equal=FALSE)[["p.value"]]), by = "gene"] %>%   # by = c("gene","id")]
+  .[, padj_fdr := list(p.adjust(p.value, method = "fdr"))] %>%
+  .[, log_padj_fdr := list(-log10(padj_fdr))] %>%
+  .[, sig := padj_fdr <= opts$threshold_fdr] %>%
+  .[complete.cases(sig)] %>% setorder(padj_fdr) %>%
+  .[mean_expr_F >=1 | mean_expr_M >=1]
+
+DE_ttest_drop_filt <- DE_ttest_drop[sig==T]# & (log_fold_diff>=1 | log_fold_diff<=-1)] #& (mean_expr_ecto>(quantile(expr_TF$mean_expr, 0.5)) | mean_expr_meso>(quantile(expr_TF$mean_expr, 0.5)))]
+
+```
+
+<!-- Wilcoxon test -->
+```{r}
+# Wilcoxon test tests difference in median between two samples
+
+DE_Wilcoxon_test <- suppressWarnings(rna_filt[,.(N1 = .SD[sex%in%opts$sex[1],.N], N2 = .SD[sex%in%opts$sex[2],.N], 
+    # .SD == Subset of Data
+    # .N == determine length; number of cells for each of the sexs
+  mean_expr_F = mean(.SD[sex%in%opts$sex[1],expr]),
+  mean_expr_M = mean(.SD[sex%in%opts$sex[2],expr]),
+  mean_diff = mean(.SD[sex%in%opts$sex[1],expr]) - mean(.SD[sex%in%opts$sex[2],expr]),
+  log_fold_diff = log2(mean(.SD[sex%in%opts$sex[1],expr]) / mean(.SD[sex%in%opts$sex[2],expr])),
+  p.value = wilcox.test(x=.SD[sex%in%opts$sex[1],expr], y=.SD[sex%in%opts$sex[2],expr])[["p.value"]]), by = "gene"]) %>% 
+  .[, padj_fdr := list(p.adjust(p.value, method = "fdr"))] %>%
+  .[, log_padj_fdr := list(-log10(padj_fdr))] %>%
+  .[, sig := padj_fdr <= opts$threshold_fdr] %>%
+  .[complete.cases(sig)] %>% setorder(padj_fdr) %>%
+  .[mean_expr_F >=1 | mean_expr_M >=1]
+
+DE_Wilcoxon_test_filt <- DE_Wilcoxon_test[sig==TRUE]# & (log_fold_diff>=1 | log_fold_diff<=-1)] #& (mean_expr_ecto>(quantile(expr_TF$mean_expr, 0.5)) | mean_expr_meso>(quantile(expr_TF$mean_expr, 0.5)))]
+
+
+```
+
+<!-- Kolmogorov-Smirnov test -->
+```{r}
+# KS test tests difference in distribution (mean expression & variability) between two samples
+
+DE_KStest <- suppressWarnings(rna_filt[,.(N1 = .SD[sex%in%opts$sex[1],.N], N2 = .SD[sex%in%opts$sex[2],.N], 
+    # .SD == Subset of Data
+    # .N == determine length; number of cells for each of the sexs
+  mean_expr_F = mean(.SD[sex%in%opts$sex[1],expr]),
+  mean_expr_M = mean(.SD[sex%in%opts$sex[2],expr]),
+  mean_diff = mean(.SD[sex%in%opts$sex[1],expr]) - mean(.SD[sex%in%opts$sex[2],expr]),
+  log_fold_diff = log2(mean(.SD[sex%in%opts$sex[1],expr]) / mean(.SD[sex%in%opts$sex[2],expr])),
+  p.value = ks.test(x=.SD[sex%in%opts$sex[1],expr], y=.SD[sex%in%opts$sex[2],expr])[["p.value"]]), by = "gene"]) %>% 
+  .[, padj_fdr := list(p.adjust(p.value, method = "fdr"))] %>%
+  .[, log_padj_fdr := list(-log10(padj_fdr))] %>%
+  .[, sig := padj_fdr <= opts$threshold_fdr] %>%
+  .[complete.cases(sig)] %>% setorder(padj_fdr) %>%
+  .[mean_expr_F >=1 | mean_expr_M >=1]
+
+DE_KStest_filt <- DE_KStest[sig==TRUE] #& (log_fold_diff>=1 | log_fold_diff<=-1)] #& (mean_expr_ecto>(quantile(expr_TF$mean_expr, 0.5)) | mean_expr_meso>(quantile(expr_TF$mean_expr, 0.5)))]
+
+```
+
+
+<!-- edgeR -->
+```{r}
+#source("https://bioconductor.org/biocLite.R")
+biocLite("edgeR")
+library(edgeR)
+
+
+
+```
+
+<!-- DESeq2 -->
+```{r}
+# Widely used package. "The package DESeq2 provides methods to test for differential expression by use of negative binomial generalized linear models; the estimates of dispersion and logarithmic fold changes incorporate data-driven prior distributions." DESeq2 uses counts data for DE analysis.
+
+#biocLite("DESeq2")
+library("DESeq2")
+
+# Transform sce object to DEsce object. Indicate colData for which to compare (in this case stage & lineage).
+DEsce <- DESeqDataSet(sce, design = ~ lineage) #* use ~ stage + lineage if not filtered by stage previously
+
+# run DE analysis
+DE_DESeq2 <- DESeq(DEsce)
+results_DESeq2 <- results(DE_DESeq2)
+
+results_DESeq2_filt <- results(DE_DESeq2, lfcThreshold=1)
+results_DESeq2_filt <- as.data.frame(results_DESeq2_filt) %>%
+  as.data.table(., keep.rownames=TRUE) %>%
+  setnames(., 1, "gene") %>%
+  .[, log_padj_fdr := list(-log10(padj))] %>%
+  .[, sig_DESeq2 := padj <= opts$threshold_fdr] %>%
+  .[complete.cases(sig_DESeq2)] %>% setorder(padj)
+
+DE_DESeq2_filt <- results_DESeq2_filt[sig_DESeq2==TRUE] #& (log2_fold_diff>=1 | log_fold_diff<=-1) & (mean_expr_ecto>(quantile(expr_TF$mean_expr, 0.5)) | mean_expr_meso>(quantile(expr_TF$mean_expr, 0.5)))]
+```
+
+<!-- STDE (recommendation Irene) -->
+```{r}
+
+```
+
+
+<!-- Combine outcomes different DE analyses to finalise list of X inactivation escape genes -->
+```{r}
+# combine results
+foo <- rbind(DE_ttest_filt, DE_ttest_drop_filt)
+bar <- rbind(DE_KStest_filt, DE_Wilcoxon_test_filt)
+DE_all <- rbind(foo, bar)
+
+esc_genes <- unique(DE_all$gene) %>% as.data.table(.)
+colnames(esc_genes) <- "gene"
+
+esc_IDs <- gene_IDs[external_gene_name %in% esc_genes$gene] %>% .[,gene:=external_gene_name] %>% .[,external_gene_name:=NULL]
+colnames(esc_IDs) <- c("ens_id","gene")
+
+write.csv(esc_IDs, file=paste(io$outdir,"/EscapeGenes_combinedTests.csv"))
+
+```

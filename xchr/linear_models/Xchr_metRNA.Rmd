@@ -1,0 +1,303 @@
+---
+title: "Gastrulation: Genomic context specificiy study during X chromosome inactivation. Using a linear regression framework"
+output: 
+  BiocStyle::html_document:
+  toc: false
+fig_width: 10
+fig_height: 8
+---
+
+```{r echo=FALSE, include=FALSE}
+library(scater)
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(edgeR)
+
+```
+
+```{r define_opts, echo=FALSE, include=FALSE}
+
+## Define I/O ##
+io <- list()
+# io$basedir <- "/Users/stapelc/Documents/gastrulation_data"
+io$basedir <- "/Users/ricard/data/gastrulation"
+io$sample_metadata <- paste0(io$basedir,"/sample_metadata_scNMT.txt")
+io$met.data.parsed <- paste(io$basedir,"met/parsed",sep="/")
+io$features.dir <- paste(io$basedir,"features/filt", sep="/")
+io$rna.file <- paste(io$basedir,"rna/parsed/sceset_scNMT.rds",sep="/")
+# io$outdir <- "/Users/stapelc/Documents/GastrulaProject/Results/Xchr/MOFA"
+io$outdir <- "/Users/ricard/Documents"
+
+
+## Define options ##
+opts <- list()
+
+# opts$met_nsites <- 200
+# opts$rna_ngenes <- 200
+opts$chr <- c("Y","X","3")
+
+# Define stages and lineages (only embryonic tissues! Xchr dynamics are different in extraembryonic)
+opts$stage_lineage <- c(
+  "E4.5_EPI","E5.5_EPI",
+  "E6.5_EPI","E6.5_PS",
+  "E7.5_Ectoderm", "E7.5_Mesoderm", "E7.5_Endoderm"
+)
+
+# Filtering options
+opts$met_min.CpGs <- 1      # Minimum number of CpG sites per feature
+opts$met_min.cells <- 15    # Minimum number of cells per feature (per stage)
+
+# Define which genomic contexts to use
+opts$annos <- c(
+  # "prom_2000_2000_cgi",
+  # "prom_2000_2000_noncgi",
+  "CGI",
+  "LINE"
+  # "genebody"
+)
+
+opts$threshold_fdr <- 0.01
+opts$min.logFC <- 0.5
+
+opts$threshold_fdr <- 0.01
+
+# Define which cells to use
+tmp <- fread(io$sample_metadata) %>% 
+  .[,stage_lineage:=paste(stage,lineage,sep="_")] %>%
+  .[KO_3b=="not" & pass_sexQC==T]
+opts$met_cells <- tmp %>% .[pass_metQC==T & outlier==F & stage_lineage%in%opts$stage_lineage,id_met]
+opts$rna_cells <- tmp %>% .[pass_rnaQC==T & outlier==F & stage_lineage%in%opts$stage_lineage,id_rna]
+```
+
+<!-- Load sample metadata -->
+```{r}
+sample_metadata <- fread(io$sample_metadata,stringsAsFactors=T) %>% 
+  .[id_met%in%opts$met_cells | id_rna%in%opts$rna_cells] %>% 
+  .[,stage_lineage:=as.factor(paste(stage,lineage,sep="_"))]
+```
+
+<!-- Load methylation data in a data.table format -->
+```{r}
+met_dt <- lapply(opts$annos, function(n) {
+  data <- fread(sprintf("zcat < %s/%s.tsv.gz",io$met.data.parsed,n), stringsAsFactors=T, header=F, quote="") %>%
+    .[V1%in%opts$met_cells]
+}) %>% rbindlist %>% droplevels()
+colnames(met_dt) <- c("id_met","id","anno","Nmet","N","rate")
+```
+
+<!-- Load RNA data in a data.table format -->
+```{r}
+# Load scater object
+sce <- readRDS(io$rna.file)
+
+# Filter cells
+sce <- sce[,colnames(sce) %in% opts$rna_cells]
+
+# Convert to data.table
+rna_dt <- exprs(sce) %>% t %>% as.data.table(keep.rownames = "id_rna") %>% 
+  melt(id.vars = "id_rna", value.name = "expr", variable.name = "id") %>%
+  merge(rowData(sce) %>% as.data.frame(row.names = rownames(sce)) %>% tibble::rownames_to_column("id") %>% .[,c("symbol","id")] %>% setnames("symbol","gene"))
+rna_dt[,c("id_rna","gene","id"):=list(as.factor(id_rna),as.factor(gene),as.factor(id))]
+```
+
+<!-- Load feature metadata -->
+```{r}
+feature_metadata <- lapply(opts$annos, function(anno) 
+  fread(sprintf("%s/%s.bed",io$features.dir,anno), stringsAsFactors=T)[,c(1,2,3,4,5,6)]) %>%
+  rbindlist %>% setnames(c("chr","start","end","strand","id","anno"))
+
+io$gene.metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
+gene.metadata <- fread(io$gene.metadata, stringsAsFactors=T) %>% 
+  .[,chr:=as.factor(sub("chr","",chr))] %>%
+  setnames(c("ens_id","symbol"),c("id","gene"))
+```
+
+<!-- Merge data and sample metadata -->
+```{r}
+met_dt <- merge(met_dt, sample_metadata[id_met%in%opts$met_cells,c("sample","id_met","stage","stage_lineage","sex")], by="id_met") %>% droplevels()
+rna_dt <- merge(rna_dt, sample_metadata[id_rna%in%opts$rna_cells,c("sample","id_rna","stage","stage_lineage","sex")], by="id_rna") %>% droplevels()
+```
+
+<!-- Merge data and feature metadata -->
+```{r}
+met_dt <- merge(met_dt, feature_metadata[,c("chr","id","anno")], by=c("id","anno")) %>% droplevels()
+rna_dt <- merge(rna_dt, gene.metadata[,c("chr","id")], by=c("id")) %>% droplevels()
+```
+
+<!-- Filter methylation data --> 
+```{r}
+# Remove chromosomes
+met_dt <- met_dt[chr%in%opts$chr]
+
+# Filter features by minimum number of CpGs
+met_dt <- met_dt[N>=opts$met_min.CpGs]
+
+# Filter features by coverage (by stage) 
+for (i in unique(met_dt$stage)) {
+ met_dt[stage==i,Ntotal:=sample_metadata[stage==i,.N]]
+}
+keep_cov_sites <- met_dt %>% split(.$stage) %>% map(~ .[, cov:=.N, by=c("id","anno")] %>% .[cov >= opts$met_min.cells] %>% .[,id_anno:=paste(id,anno,sep="_")] %>% .$id_anno)
+met_dt <- met_dt %>% .[,id_anno:=paste(id,anno,sep="_")] %>% .[id_anno%in%Reduce("intersect",keep_cov_sites)] %>% .[,"Ntotal":=NULL]
+
+# Filter features with a minimum number of both sexes profiled in each stage
+met_dt[,c("nfemale","nmale"):=list(sum(sex=="female"),sum(sex=="male")), by=c("id","anno","stage")]
+met_dt <- met_dt[nfemale>=5 & nmale>=5]
+
+met_dt <- met_dt %>% droplevels()
+```
+
+<!-- Filter expression data -->
+```{r filter, echo=FALSE}
+
+# Select genes from chromosomes of interest
+rna_dt <- rna_dt[chr %in% opts$chr]
+
+# Remove lowly expressed genes, by stage
+rna_dt <- rna_dt[,mean:=mean(expr),by=c("gene","stage")] %>% .[mean>=1] %>% .[,mean:=NULL]
+
+# Remove genes with constant expression levels
+rna_dt <- rna_dt[,var:=var(expr),by=c("gene","stage")] %>% .[var>0] %>% .[,var:=NULL]
+
+rna_dt <- rna_dt %>% droplevels()
+```
+
+<!-- Parse methylation data -->
+```{r}
+# Calculate M value from Beta value
+met_dt[,m:=log2(((rate/100)+0.01)/(1-(rate/100)+0.01))]
+```
+
+<!-- Calculate number of sex- differentially methylated sites per stage, chromosome and genomic context -->
+```{r}
+diffmet <- met_dt[, .(
+  A_met=sum(.SD[sex=="female",Nmet]), A_unmet=sum(.SD[sex=="female",N-Nmet]),
+  B_met=sum(.SD[sex=="male",Nmet]), B_unmet=sum(.SD[sex=="male",N-Nmet]),
+  p.value = fisher.test(
+    x = matrix( c(
+      A_met=sum(.SD[sex=="female",Nmet]), A_unmet=sum(.SD[sex=="female",N-Nmet]),
+      B_met=sum(.SD[sex=="male",Nmet]), B_unmet=sum(.SD[sex=="male",N-Nmet])
+    ), nrow = 2, ncol = 2))[["p.value"]]
+), by = c("id","anno","chr","stage")] %>%
+  .[, c("padj_fdr") := list(p.adjust(p.value, method="fdr")), by=c("anno","stage")] %>%
+  .[, sig := (padj_fdr<=opts$threshold_fdr)]
+```
+
+```{r}
+r2.met <- diffmet[,.(r2=mean(sig==T)), by=c("chr","stage","anno")] %>%
+  .[chr!="Y"]
+```
+
+<!-- Calculate number of sex- differentially expressed genes sites per stage and chromosome -->
+```{r}
+out <- list()
+for (i in unique(rna_dt$stage)) {
+  cells <- sample_metadata[stage==i,id_rna] %>% as.character()
+  sce_filt <- sce[,cells]
+  sce_filt <- sce_filt[as.character(unique(rna_dt[stage==i,id])),]
+  
+  # Convert SCE to DGEList
+  sce_edger <- scran::convertTo(sce_filt, type="edgeR")
+  
+  # Define design matrix (with intercept)
+  sex <- sample_metadata %>% setkey(id_rna) %>% .[cells] %>% .$sex %>% droplevels() %>% as.numeric()
+  lineage <- sample_metadata %>% setkey(id_rna) %>% .[cells] %>% .$lineage %>% droplevels() %>%as.numeric()
+  plate <- sample_metadata %>% setkey(id_rna) %>% .[cells] %>% .$plate %>% droplevels() %>% as.numeric()
+  embryo <- sample_metadata %>% setkey(id_rna) %>% .[cells] %>% .$embryo %>% droplevels() %>% as.numeric()
+  cdr <- colMeans(exprs(sce_filt)>0)
+  
+  if (i %in% c("E6.5","E7.5")) {
+    design <- model.matrix(~cdr+lineage+embryo+sex)
+    coef <- 5
+  } else {
+    design <- model.matrix(~cdr+embryo+sex)
+    coef <- 4
+  }
+   
+  # Estimate dispersions
+  sce_edger  <- estimateDisp(sce_edger,design)
+   
+  # Fit GLM
+  fit <- glmQLFit(sce_edger,design)
+  
+  # Quasi-likelihood F test
+  lrt <- glmQLFTest(fit,coef=coef)
+  
+  # Construct output data.frame
+  out[[i]] <- topTags(lrt, n=nrow(lrt))$table %>% as.data.table(keep.rownames=T) %>%
+    .[,c("rn","logFC","FDR")] %>% setnames(c("rn","FDR"),c("id","padj_fdr")) %>%
+    .[,stage:=i] %>%
+    .[, sig := (padj_fdr<=opts$threshold_fdr & abs(logFC)>opts$min.logFC)] %>%
+    merge(gene.metadata[,c("chr","id")]) 
+}
+diffrna <- rbindlist(out)
+```
+
+```{r}
+r2.rna <- diffrna[,.(r2=mean(sig==T)), by=c("chr","stage")] %>% 
+  .[chr!="Y"]
+```
+
+<!-- Join results -->
+```{r}
+r2 <- rbind(
+  r2.met[,type:="met"],
+  r2.rna[,c("anno","type"):=list("rna","rna")]
+)
+```
+
+<!-- Plot -->
+
+One plot per omic
+```{r}
+r2.chr <- r2 %>% split(.$type)
+
+for (i in names(r2.chr)) {
+  tmp <- r2.chr[[i]]# %>% dcast(anno~stage, value.var="r2")
+  
+  # Grid plot with the variance explained per factor and view
+  p <- ggplot(tmp, aes(x=interaction(chr,anno),y=stage)) + 
+    geom_tile(aes_string(fill="r2"), color="black") +
+    guides(fill=guide_colorbar("R2")) +
+    scale_fill_gradientn(colors=c("gray97","darkblue"), guide="colorbar") +
+    labs(title=i) +
+    theme(
+      # plot.margin = margin(5,5,5,5),
+      plot.title = element_text(size=17, hjust=0.5),
+      axis.title.x = element_blank(),
+      axis.title.y = element_blank(),
+      # axis.text.y = element_blank()
+      # axis.text.x = element_text(size=11, angle=60, hjust=1, vjust=1, color="black"),
+      axis.line = element_blank(),
+      axis.ticks =  element_blank(),
+      panel.background = element_blank()
+    )
+  print(p)
+}
+```
+
+Joint plot
+```{r}
+tmp <- r2
+
+# Grid plot with the variance explained per factor and view
+p <- ggplot(tmp, aes(x=interaction(anno,chr), y=stage)) + 
+  geom_tile(aes_string(fill="r2"), color="black") +
+  guides(fill=guide_colorbar("R2")) +
+  scale_fill_gradientn(colors=c("gray97","darkblue"), guide="colorbar") +
+  labs(title="") +
+  theme(
+    # plot.margin = margin(5,5,5,5),
+    plot.title = element_text(size=17, hjust=0.5),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    # axis.text.y = element_blank()
+    axis.text.x = element_text(size=11, angle=90, hjust=1, vjust=1, color="black"),
+    axis.line = element_blank(),
+    axis.ticks =  element_blank(),
+    panel.background = element_blank()
+  )
+print(p)
+```
+
+

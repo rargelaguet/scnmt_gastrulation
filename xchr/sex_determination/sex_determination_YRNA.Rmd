@@ -1,0 +1,204 @@
+---
+title: "Gastrulation scNMT: sex determination 1"
+output: 
+  BiocStyle::html_document:
+  toc: false
+fig_width: 10
+fig_height: 8
+---
+
+Assign sex to embryos based on sum expression counts of genes on the Y chromosome.
+This script only assigns sex to cells that can be traced back to individual embryos since the Y chromosome expression counts are not sufficiently informative for individual cells (e.g. not all male cells have Y chromosome counts).
+To assign sex to cells that can not be traced back to individual embryos (mixed), run 'sex_determination_YRNA_Ymet.Rmd' after running this script.
+
+```{r echo=FALSE, include=FALSE}
+library(scater)
+library(data.table)
+library(purrr)
+library(ggplot2)
+```
+
+```{r funcs, echo=FALSE}
+
+```
+
+```{r define_opts, echo=FALSE, include=FALSE}
+
+## Define I/O ##
+io <- list()
+io$basedir <- "/Users/stapelc/Documents/gastrulation_data"
+io$sample_metadata <- paste0(io$basedir,"/sample_metadata.txt")
+io$gene.metadata <- "/Users/stapelc/Documents/GastrulaProject/data/ensembl/mouse/v93/BioMart/Mmusculus_genes_BioMart.93_GRCm38.p6.txt"
+io$rna.infile <- paste(io$basedir,"rna/parsed/SingleCellExperiment.rds",sep="/")
+io$outdir <- "/Users/stapelc/Documents/GastrulaProject/Results/Xchr"
+
+## Define options ##
+opts <- list()
+
+# Define stages and lineages (only embryonic stages! X inactivation dynamics differ in extraembryonic cells (Xpi))
+opts$stage <- c("E4.5","E5.5","E6.5","E7.5")
+opts$lineage10x_2 <- c("Ectoderm","Embryonic_endoderm","Epiblast","Nascent_mesoderm","Mature_mesoderm","Primitive_Streak")
+
+# opts$stage_lineage <- "all"
+# if (opts$stage_lineage == "all") {
+#   opts$stage_lineage <- fread(io$sample_metadata, header=T) %>% .[pass_rnaQC==T] %>% 
+#     .[,stage_lineage:=paste(stage,lineage,sep="_")] %>% .$stage_lineage %>% unique
+# }
+
+# Define which cells to use
+opts$cells <- fread(io$sample_metadata) %>% 
+  .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")] %>%
+  .[pass_rnaQC==T & stage%in%opts$stage & lineage10x_2%in%opts$lineage10x_2,sample]
+
+```
+
+<!-- Load expression data -->
+```{r load_expr, echo=FALSE, include=FALSE}
+
+# Load SCEset object
+sce <- readRDS(io$rna.infile)
+colnames(sce) <- colData(sce)$sample
+
+# Filter cells
+sce <- sce[,colnames(sce) %in% opts$cells]
+
+```
+
+<!-- Load sample metadata -->
+```{r}
+sample_metadata <- fread(io$sample_metadata) %>% .[sample %in% opts$cells] %>% .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")]
+```
+
+<!-- Extract gene metadata -->
+```{r}
+gene_metadata <- fread(io$gene.metadata, stringsAsFactors=T) #%>% 
+
+#gene_metadata_1 <- ranges(sce) %>% as.data.table %>% setnames("names", "gene")
+#gene_metadata_2 <- rowRanges(sce) %>% as.data.table %>% setnames(c("seqnames"), c("chr")) %>% 
+#  .[,c("chr", "start", "end", "ens_id")] %>% .[,chr:=as.factor(sub("chr","",chr))]
+#gene_metadata_all <- merge(gene_metadata_1, gene_metadata_2, by = c("start", "end"))
+```
+
+<!-- Create data.table from SCEset object -->
+```{r}
+rna <- counts(sce) %>% t %>% as.data.table(keep.rownames="sample") %>% melt(id.vars="sample", value.name="counts", variable.name="ens_id") #%>%
+  #merge(fData(sce) %>% tibble::rownames_to_column("gene") %>% .[,c("gene","ens_id")] %>% as.data.table %>% setnames("ens_id","id"))
+```
+
+<!-- Merge data and metadata -->
+```{r}
+rna <- merge(rna, sample_metadata[,c("sample","stage_lineage","embryo")], by="sample") %>%
+  merge(gene_metadata[,c("chr","ens_id","gene")], by="ens_id")
+```
+
+<!-- Filter expression data -->
+```{r filter, echo=FALSE}
+
+# Extract genes in the Y chromosome
+rna_filt <- rna
+rna_filt <- rna_filt[chr=="Y"]
+
+```
+
+<!-- plot expression of y-chr genes in different embyros per gene -->
+```{r}
+test <- merge(rna_filt, sex[,c("sample", "sex")], by="sample")
+
+for (g in unique(rna_filt$gene)){
+  p <- ggplot(rna_filt[gene==g], aes(x=embryo, y=counts)) +
+    geom_point(pos="jitter") + 
+    ggtitle(g) + 
+    ylim(0,100) +
+    theme(
+    axis.title.y = element_text(colour="black", size=14, vjust=1.5),
+    axis.title.x = element_text(colour="black", size=14, vjust=1.5),
+    axis.text.x = element_text(angle=90, size=10, vjust=0.5, hjust=1.0, color=b$color),
+    axis.text.y = element_text(colour="black",size=rel(1.3)),
+    axis.line = element_line(colour="black", size=0.5),
+    axis.ticks.x = element_line(colour="black", size=rel(0.8)),
+    axis.ticks.y = element_line(colour="black", size=rel(0.8)),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_blank()
+  )
+  print(p)
+}
+
+y_genes <- c("Ddx3y","Eif2s3y","Kdm5d","Uty")
+
+rna_filt <- rna_filt[gene %in% y_genes]
+
+```
+
+<!-- Determine sex of each cell and each embryo -->
+```{r}
+# define minimum number of mean Y-chr counts for male
+opts$min.counts <- 1
+
+# assign sex to individual cells
+foo <- rna_filt[,.(counts=sum(counts)), by=c("sample" ,"embryo")]
+females <- foo[counts<opts$min.counts]
+foo$sex <- ifelse(foo$sample %in% females$sample, 0, 1)
+
+# assign sex to individual embryos
+bar <- foo[,.(sumSex=sum(sex), n=length(sex)), by="embryo"]
+bar$ratio <- bar$sumSex / bar$n
+bar$embryo_sex <- ifelse(bar$ratio < 0.2, "female", ifelse(bar$ratio > 0.8, "male", "unknown"))
+
+# verify sex of individual cells based on sex assigned to the corresponding embryo
+sex <- merge(foo, bar[, c("ratio", "embryo_sex", "embryo")], by = "embryo") 
+sex$sex <- ifelse(sex$sex == 0, "female", "male")
+sex$pass_sexQC <- ifelse(sex$sex == sex$embryo_sex, T, F)
+
+```
+
+<!-- Bar plot of number of counts in Y chr per embryo -->
+```{r}
+
+# mean Y counts per cell for each embryo
+a <- sex[pass_sexQC == T]
+b <- a[,.(counts=sum(counts), n=length(counts)), by="embryo"]
+b$mean_counts <- b$counts/b$n
+
+# sort embryos based on Y count levels
+b <- b %>%  setkey(mean_counts) %>% .[,embryo:=factor(embryo,levels=embryo)]
+
+# color bars based on sex
+b$color <- c("blue","magenta")[as.numeric(b$mean_counts < opts$min.counts)+1]
+
+# plot
+p <- ggplot(b, aes(x=embryo, y=mean_counts)) + 
+  ggtitle("") +
+  geom_bar(stat='identity', position="dodge") +
+  geom_hline(yintercept=opts$min.counts, colour="red", linetype="dashed") +
+  xlab("Embryo") + ylab("Mean sum of counts \n per cell in Y chr") +
+  theme(
+    axis.title.y = element_text(colour="black", size=14, vjust=1.5),
+    axis.title.x = element_text(colour="black", size=14, vjust=1.5),
+    axis.text.x = element_text(angle=90, size=10, vjust=0.5, hjust=1.0, color=b$color),
+    axis.text.y = element_text(colour="black",size=rel(1.3)),
+    axis.line = element_line(colour="black", size=0.5),
+    axis.ticks.x = element_line(colour="black", size=rel(0.8)),
+    axis.ticks.y = element_line(colour="black", size=rel(0.8)),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_blank()
+  )
+print(p)
+
+# save
+#ggsave(filename=(paste0(io$outdir,"/scNMT_sex_countsYRNA",".pdf")), plot=p)
+
+
+```
+
+<!-- Assign sex to metadata -->
+```{r}
+# assign sex
+sample_metadata_all <- fread(io$sample_metadata)
+sample_metadata_sex <- merge(sample_metadata_all, sex[,c("sex", "pass_sexQC", "sample")], by="sample", all=TRUE)
+
+# save new metadata including sex information
+write.table(sample_metadata_sex,paste(io$outdir,"sample_metadata_sex.txt",sep="/"),sep="\t",row.names=FALSE)
+
+```

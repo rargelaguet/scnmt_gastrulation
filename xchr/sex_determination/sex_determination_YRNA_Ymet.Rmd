@@ -1,0 +1,219 @@
+---
+title: "Gastrulation scNMT: sex determination 2"
+output: 
+  BiocStyle::html_document:
+  toc: false
+fig_width: 10
+fig_height: 8
+---
+
+Assign sex to individual cells based on a combination of the sum Y RNA expression counts and Y met read number.
+This script uses data from cells for which the sex is known to determine sex-defining thresholds for RNA and met counts. 
+Before running this script, first run 'sex_determination_YRNA.Rmd' to obtain a ground truth to set these thresholds. 
+
+```{r echo=FALSE, include=FALSE}
+library(scater)
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(dplyr)
+```
+
+```{r funcs, echo=FALSE}
+
+```
+
+```{r define_opts, echo=FALSE, include=FALSE}
+
+## Define I/O ##
+io <- list()
+io$basedir <- "/Users/stapelc/Documents/gastrulation_data"
+io$sample_metadata <- paste0(io$basedir,"/sample_metadata_scNMT_sex.txt")
+io$met.data.indir <- paste(io$basedir,"met/raw/scNMT",sep="/")
+io$rna.infile <- paste(io$basedir,"rna/parsed/sceset_scNMT.rds",sep="/")
+io$outdir <- "/Users/stapelc/Documents/GastrulaProject/Results/Xchr/met"
+
+## Define options ##
+opts <- list()
+
+# Define methylation data files to use
+opts$met.infiles <- list.files(io$met.data.indir, full.names=TRUE, recursive=TRUE)
+
+# Define stages and lineages (only embryonic stages! X inactivation dynamics differ in extraembryonic cells (Xpi))
+opts$stage_lineage <- c("E4.5_EPI","E5.5_EPI","E6.5_EPI","E6.5_PS","E6.75_EPI","E6.75_PS","E7.5_Ectoderm","E7.5_Mesoderm","E7.5_Endoderm")
+
+# Define which cells to use
+opts$cells <- fread(io$sample_metadata) %>% 
+  .[,stage_lineage:=paste(stage,lineage,sep="_")] %>%
+  .[pass_rnaQC==T & pass_metQC==T & stage_lineage%in%opts$stage_lineage,sample]
+
+```
+
+
+Methylation analysis
+
+<!-- Load sample metadata methylation -->
+```{r}
+sample_metadata <- fread(io$sample_metadata) %>% .[sample %in% opts$cells] %>% .[,stage_lineage:=paste(stage,lineage,sep="_")] #%>% setnames("sample","sample_old") %>% setnames("id_met","sample") 
+```
+
+<!-- Load methylation data -->
+```{r load_met, echo=FALSE, include=FALSE}
+
+met = map(opts$met.infiles, function(file){
+  fread(sprintf("zcat < %s", file), showProgress=F) %>%
+    .[,c("chr","pos","rate")] %>% 
+    .[,sample:=(gsub(".tsv.gz", "", word(file, start=10, sep="/")))] %>% 
+    .[, .(count = .N), by = c("chr", "sample")] %>% 
+    .[, count := count / sum(count)]
+}) %>% 
+  rbindlist()
+
+#met = map(opts$cells, function(cell){
+#  fread(sprintf("zcat < %s/%s.tsv.gz",io$met.data.indir,cell), showProgress=F) %>%
+#    .[,c("chr","pos","rate")] %>% 
+#    .[,id_met:=cell] %>% 
+#    .[, .(count = .N), by = c("chr", "id_met")] %>% 
+#    .[, count := count / sum(count)]
+#}) %>% 
+#  rbindlist()
+
+``` 
+
+<!-- Determine whether cells separate by sex based on the presence of Ychr methylation reads -->
+```{r}
+
+met_sex <- merge(met, sample_metadata, by="sample")
+
+# plot Y chromosome methylation read count for each cell
+p <- ggplot(met_sex[chr=="Y"], aes(stage, count, color=sex)) + 
+  ggtitle("") +
+  geom_point(stat='identity', position="jitter") +
+  xlab("") + ylab("Ychr/all DNAme reads") +
+  theme(
+    axis.title.y = element_text(colour="black", size=14, vjust=1.5),
+    axis.title.x = element_text(colour="black", size=14, vjust=1.5),
+    axis.text.x = element_text(angle=90, size=10, vjust=0.5, hjust=1.0), #, color=tmp$color
+    axis.text.y = element_text(colour="black",size=rel(1.3)),
+    axis.line = element_line(colour="black", size=0.5),
+    axis.ticks.x = element_line(colour="black", size=rel(0.8)),
+    axis.ticks.y = element_line(colour="black", size=rel(0.8)),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_blank()
+  )
+print(p)
+
+# save plot
+ggsave(filename=(paste0(io$outdir,"/scNMT_sex_Ymet_reads",".pdf")), plot=p)
+
+
+```
+
+
+Expression analysis
+<!-- Load expression data -->
+```{r load_expr, echo=FALSE, include=FALSE}
+
+# Load SCEset object
+sce <- readRDS(io$rna.infile)
+colnames(sce) <- colData(sce)$sample
+
+# Filter cells
+sce <- sce[,colnames(sce) %in% opts$cells]
+
+```
+
+<!-- Load sample metadata for all cells -->
+```{r}
+sample_metadata_all <- fread(io$sample_metadata) %>% .[,stage_lineage:=paste(stage,lineage,sep="_")] #%>% setnames("sample","sample_old") %>% setnames("id_met","sample") 
+```
+
+<!-- Extract gene metadata -->
+```{r}
+gene_metadata_1 <- ranges(sce) %>% as.data.table %>% setnames("names", "gene")
+gene_metadata_2 <- rowRanges(sce) %>% as.data.table %>% setnames(c("seqnames"), c("chr")) %>% 
+  .[,c("chr", "start", "end", "ens_id")] %>% .[,chr:=as.factor(sub("chr","",chr))]
+
+gene_metadata_all <- merge(gene_metadata_1, gene_metadata_2, by = c("start", "end"))
+
+```
+
+<!-- Create data.table from SCEset object -->
+```{r}
+rna <- counts(sce) %>% t %>% as.data.table(keep.rownames="sample") %>% melt(id.vars="sample", value.name="counts", variable.name="id") #%>%
+  #merge(fData(sce) %>% tibble::rownames_to_column("gene") %>% .[,c("gene","ens_id")] %>% as.data.table %>% setnames("ens_id","id"))
+```
+
+
+<!-- Merge data and metadata -->
+```{r}
+rna <- merge(rna, sample_metadata_all[,c("sample","id_met","stage_lineage","embryo")], by="sample") %>%
+  merge(gene_metadata_all[,c("chr","gene","id")], by="id")
+```
+
+<!-- Filter expression data -->
+```{r filter, echo=FALSE}
+# Extract genes in the Y chromosome
+rna_filt <- rna
+rna_filt <- rna_filt[chr=="Y"] %>% .[gene != "Erdr1"]
+
+```
+
+<!-- Plot Ychr methylation counts vs Ychr RNA counts to visualize distribution in male vs female -->
+```{r}
+
+#opts$min.counts <- 1
+
+#a <- rna_filt[,.(counts=sum(counts)), by=c("sample", "id_met" ,"embryo")]
+
+#sex_rna_met <- merge(met_sex[chr=="Y"], a, by=c("sample" ,"id_met", "embryo")) %>% setnames(c("count", "counts"), c("Ydna", "Yrna"))
+
+#p <- ggplot(sex_rna_met, aes(x=Ydna, y=Yrna, color=sex)) + 
+  #ggtitle("") +
+  #geom_point(stat='identity') +
+  #xlab("number of Ychr DNAme reads") + ylab("Ychr RNA counts") +
+  #xlim(0,0.003) +
+  #theme(
+    #axis.title.y = element_text(colour="black", size=14, vjust=1.5),
+    #axis.title.x = element_text(colour="black", size=14, vjust=1.5),
+    #axis.text.x = element_text(angle=90, size=10, vjust=0.5, hjust=1.0), #, color=tmp$color
+    #axis.text.y = element_text(colour="black",size=rel(1.3)),
+    #axis.line = element_line(colour="black", size=0.5),
+    #axis.ticks.x = element_line(colour="black", size=rel(0.8)),
+    #axis.ticks.y = element_line(colour="black", size=rel(0.8)),
+    #panel.background = element_blank(),
+    #panel.grid = element_blank(),
+    #panel.border = element_blank()
+  #)
+#print(p)
+
+```
+
+<!-- Determine thresholds for sex determination -->
+```{r}
+
+# determine thresholds y met reads and y RNA counts for sex determination based on levels cells for which sex is known
+tmp <- sex_rna_met %>% .[pass_sexQC==TRUE] %>% .[,.(maxDNA=max(Ydna), minDNA=min(Ydna), maxRNA=max(Yrna), minRNA=min(Yrna)), by="sex"] 
+
+# Assign sex to cells mixed samples
+foo <- sex_rna_met %>% 
+  .[,sex2 := ifelse(Ydna < tmp$minDNA[2] & Yrna < tmp$minRNA[2], "female", ifelse(Ydna >= tmp$minDNA[2] & Yrna >= tmp$minRNA[2], "male", "unknown"))] %>%
+  .[,pass_sexQC2 := ifelse(sex=="unknown" & sex2=="unknown", FALSE, TRUE)] %>% 
+  .[,sex2 := ifelse(pass_sexQC2==TRUE & sex2=="unknown", sex, sex2)] %>%
+  .[,c("Yrna","Ydna","chr","sex", "pass_sexQC") := NULL] %>% 
+  setnames(c("sex2", "pass_sexQC2"), c("sex", "pass_sexQC"))
+
+# only updated sex of cells for which sex was inconclusive
+sample_metadata_missing <- sample_metadata_all[!sample %in% foo$sample]
+sample_metadata_sex <- rbind(sample_metadata_missing, foo) %>% .[,stage_lineage := NULL]
+
+```
+
+<!-- Save updated metadata including sex determination for all cells to file -->
+```{r}
+
+# save metadata with sex classification for all cells
+write.table(sample_metadata_sex, paste(io$basedir,"sample_metadata_scNMT_sex.txt",sep="/"),sep="\t",row.names=FALSE)
+
+```

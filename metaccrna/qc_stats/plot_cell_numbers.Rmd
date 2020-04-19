@@ -106,9 +106,9 @@ p <- ggplot(foo, aes(x=stage, y=V1, fill=type)) +
     legend.text = element_text(size=rel(1.1), color="black")
   )
 
-pdf(file=sprintf("%s/qc_barplots.pdf",io$outdir), width=7, height=5)
+# pdf(file=sprintf("%s/qc_barplots.pdf",io$outdir), width=7, height=5)
 print(p)
-dev.off()
+# dev.off()
 ```
 
 <!-- Plot number cells that passQC for each omic, per stage_lineage -->
@@ -132,9 +132,9 @@ p <- ggplot(foo, aes(x=stage, y=V1, fill=type)) +
     legend.text = element_text(size=rel(1.1), color="black")
   )
 
-pdf(file=sprintf("%s/qc_barplots2.pdf",io$outdir), width=7, height=4)
+# pdf(file=sprintf("%s/qc_barplots2.pdf",io$outdir), width=7, height=4)
 print(p)
-dev.off()
+# dev.off()
 ```
 
 <!-- Plot Venn Diagrams per stage with cell numbers -->

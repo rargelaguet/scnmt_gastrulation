@@ -1,0 +1,338 @@
+---
+title: "Gastrulation: exploratory analysis of DNA methylation variability on X"
+output: 
+  BiocStyle::html_document:
+    toc: false
+    fig_width: 10
+    fig_height: 8
+---
+
+Use a beta binomial model to assess the variability of methylation for different annotations at each stage
+
+Xij: cell i and feature j
+    
+- Beta binomial: overdispersed binomial
+  Xij ~ Binomial(Theta_j,N_ij)
+  Theta_j ~ Beta(alpha,beta)
+    Mean is: N_ij*mu_j
+    Variance is:  N_ij*mu_j*(1-mu_j)* (1+(N_ij-1)*gamma_j)
+      defining mu_j = alpha_j/(alpha_j+beta_j)
+               gamma_j = 1/(alpha_j+beta_j+1)
+      
+```{r import, include=FALSE}
+library(ggplot2)
+library(data.table)
+library(purrr)
+library(VGAM)
+library(MASS)
+library(RColorBrewer)
+
+source("/Users/stapelc/Documents/Github/gastrulation/met/variability/bb_model.R")
+
+round_df <- function(df, digits) {
+  nums <- names(which(vapply(df, is.numeric, FUN.VALUE = logical(1))))
+  df[,(nums) := round(.SD,digits), .SDcols=nums]
+  return(df)
+}
+```
+
+<!-- Define I/O and options -->
+```{r options, echo=FALSE}
+
+## Define I/O ##
+io <- list()
+io$basedir <- "/Users/stapelc/Documents/gastrulation_data"
+io$outdir <- "/Users/stapelc/Documents/GastrulaProject/Results/Xchr/met/variability"
+io$in.sample_metadata <- paste0(io$basedir,"/sample_metadata_scNMT.txt")
+io$in.data <- paste(io$basedir,"met/parsed",sep="/")
+io$in.features <- paste(io$basedir,"features/filt",sep="/")
+
+
+## Define options ##
+opts <- list()
+
+# Filtering options
+opts$min.CpGs <- 3
+opts$min.cells <- 10
+
+# Define which annotations to look at
+opts$annos <- c(
+  # "genebody"="Gene body",
+  "prom_2000_2000_cgi"="CGI promoters",
+  "prom_2000_2000_noncgi"="non-CGI promoters",
+  # "prom_2000_2000"="Promoters",
+  "CGI"="CpG islands",
+  # "exons"="Exons",
+  # "introns"="Introns",
+  # "E3.5_Distal_H3K27ac"="E3.5 Distal H3K27ac",
+  # "E6.5_Distal_H3K27ac"="E6.5 Distal H3K27ac",
+  # "Wei_Distal_K27ac_intersect"="E7.5 Distal H3K27ac",
+  # "Wei_Distal_K27ac"="E7.5 enhancers",
+  # "Wei_Mes_K4me3"="Wei E7.5_Meso_H3K4me3",
+  # "Wei_Mes_K27me3"="Wei E7.5_Meso_H3K27me3",
+  # "Wei_Mes_K27ac"="Wei E7.5_Meso_H3K27ac",
+  # "Wei_End_K4me3"="Wei E7.5_Endo_H3K4me3",
+  # "Wei_End_K27me3"="Wei E7.5_Endo_H3K27me3",
+  # "Wei_End_K27ac"="Wei E7.5_Endo_H3K27ac",
+  # "Wei_Ect_K4me3"="Wei E7.5_Ecto_H3K4me3",
+  # "Wei_Ect_K27me3"="Wei E7.5_Ecto_H3K27me3",
+  # "Wei_Ect_K27ac"="Wei E7.5_Ecto_H3K27ac",
+  # "LINE"="LINE"
+  "LTR"="LTR"
+)
+
+# Define which stage and lineages to look at 
+opts$stage_lineage <- c(
+  "E4.5_EPI",
+  "E5.5_EPI",
+  "E6.5_EPI","E6.5_PS",
+  "E6.75_EPI","E6.75_PS",
+  "E7.5_Ectoderm","E7.5_Endoderm","E7.5_Mesoderm"
+)
+
+# Define which cells to use
+opts$cells <- fread(io$in.sample_metadata) %>% 
+  .[KO_3b=="not"] %>%
+  .[,stage_lineage:=paste(stage,lineage,sep="_")] %>% 
+  .[pass_metQC==T & pass_sexQC==T & stage_lineage%in%opts$stage_lineage,id_met]
+```
+
+<!-- Load sample metadata -->
+```{r}
+sample_metadata <- fread(file=io$in.sample_metadata, header=T, sep="\t", stringsAsFactors=F) %>%
+  .[,c("id_met","stage","lineage","sex")] %>%
+  .[id_met%in%opts$cells] %>% setnames("id_met","sample")
+
+sample_metadata[stage=="E6.75",stage:="E6.5"] %>% .[,stage_lineage:=paste(stage,lineage,sep="_")]
+```
+
+<!-- Load methylation data and merge with metadata -->
+```{r load, echo=FALSE}
+data <- lapply(names(opts$annos), function(n) fread(sprintf("zcat < %s/%s.tsv.gz",io$in.data,n), showProgress=F, stringsAsFactors = F, sep="\t", quote="")) %>% rbindlist
+colnames(data) <- c("sample","id","anno","Nmet","N","rate")
+
+# Load genomic features from bed file
+feature_metadata <- lapply(names(opts$annos), function(n) fread(sprintf("%s/%s.bed",io$in.features,n), showProgress=F)) %>% rbindlist  
+colnames(feature_metadata) <- c("chr", "start", "end", "strand", "id", "anno")
+
+# Merge data and anno metadata
+data <- merge(data, feature_metadata, by=c("anno","id")) %>% merge(.,sample_metadata[,c("sample","stage","lineage","stage_lineage","sex")], by="sample") %>% .[chr=="X"]
+
+```
+
+<!-- Filter methylation data -->
+```{r}
+# Filter features by number of CpGs
+data <- data[N>=opts$min.CpGs]
+
+# Filter features by number of cells (by stage)
+#remove_samples <- sample_metadata %>% split(.$stage) %>% map(~ .[,.(N=min(.N)), by=c("stage","sex")] %>% .[N<opts$min.n], id) %>% rbindlist()
+#data <- data[!stage %in% remove_samples$stage]
+#for (i in unique(data$stage)) {
+#  data[stage_lineage==i,Ntotal:=sample_metadata[stage==i,.N]]
+#}
+
+keep_cov_sites <- data %>% split(.$stage) %>% map(~ .[, cov:=.N, by=c("id","anno")] %>% .[cov >= opts$min.cells] %>% .[,id_anno:=paste(id,anno,sep="_")] %>% .$id_anno)
+data <- data %>% .[,id_anno:=paste(id,anno,sep="_")] %>% .[id_anno%in%Reduce("intersect",keep_cov_sites)] %>% .[,"Ntotal":=NULL]
+```
+
+<!-- Assess the Beta-Binomial model -->
+
+Fit beta binomial model for a single feature
+```{r}
+# # tmp <- data[id=="ENSMUSG00000000001" & anno=="genebody"]
+# tmp <- data[id=="E3.5_Distal_H3K27ac_24291" & anno=="E3.5_Distal_H3K27ac"]
+# m <- round((tmp$rate/100)*tmp$N) # THIS IS WRONG, WE SHOULD INCLUDE MET_READS IN THE ANNOTATE.R
+# n <- tmp$N
+# # fit <- vglm(cbind(m, n-m) ~ 1, binomial, trace = FALSE)
+# # Coef(fit)
+# bb_mm(n,m)
+# bb_mle(cbind(n,m))
+```
+
+Fit beta binomial model for multiple features
+```{r}
+tmp <- data
+bb_res <- tmp[, bb_mle(cbind(N, Nmet))[c("rho", "mu", "z_test", "chi2_test")], by = c("id","stage","anno","sex")]
+
+# save results
+write.table(bb_res, paste(io$outdir,"bb_res.txt",sep="/"),sep="\t",row.names=FALSE)
+
+
+```
+
+Fit beta binomial model for multiple features (2)
+TO-DO: PARALLELISE OR RUN WITH ARGUMENTS
+```{r}
+# tmp <- data[,c("sample","id","rate","Nmet","N","anno","stage")]
+
+for (i in unique(data$anno)) {
+  print(i)
+  for (j in unique(data$stage)) {
+    print(j)
+    for (k in unique(data$sex)) {
+      outfile <- sprintf("%s/%s_%s.txt",io$outdir,j,i,k)
+    if (!file.exists(outfile)) {
+      # ids <- head(unique(data[anno==i & stage==j,id]), n=100)
+      # bb_res <- data[anno==i & stage==j & id%in%ids, bb_mle(cbind(N,Nmet))[c("rho","mu","z_test","chi2_test")], by = c("id","anno")]
+      bb_res <- data[anno==i & stage==j & sex==k, bb_mle(cbind(N,Nmet)), by=c("id","anno")]
+      fwrite(round_df(bb_res,5), outfile, sep="\t")
+      }
+    }
+  }
+  
+  # Loop over features
+  # for (j in unique(tmp$stage)) {
+  #   tmptmp <- tmp[anno==i & stage==j]
+  #   for (d in unique(tmptmp$id)) {
+  #     print(paste(i, d, sep=" "))
+  #     foo <- bb_mle(cbind(tmptmp[id==d,N],tmptmp[id==d,Nmet]))
+  #     # foo <- bb_mm(tmptmp[id==d,N],tmptmp[id==d,Nmet])
+  #     # print(foo)
+  #   }
+  # }
+}
+```
+
+```{r}
+stop()
+```
+
+<!-- Load precomputed results -->
+```{r}
+
+# if one file with all annotations
+bb_res <- fread(paste(io$outdir,"bb_res.txt",sep="/"))
+
+# if separate files for separate annotations
+bb_res <- list()
+for (i in opts$annos) {
+  for (j in unique(sample_metadata$stage)) {
+    bb_res[[paste(i,j,sep="_")]] <- fread(sprintf("/Users/ricard/gastrulation/met/variability/out/%s_%s.txt",j,i), sep="\t") %>%
+      .[,c("stage","anno"):=list(j,i)] %>% .[,c("id","anno","stage","rho","mu")]
+  }
+}
+bb_res <- rbindlist(bb_res)
+```
+
+```{r}
+# for (i in unique(bb_res$anno)) {
+#   p <- ggplot(bb_res[anno==i], aes(x=mu, y=rho)) +
+#     geom_point(aes(fill=stage)) +
+#     # facet_wrap(~stage, nrow=3, ncol=2) +
+#     geom_smooth(method="loess") +
+#     # coord_cartesian(ylim=c(0,0.25)) +
+#     theme_bw()
+#   print(p)
+# }
+```
+
+```{r}
+opts$min.rate <- 0.05
+
+bb_res_filt <- bb_res[mu>opts$min.rate]
+
+for (i in unique(bb_res$anno)) {
+  p <- ggplot(bb_res[anno==i], aes(x=stage, y=rho)) +
+    labs(title=i) +
+    geom_boxplot(aes(fill=sex), outlier.shape = NA) +
+    coord_cartesian(ylim=c(0,0.5)) +
+    theme_bw()
+  print(p)
+}
+
+for (i in unique(bb_res$anno)) {
+  p <- ggplot(bb_res[anno==i], aes(x=stage, y=mu)) +
+    labs(title=i) +
+    geom_boxplot(aes(fill=sex), outlier.shape = NA) +
+    #coord_cartesian(ylim=c(0,0.5)) +
+    theme_bw()
+  print(p)
+}
+
+```
+
+<!-- Plot heatmap -->
+```{r}
+yaxis_order <- c("LTR","prom_2000_2000_noncgi","prom_2000_2000_cgi","CGI")
+yaxis_labels <- c("LTR","non-CGI promoters","CGI promoters","CpG islands")
+
+# select data for heatmap female
+tmp_F <- bb_res[sex=="female"] %>% .[,.(rho=mean(rho)),by=c("anno","stage")] 
+
+# select data for heatmap male
+tmp_M <- bb_res[sex=="male"] %>% .[,.(rho=mean(rho)),by=c("anno","stage")]
+
+p <- ggplot(tmp_F, aes(x=stage, y=factor(anno,level=yaxis_order), fill=rho)) +
+  geom_tile() +
+  #geom_text(aes(stage, anno, label = rho), color = "black", size = 2.5) +
+  scale_fill_gradient2(low = "white", high = "purple4",
+      limit = c(0.02,0.17), space = "Lab",
+      name="Rho") +
+  scale_y_discrete(breaks=yaxis_order, labels=yaxis_labels) +
+  coord_fixed() +
+  ggtitle("") +
+  xlab("") + ylab("") +
+  theme(
+    axis.title.y = element_text(colour="black", size=14, vjust=1.5),
+    axis.title.x = element_text(colour="black", size=14, vjust=1.5),
+    axis.text.x = element_text(angle=90, size=10, vjust=0.5, hjust=1.0), #, color=tmp$color
+    axis.text.y = element_text(colour="black",size=rel(1)),
+    #axis.line = element_line(colour="black", size=0.5),
+    #axis.ticks.x = element_line(colour="black", size=rel(0.8)),
+    #axis.ticks.y = element_line(colour="black", size=rel(0.8)),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_blank()
+  )
+print(p)
+
+ggsave(filename=(paste0(io$outdir,"/variability_met_Xchr_female.pdf")), plot=p)
+
+
+p2 <- ggplot(tmp_M, aes(x=stage, y=factor(anno,level=yaxis_order), fill=rho)) +
+  geom_tile() +
+  #geom_text(aes(stage, anno, label = rho), color = "black", size = 2.5) +
+  scale_fill_gradient2(low = "white", high = "purple4",
+      limit = c(0.02,0.17), space = "Lab",
+      name="Rho") +
+  scale_y_discrete(breaks=yaxis_order, labels=yaxis_labels) +
+  coord_fixed() +
+  ggtitle("") +
+  xlab("") + ylab("") +
+  theme(
+    axis.title.y = element_text(colour="black", size=14, vjust=1.5),
+    axis.title.x = element_text(colour="black", size=14, vjust=1.5),
+    axis.text.x = element_text(angle=90, size=10, vjust=0.5, hjust=1.0), #, color=tmp$color
+    axis.text.y = element_text(colour="black",size=rel(1)),
+    #axis.line = element_line(colour="black", size=0.5),
+    #axis.ticks.x = element_line(colour="black", size=rel(0.8)),
+    #axis.ticks.y = element_line(colour="black", size=rel(0.8)),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_blank()
+  )
+print(p2)
+
+ggsave(filename=(paste0(io$outdir,"/variability_met_Xchr_male.pdf")), plot=p2)
+```
+
+<!-- Heatmap of mean variance per CpG site and genomic context -->
+```{r}
+color <- colorRampPalette(brewer.pal(n = 7, name="OrRd"))(100)
+breaks <- seq(0.02,0.18,(0.18-0.02)/100)
+
+# plot heatmap for data female
+tmp_F <- bb_res[sex=="female"] %>% .[,.(rho=mean(rho)),by=c("anno","stage")] %>% 
+  dcast(anno~stage, value.var="rho") %>% 
+  as.data.frame %>% tibble::column_to_rownames("anno")
+
+pheatmap::pheatmap(tmp_F, cluster_cols = F, color=color, breaks=breaks)
+
+# plot heatmap for data female
+tmp_M <- bb_res[sex=="male"] %>% .[,.(rho=mean(rho)),by=c("anno","stage")] %>% 
+  dcast(anno~stage, value.var="rho") %>% 
+  as.data.frame %>% tibble::column_to_rownames("anno")
+
+pheatmap::pheatmap(tmp_M, cluster_cols = F, color=color, breaks=breaks)
+```

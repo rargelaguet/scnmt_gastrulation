@@ -1,0 +1,261 @@
+---
+title: "Gastrulation: sex specific feature accessibility XChr"
+output: html_document
+---
+
+Identify the differences in X chromosome accessibility for different genomic features between male and female embryos.
+
+```{r echo=FALSE, include=FALSE}
+library(scater)
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(dplyr)
+library(BSgenome)
+
+source("/Users/stapelc/Documents/gastrulation_scripts/met/enhancers/utils.R")
+
+#source("https://bioconductor.org/biocLite.R")
+#biocLite("BSgenome.Mmusculus.UCSC.mm10")
+```
+
+```{r funcs, echo=FALSE}
+
+```
+
+```{r define_opts, echo=FALSE, include=FALSE}
+
+## Define I/O ##
+io <- list()
+io$basedir <- "/Users/stapelc/Documents/gastrulation_data"
+io$sample_metadata <- paste0(io$basedir,"/sample_metadata_scNMT.txt")
+io$acc.data.parsed <- paste(io$basedir,"acc/parsed",sep="/")
+io$features.dir <- paste(io$basedir,"features/filt", sep="/")
+io$outdir <- "/Users/stapelc/Documents/GastrulaProject/Results/Xchr/acc"
+
+## Define options ##
+opts <- list()
+
+# Define stages and lineages (only embryonic tissues! Xchr dynamics are different in extraembryonic)
+opts$stage_lineage <- c("E4.5_EPI","E5.5_EPI","E6.5_EPI","E6.5_PS","E6.75_EPI","E6.75_PS","E7.5_Ectoderm", "E7.5_Mesoderm", "E7.5_Endoderm")
+#opts$stage_lineage <- c("E7.5_Ectoderm","E7.5_Mesoderm","E7.5_Endoderm")
+opts$stage <- c("E4.5","E5.5","E6.5","E6.75","E7.5")
+
+# Define which genomic annotations to analyse
+opts$annos <- c("LTR","LINE","E6.5_Distal_H3K27ac","E3.5_Distal_H3K27ac","genebody","prom_2000_2000_cgi","prom_2000_2000_noncgi","CGI")
+# "prom_100_100_cgi","prom_100_100_noncgi",
+
+# false discovery rate significance threshold
+#opts$threshold_fdr <- 0.1
+
+# window length for the overlap between genes and features (for coupling enhancers to genes?)
+#opts$gene_window <- 25000
+
+# Filtering criteria
+#opts$min.weight <- 3
+#opts$min.coverage <- 0.3
+#opts$fraction.sites <- 0.75
+opts$min.n <- 5
+
+opts$cells <- fread(io$sample_metadata) %>% 
+  .[KO_3b=="not"] %>%
+  .[,stage_lineage:=paste(stage,lineage,sep="_")] %>%
+  .[pass_accQC==T & pass_sexQC==T & stage_lineage%in%opts$stage_lineage,sample]
+
+
+```
+
+<!-- Load sample metadata -->
+```{r}
+sample_metadata <- fread(io$sample_metadata) %>% .[sample %in% opts$cells] %>% .[stage=="E6.75",stage:="E6.5"] %>% .[,stage_lineage:=paste(stage,lineage,sep="_")]
+
+#sample_metadata <- fread(io$sample_metadata) %>% .[sample %in% opts$cells] %>% .[,stage_lineage:=paste(stage,lineage,sep="_")] #%>% setnames("sample","sample_old") %>% setnames("sample","sample") 
+```
+
+<!-- Load data -->
+```{r load_data, echo=FALSE, include=FALSE}
+# Load accessibility data per annotation
+parsed <- lapply(opts$annos, function(n) fread(sprintf("zcat < %s/%s.tsv.gz",io$acc.data.parsed,n), showProgress=F)) %>% rbindlist  
+#%>% setnames(., c("V1","V2","V3","V4","V5"), c("sample", "anno_id", "anno", "rate", "coverage"))
+colnames(parsed) <- c("sample","id","anno","rate","Nmet","N")
+parsed <- parsed[sample %in% opts$cells] 
+
+# Load genomic features from bed file
+feature_metadata <- lapply(opts$annos, function(n) fread(sprintf("%s/%s.bed",io$features.dir,n), showProgress=F)) %>% rbindlist  
+#%>% setnames(., c("V1","V2","V3","V4","V5","V6"), c("chr", "start", "end", "strand", "anno_id", "anno"))
+colnames(feature_metadata) <- c("chr", "start", "end", "strand", "id", "anno")
+
+# Merge data and anno metadata
+data <- merge(parsed, feature_metadata, by=c("id","anno")) %>% merge(.,sample_metadata[,c("sample","embryo","stage","lineage","stage_lineage","sex")], by="sample") %>% .[chr=="X"]
+
+```
+
+
+<!-- Determine difference mean anno accessibility rate male and female -->
+```{r load_data, echo=FALSE, include=FALSE}
+
+# Filter features by minimum number of cells per group
+remove_samples <- sample_metadata %>% split(.$stage_lineage) %>% map(~ .[,.(N=min(.N)), by=c("stage_lineage","sex")] %>% .[N<opts$min.n], id) %>% rbindlist()
+data <- data[!stage_lineage %in% remove_samples$stage_lineage]
+
+# combine and compare female and male data
+rates <- data[,.(meanRate=mean(rate)), by=c("sex", "stage_lineage", "anno")]
+rates_female <- rates[sex=="female"] %>% .[,meanRate_F:=meanRate] %>% .[,meanRate:=NULL] %>% .[,meanRate_F:=round(meanRate_F, digits=1)]
+rates_male <- rates[sex=="male"] %>% .[,meanRate_M:=meanRate] %>% .[,meanRate:=NULL] %>% .[,meanRate_M:=round(meanRate_M, digits=1)]
+
+rates_all <- merge(rates_female[,!"sex"], rates_male[,!"sex"], by=c("stage_lineage","anno")) %>% .[,ratioFM:=(meanRate_F/meanRate_M)] %>% .[,log_ratio:=log2(ratioFM)] %>% .[,diff:=meanRate_F-meanRate_M]
+
+# define axis order and labels
+yaxis_order <- c("LTR","LINE","genebody","E3.5_Distal_H3K27ac","E6.5_Distal_H3K27ac","prom_2000_2000_noncgi","prom_2000_2000_cgi","CGI")
+yaxis_labels <- c("LTR","LINE","Gene body","E3.5 enhancers","E6.5 enhancers","non-CGI promoters","CGI promoters","CpG islands")
+
+# plot accessibility rate fold difference between female and male for each annotation
+p <- ggplot(rates_all, aes(x=stage_lineage, y=factor(anno,level=yaxis_order), fill=log_ratio)) +
+  geom_tile() +
+  geom_text(aes(stage_lineage, anno, label = meanRate_F), color = "black", size = 2.5) +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0, 
+      limit = c(min(rates_all$log_ratio),max(rates_all$log_ratio)), space = "Lab",
+      name="log2 ratio Acc\nFemale/Male") +
+  scale_y_discrete(breaks=yaxis_order, labels=yaxis_labels) +
+  coord_fixed() +
+  ggtitle("") +
+  xlab("") + ylab("") +
+  theme(
+    axis.title.y = element_text(colour="black", size=14, vjust=1.5),
+    axis.title.x = element_text(colour="black", size=14, vjust=1.5),
+    axis.text.x = element_text(angle=90, size=10, vjust=0.5, hjust=1.0), #, color=tmp$color
+    axis.text.y = element_text(colour="black",size=rel(1)),
+    #axis.line = element_line(colour="black", size=0.5),
+    #axis.ticks.x = element_line(colour="black", size=rel(0.8)),
+    #axis.ticks.y = element_line(colour="black", size=rel(0.8)),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_blank()
+  )
+print(p)
+
+ggsave(filename=(paste0(io$outdir,"/diff_acc_stageLineage_feature_ratioFM.pdf")), plot=p)
+
+
+# plot absolute accessibility rate difference between female and male for each annotation
+p2 <- ggplot(rates_all, aes(x=stage_lineage, y=factor(anno,level=yaxis_order), fill=diff)) +
+  geom_tile() +
+  geom_text(aes(stage_lineage, anno, label = meanRate_F), color = "black", size = 2.5) +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0, 
+      limit = c(min(rates_all$diff),max(rates_all$diff)), space = "Lab",
+      name="Acc difference\nFemale vs Male") +
+  scale_y_discrete(breaks=yaxis_order, labels=yaxis_labels) +
+  coord_fixed() +
+  ggtitle("") +
+  xlab("") + ylab("") +
+  theme(
+    axis.title.y = element_text(colour="black", size=14, vjust=1.5),
+    axis.title.x = element_text(colour="black", size=14, vjust=1.5),
+    axis.text.x = element_text(angle=90, size=10, vjust=0.5, hjust=1.0), #, color=tmp$color
+    axis.text.y = element_text(colour="black",size=rel(1)),
+    #axis.line = element_line(colour="black", size=0.5),
+    #axis.ticks.x = element_line(colour="black", size=rel(0.8)),
+    #axis.ticks.y = element_line(colour="black", size=rel(0.8)),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_blank()
+  )
+print(p2)
+
+ggsave(filename=(paste0(io$outdir,"/diff_acc_stageLineage_feature_absDiffFM.pdf")), plot=p2)
+
+
+```
+
+<!--Plot mean accessibility rate female/male for annotations of interest per female cell -->
+```{r}
+# select data ROIs
+roi <- data[anno %in% c("CGI","prom_2000_2000_cgi","prom_2000_2000_noncgi")]
+
+# determine mean methylation rate for each ROI at each stage_lineage for male and female
+# Different outcome from previous plots because I removed all ROI with meanRate == 0!!!
+mean_rates_roi_F <- roi[,.(meanRate_F=mean(rate)), by=c("sex", "stage_lineage", "anno", "sample","embryo")] %>% .[!meanRate_F==0] %>% .[sex=="female"]
+mean_rate_roi_M <- roi[,.(meanRate_M=mean(rate)), by=c("sex", "stage_lineage", "anno")] %>% .[!meanRate_M==0] %>% .[sex=="male"]
+
+# calculate methylation ratio for each female cell by dividing over mean rate male cells 
+mean_rates_roi_all <- merge(mean_rates_roi_F, mean_rate_roi_M[,c("stage_lineage","anno","meanRate_M")], by=c("stage_lineage","anno"), all.x=T) %>%
+  .[,meanRate_F_norm:=(meanRate_F/meanRate_M)] %>% .[,log_ratio:=log2(meanRate_F_norm)] %>% .[,diff:=meanRate_F-meanRate_M]
+
+# plot
+p3 <- ggplot(mean_rates_roi_all, aes(x=stage_lineage, y=log_ratio, group=anno, color=anno)) +
+  geom_hline(yintercept=0, color="gray") +
+  geom_point(group="anno", pos="jitter") +
+  ggtitle("") +
+  xlab("") + ylab("log2 accessibility ratio F/M") +
+  theme(
+    axis.title.y = element_text(colour="black", size=14, vjust=1.5),
+    axis.title.x = element_text(colour="black", size=14, vjust=1.5),
+    axis.text.x = element_text(angle=90, size=10, vjust=0.5, hjust=1.0), #, color=tmp$color
+    axis.text.y = element_text(colour="black",size=rel(1)),
+    axis.line = element_line(colour="black", size=0.5),
+    axis.ticks.x = element_line(colour="black", size=rel(0.8)),
+    axis.ticks.y = element_line(colour="black", size=rel(0.8)),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_blank()
+  )
+print(p3)
+
+ggsave(filename=(paste0(io$outdir,"/diff_acc_stageLineage_perCell_feature_ratioFM.pdf")), plot=p3)
+
+
+```
+
+<!--Determine promoter methylation rate difference female vs male for each promoter -->
+```{r}
+# select promoter data
+promoter <- data[anno %in% c("prom_100_100_cgi","prom_100_100_noncgi")]
+
+# determine mean methylation rate for each promoter at each stage_lineage for male and female
+# Different outcome from previous plots because I removed all promoters with meanRate == 0!!!
+rates_prom <- promoter[,.(meanRate=mean(rate)), by=c("sex", "stage_lineage", "anno", "anno_id")] %>% .[!meanRate==0]
+rates_prom_female <- rates_prom[sex=="female"] %>% .[,meanRate_F:=meanRate] %>% .[,meanRate:=NULL] %>% .[,meanRate_F:=round(meanRate_F, digits=1)]
+rates_prom_male <- rates_prom[sex=="male"] %>% .[,meanRate_M:=meanRate] %>% .[,meanRate:=NULL] %>% .[,meanRate_M:=round(meanRate_M, digits=1)]
+
+rates_prom_all <- merge(rates_prom_female[,!"sex"], rates_prom_male[,!"sex"], by=c("stage_lineage","anno","anno_id")) %>% .[,ratioFM:=(meanRate_F/meanRate_M)] %>% .[,log_ratio:=log2(ratioFM)] %>% .[,diff:=meanRate_F-meanRate_M]
+
+mean_diff_prom <- rates_prom_all %>% .[,.(anno_rate=mean(ratioFM)), by=c("anno_id", "anno")]
+
+rates_test <- rates_prom_all[,.(meanRate=mean(ratioFM)), by=c("stage_lineage", "anno")]
+
+# boxplot accessibility rate fold difference female vs male, cgi vs noncgi promoters 
+p3 <- ggplot(rates_prom_all, aes(x=stage_lineage, y=log_ratio, group=anno_id, color=anno)) +
+  geom_hline(yintercept=0, color="gray") +
+  geom_boxplot(group="anno") +
+  #geom_point(group="anno", pos="jitter")
+  ggtitle("") +
+  xlab("") + ylab("log2 Acc difference F/M") +
+  theme(
+    axis.title.y = element_text(colour="black", size=14, vjust=1.5),
+    axis.title.x = element_text(colour="black", size=14, vjust=1.5),
+    axis.text.x = element_text(angle=90, size=10, vjust=0.5, hjust=1.0), #, color=tmp$color
+    axis.text.y = element_text(colour="black",size=rel(1)),
+    axis.line = element_line(colour="black", size=0.5),
+    axis.ticks.x = element_line(colour="black", size=rel(0.8)),
+    axis.ticks.y = element_line(colour="black", size=rel(0.8)),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_blank()
+  )
+print(p3)
+
+
+# select Xchr genes that are affected in dnmt3b-/- to check promoter methylation status
+dnmt3b_target_genes <- rates_prom[anno_id %in% c("ENSMUSG00000057836", "ENSMUSG00000073125","ENSMUSG00000058147", "ENSMUSG00000079845", "ENSMUSG00000067768", "ENSMUSG00000031362", "ENSMUSG00000073243", "ENSMUSG00000079628", "ENSMUSG00000071770", "ENSMUSG00000068048")]
+
+```
+
+
+<!-- Parse data -->
+```{r transform_data}
+
+#???????
+ 
+# Convert beta value to M value
+data[,m:=log2(((rate/100)+0.01)/(1-(rate/100)+0.01))]
+```

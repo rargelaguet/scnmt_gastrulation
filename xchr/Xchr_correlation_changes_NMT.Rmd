@@ -1,0 +1,354 @@
+---
+title: "Gastrulation: dynamics NMT layers Xchr"
+output: html_document
+---
+
+```{r echo=FALSE, include=FALSE}
+library(scater)
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(dplyr)
+library(BSgenome)
+
+source("/Users/stapelc/Documents/gastrulation_scripts/met/enhancers/utils.R")
+
+#source("https://bioconductor.org/biocLite.R")
+#biocLite("BSgenome.Mmusculus.UCSC.mm10")
+```
+
+```{r funcs, echo=FALSE}
+
+```
+
+```{r define_opts, echo=FALSE, include=FALSE}
+
+## Define I/O ##
+io <- list()
+io$basedir <- "/Users/stapelc/Documents/gastrulation_data"
+io$sample_metadata <- paste0(io$basedir,"/sample_metadata_scNMT.txt")
+io$outdir <- "/Users/stapelc/Documents/GastrulaProject/Results/Xchr/NMT"
+
+io$rna.infile <- paste0(io$basedir,"/rna/parsed/sceset_scNMT.rds")
+io$met.data.parsed <- paste0(io$basedir,"/met/parsed")
+io$acc.data.parsed <- paste0(io$basedir,"/acc/parsed")
+io$features.dir <- paste0(io$basedir,"/features/filt")
+
+## Define options ##
+opts <- list()
+
+# Define stages and lineages (only embryonic tissues! Xchr dynamics are different in extraembryonic)
+opts$stage_lineage <- c("E4.5_EPI","E5.5_EPI","E6.5_EPI","E6.5_PS","E6.75_EPI","E6.75_PS","E7.5_Ectoderm", "E7.5_Mesoderm", "E7.5_Endoderm")
+opts$stage <- c("E4.5","E5.5","E6.5","E6.75","E7.5")
+
+# Define which genomic annotations to analyse
+opts$annos <- c("LINE","H3K27ac_distal_E6.5","H3K27ac_distal_E3.5","genebody","prom_2000_2000_cgi","prom_2000_2000_noncgi","CGI")
+# "prom_100_100_cgi","prom_100_100_noncgi", "H3K27ac_distal_E6.5","H3K27ac_distal_E3.5","E3.5_Distal_H3K27ac", "E6.5_Distal_H3K27ac"
+
+# false discovery rate significance threshold
+#opts$threshold_fdr <- 0.1
+
+# window length for the overlap between genes and features (for coupling enhancers to genes?)
+#opts$gene_window <- 25000
+
+# Filtering criteria
+opts$min.CpGs <- 3
+opts$min.cells <- 5
+#opts$fraction.sites <- 0.75
+opts$min.n <- 5
+
+opts$cells <- fread(io$sample_metadata) %>% 
+  .[KO_3b=="not"] %>%
+  .[,stage_lineage:=paste(stage,lineage,sep="_")] %>%
+  .[pass_rnaQC==T & pass_metQC==T & pass_accQC==T & pass_sexQC==T & stage%in%opts$stage & stage_lineage%in%opts$stage_lineage,sample]
+
+
+```
+
+<!-- Load sample metadata -->
+```{r}
+sample_metadata <- fread(io$sample_metadata) %>% .[sample %in% opts$cells] %>% .[stage=="E6.75",stage:="E6.5"] %>% .[,stage_lineage:=paste(stage,lineage,sep="_")]
+```
+
+
+Load RNA data
+
+<!-- Load expression data -->
+```{r load_expr, echo=FALSE, include=FALSE}
+
+# Load SCEset object
+sce <- readRDS(io$rna.infile)
+colnames(sce) <- colData(sce)$sample
+
+# Filter cells
+sce <- sce[,colnames(sce) %in% opts$cells]
+
+```
+
+<!-- Extract gene metadata -->
+```{r}
+gene_metadata_1 <- ranges(sce) %>% as.data.table %>% setnames("names", "ens_id")
+gene_metadata_2 <- rowRanges(sce) %>% as.data.table %>% setnames(c("seqnames", "symbol"), c("chr", "gene")) %>% 
+  .[,c("chr", "start", "end", "gene")] %>% .[,chr:=as.factor(sub("chr","",chr))]
+
+gene_metadata_all <- merge(gene_metadata_1, gene_metadata_2, by = c("start", "end"))
+
+```
+
+<!-- Create data.table from SCEset object -->
+```{r}
+rna <- exprs(sce) %>% t %>% as.data.table(keep.rownames="sample") %>% melt(id.vars="sample", value.name="expr", variable.name="ens_id") #%>%
+  #merge(fData(sce) %>% tibble::rownames_to_column("gene") %>% .[,c("gene","ens_id")] %>% as.data.table %>% setnames("ens_id","id"))
+```
+
+<!-- Merge data and metadata -->
+```{r}
+rna <- merge(rna, sample_metadata[,c("sample","stage","stage_lineage","embryo","sex")], by="sample") %>%
+  merge(gene_metadata_all[,c("chr","gene","ens_id")], by="ens_id")
+```
+
+<!-- Filter expression data -->
+```{r filter, echo=FALSE}
+
+rna_filt <- rna[expr>=1 & chr!="MT"]
+
+# Extract genes on the X chromosome and on control autosome
+rna_X <- rna_filt[chr=="X"]
+rna_ctrl <- rna_filt[chr=="3"]
+rna_auto <- subset(rna_filt, chr!="X" & chr!="Y")
+
+```
+
+<!-- Determine Xchr expression ratio female and male -->
+```{r load_data, echo=FALSE, include=FALSE}
+
+# Normalise Xchr expression over autosome
+tmp_X <- rna_X[,.(expr=sum(expr)), by=c("sample", "stage", "sex")] %>% setkey(., sex) %>% .[,expr_X:=expr] %>% .[,expr:=NULL]
+tmp_auto <- rna_auto[,.(expr=sum(expr)/19), by=c("sample", "stage", "sex")] %>% setkey(., sex) %>% .[,expr_auto:=expr] %>% .[,expr:=NULL]
+
+tmp <- merge(tmp_X, tmp_auto, by = c("sample", "stage", "sex")) %>% .[,norm_expr_X:=expr_X/expr_auto] 
+rna_sex <- tmp[,.(norm_expr_X=mean(norm_expr_X)),by=c("stage","sex")] 
+
+# Determine Xchr expression ratio female and male
+rna_female <- rna_sex[sex=="female"] %>% .[,expr_X_F:=norm_expr_X] %>% .[,norm_expr_X:=NULL]
+rna_male <- rna_sex[sex=="male"] %>% .[,expr_X_M:=norm_expr_X] %>% .[,norm_expr_X:=NULL]
+rna_all <- merge(rna_female[,!"sex"],rna_male[,c("expr_X_M", "stage")], by=c("stage")) %>% .[,ratio_rna:=expr_X_F/expr_X_M]
+
+# make a table with the expression ratio for each feature at each stage
+rna_rates_all <- data.table(
+  feature="rna_X", 
+  class="rna", 
+  value_E4.5=rna_all[stage=="E4.5", ratio_rna], 
+  value_E5.5=rna_all[stage=="E5.5", ratio_rna],
+  value_E6.5=rna_all[stage=="E6.5", ratio_rna],
+  value_E7.5=rna_all[stage=="E7.5", ratio_rna])
+
+```
+
+
+
+Load methylation data
+
+<!-- Load data and filter -->
+```{r load_data, echo=FALSE, include=FALSE}
+# Load methylation data per annotation
+parsed_met <- lapply(opts$annos, function(n) fread(sprintf("zcat < %s/%s.tsv.gz",io$met.data.parsed,n), showProgress=T)) %>% rbindlist  
+#%>% setnames(., c("V1","V2","V3","V4","V5"), c("sample", "anno_id", "anno", "rate", "coverage"))
+colnames(parsed_met) <- c("sample","id","anno","Nmet","N","rate")
+parsed_met <- parsed_met[sample %in% opts$cells] 
+
+# Filter features by number of CpGs
+parsed_met <- parsed_met[N>=opts$min.CpGs]
+
+
+# Load anno metadata from bed file
+feature_metadata <- lapply(opts$annos, function(n) fread(sprintf("%s/%s.bed",io$features.dir,n), showProgress=F)) %>% rbindlist  
+#%>% setnames(., c("V1","V2","V3","V4","V5","V6"), c("chr", "start", "end", "strand", "anno_id", "anno"))
+colnames(feature_metadata) <- c("chr", "start", "end", "strand", "id", "anno")
+
+# Merge data and anno metadata
+met <- merge(parsed_met, feature_metadata, by=c("id","anno")) %>% merge(.,sample_metadata[,c("sample","embryo","stage","lineage","stage_lineage","sex")], by="sample")
+
+# Filter features by number of observations per annotation
+keep_cov_sites <- met %>% split(.$stage) %>% map(~ .[, cov:=.N, by=c("id","anno")] %>% .[cov >= opts$min.n] %>% .[,id_anno:=paste(id,anno,sep="_")] %>% .$id_anno)
+met <- met %>% .[,id_anno:=paste(id,anno,sep="_")] %>% .[id_anno%in%Reduce("intersect",keep_cov_sites)] %>% .[,"Ntotal":=NULL]
+
+# Filter features by minimum number of cells per group
+remove_samples <- sample_metadata %>% split(.$stage_lineage) %>% map(~ .[,.(N=min(.N)), by=c("stage","sex")] %>% .[N<opts$min.cells], id) %>% rbindlist()
+met <- met[!stage_lineage %in% remove_samples$stage_lineage]
+
+
+# Extract data from X chromosome and from control autosome 
+met_X <- met[chr=="X"]
+met_ctrl <- met[chr=="3"]
+
+```
+
+<!-- Determine ratio methylation rate female and male -->
+```{r load_data, echo=FALSE, include=FALSE}
+
+# determine methylation rates in female and male
+met_rates <- met_X[,.(mean_metRate=mean(rate)), by=c("sex", "stage", "anno")]
+met_rates_F <- met_rates[sex=="female"] %>% .[,mean_metRate_F:=mean_metRate] %>% .[,mean_metRate:=NULL] %>% .[,mean_metRate_F:=round(mean_metRate_F, digits=1)]
+met_rates_M <- met_rates[sex=="male"] %>% .[,mean_metRate_M:=mean_metRate] %>% .[,mean_metRate:=NULL] %>% .[,mean_metRate_M:=round(mean_metRate_M, digits=1)]
+
+# determine the methylation ratio for female/male
+met_rates_all <- merge(met_rates_F[,!"sex"], met_rates_M[,!"sex"], by=c("stage","anno")) %>% 
+  .[,met_ratioFM:=(mean_metRate_F/mean_metRate_M)] %>% 
+  .[,log_met_ratio:=log2(met_ratioFM)] %>% 
+  .[,c("met_ratioFM", "mean_metRate_F", "mean_metRate_M"):=NULL] %>%
+  .[,class:="met"]
+colnames(met_rates_all) <- c("stage","feature","value","class")
+
+# extract the methylation ratio for each stage
+met_rates_E4.5 <- met_rates_all[stage=="E4.5"] %>% .[,value_E4.5:=value] %>% .[,value:=NULL]
+met_rates_E5.5 <- met_rates_all[stage=="E5.5"] %>% .[,value_E5.5:=value] %>% .[,value:=NULL]
+met_rates_E6.5 <- met_rates_all[stage=="E6.5"] %>% .[,value_E6.5:=value] %>% .[,value:=NULL]
+met_rates_E7.5 <- met_rates_all[stage=="E7.5"] %>% .[,value_E7.5:=value] %>% .[,value:=NULL]
+
+# combine the methylation ratios in one table
+met_rates_1 <- merge(met_rates_E4.5[,!"stage"], met_rates_E5.5[,c("feature","value_E5.5")], by=c("feature"))
+met_rates_2 <- merge(met_rates_1, met_rates_E6.5[,c("feature","value_E6.5")], by=c("feature"))
+met_rates_all <- merge(met_rates_2, met_rates_E7.5[,c("feature","value_E7.5")], by=c("feature"))
+
+
+```
+
+
+Load accessibility data
+
+<!-- Load data and filter -->
+```{r load_data, echo=FALSE, include=FALSE}
+# Load accessibility data per annotation
+parsed_acc <- lapply(opts$annos, function(n) fread(sprintf("zcat < %s/%s.tsv.gz",io$acc.data.parsed,n), showProgress=F)) %>% rbindlist  
+#%>% setnames(., c("V1","V2","V3","V4","V5"), c("sample", "anno_id", "anno", "rate", "coverage"))
+colnames(parsed_acc) <- c("sample","id","anno","Nmet","N","rate")
+parsed_acc <- parsed_acc[sample %in% opts$cells] 
+
+# Filter features by number of CpGs
+parsed_acc <- parsed_acc[N>=opts$min.CpGs]
+
+
+# Merge data and anno metadata
+acc <- merge(parsed_acc, feature_metadata, by=c("id","anno")) %>% merge(.,sample_metadata[,c("sample","embryo","stage","lineage","stage_lineage","sex")], by="sample")
+
+# Filter features by number of observations per annotation
+keep_cov_sites <- acc %>% split(.$stage) %>% map(~ .[, cov:=.N, by=c("id","anno")] %>% .[cov >= opts$min.n] %>% .[,id_anno:=paste(id,anno,sep="_")] %>% .$id_anno)
+acc <- acc %>% .[,id_anno:=paste(id,anno,sep="_")] %>% .[id_anno%in%Reduce("intersect",keep_cov_sites)] %>% .[,"Ntotal":=NULL]
+
+# Filter features by minimum number of cells per group
+#remove_samples <- sample_metadata %>% split(.$stage_lineage) %>% map(~ .[,.(N=min(.N)), by=c("stage","sex")] %>% .[N<opts$min.cells], id) %>% rbindlist()
+acc <- acc[!stage_lineage %in% remove_samples$stage_lineage]
+
+
+# Extract data from X chromosome and from control autosome 
+acc_X <- acc[chr=="X"]
+acc_ctrl <- acc[chr=="3"]
+
+```
+
+<!-- Determine ratio accessibility rate female and male -->
+```{r load_data, echo=FALSE, include=FALSE}
+
+# determine accessibility rates in female and male
+acc_rates <- acc_X[,.(mean_accRate=mean(rate)), by=c("sex", "stage", "anno")]
+acc_rates_F <- acc_rates[sex=="female"] %>% .[,mean_accRate_F:=mean_accRate] %>% .[,mean_accRate:=NULL] %>% .[,mean_accRate_F:=round(mean_accRate_F, digits=1)]
+acc_rates_M <- acc_rates[sex=="male"] %>% .[,mean_accRate_M:=mean_accRate] %>% .[,mean_accRate:=NULL] %>% .[,mean_accRate_M:=round(mean_accRate_M, digits=1)]
+
+# determine the accessibility ratio for female/male
+acc_rates_all <- merge(acc_rates_F[,!"sex"], acc_rates_M[,!"sex"], by=c("stage","anno")) %>% 
+  .[,acc_ratioFM:=(mean_accRate_F/mean_accRate_M)] %>% 
+  .[,log_acc_ratio:=log2(acc_ratioFM)] %>% 
+  .[,c("acc_ratioFM", "mean_accRate_F", "mean_accRate_M"):=NULL] %>%
+  .[,class:="acc"]
+colnames(acc_rates_all) <- c("stage","feature","value","class")
+
+# extract the accessibility ratio for each stage
+acc_rates_E4.5 <- acc_rates_all[stage=="E4.5"] %>% .[,value_E4.5:=value] %>% .[,value:=NULL]
+acc_rates_E5.5 <- acc_rates_all[stage=="E5.5"] %>% .[,value_E5.5:=value] %>% .[,value:=NULL]
+acc_rates_E6.5 <- acc_rates_all[stage=="E6.5"] %>% .[,value_E6.5:=value] %>% .[,value:=NULL]
+acc_rates_E7.5 <- acc_rates_all[stage=="E7.5"] %>% .[,value_E7.5:=value] %>% .[,value:=NULL]
+
+# combine the accessibility ratios in one table
+acc_rates_1 <- merge(acc_rates_E4.5[,!"stage"], acc_rates_E5.5[,c("feature","value_E5.5")], by=c("feature"))
+acc_rates_2 <- merge(acc_rates_1, acc_rates_E6.5[,c("feature","value_E6.5")], by=c("feature"))
+acc_rates_all <- merge(acc_rates_2, acc_rates_E7.5[,c("feature","value_E7.5")], by=c("feature"))
+
+```
+
+
+<!-- Combine all data and calculate changes between stages -->
+```{r}
+# combine data
+rates_all <- rbind(rna_rates_all, met_rates_all, acc_rates_all)
+
+# determine changes between stages
+diff_all <- rates_all %>% 
+  .[,E4.5_to_E5.5:=value_E5.5-value_E4.5] %>%
+  .[,E5.5_to_E6.5:=value_E6.5-value_E5.5] %>%
+  .[,E6.5_to_E7.5:=value_E7.5-value_E6.5]
+
+# normalise change at each stage over maximum change
+max <- do.call(pmax, abs(diff_all[,c(7:9)]))
+diff_all <- cbind(diff_all, max)
+
+# determine ratio of change between stages
+ratios_all <- diff_all %>%
+  .[,E4.5_to_E5.5_norm:=abs(E4.5_to_E5.5)/max] %>%
+  .[,E5.5_to_E6.5_norm:=abs(E5.5_to_E6.5)/max] %>%
+  .[,E6.5_to_E7.5_norm:=abs(E6.5_to_E7.5)/max] %>%
+  .[,class_feat:=paste(class, feature, sep="_")]
+
+```
+
+
+```{r}
+
+# plot the female/male ratio for the different features at each stage
+p4 <- ggplot(data=ratios_all, aes(x=class_feat, y=value_E7.5)) +
+  geom_point() +
+  #annotate("text", x="rna_rna_X", y=2, label="E7.5", size=4.5) +   
+  ylim(-1, 2) +
+  ggtitle("E7.5") +
+  xlab("") + ylab("") +
+  theme(
+    axis.title.y = element_text(colour="black", size=14, vjust=1.5),
+    axis.title.x = element_text(colour="black", size=14, vjust=1.5),
+    axis.text.x = element_text(angle=90, size=10, vjust=0.5, hjust=1.0), #, color=tmp$color
+    axis.text.y = element_text(colour="black",size=rel(1)),
+    axis.line = element_line(colour="black", size=0.5),
+    #axis.ticks.x = element_line(colour="black", size=rel(0.8)),
+    #axis.ticks.y = element_line(colour="black", size=rel(0.8)),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_blank()
+  )
+print(p4)
+
+# save plots
+ggsave(filename="/Users/stapelc/Desktop/plot1.pdf", plot=p1)
+ggsave(filename="/Users/stapelc/Desktop/plot2.pdf", plot=p2)
+ggsave(filename="/Users/stapelc/Desktop/plot3.pdf", plot=p3)
+ggsave(filename="/Users/stapelc/Desktop/plot4.pdf", plot=p4)
+
+
+library(magick)
+library(pdftools)
+
+# load plots as magick objects
+img1 <- image_read_pdf(path="/Users/stapelc/Desktop/plot1.pdf")
+img2 <- image_read_pdf(path="/Users/stapelc/Desktop/plot2.pdf")
+img3 <- image_read_pdf(path="/Users/stapelc/Desktop/plot3.pdf")
+img4 <- image_read_pdf(path="/Users/stapelc/Desktop/plot4.pdf")
+img5 <- image_blank(500, 306, color="white")
+
+# animate plots
+img_all <- c(img1, img2, img3, img4, img5)
+animation <- image_animate(image_scale(img_all, "500x500"), fps = 1, dispose = "previous")
+frames <- image_morph(image_scale(img_all, "500x500"), frames = 20)
+morph <- image_animate(frames)
+
+# save animations
+image_write(animation, "/Users/stapelc/Desktop/FMratio_animation.gif")
+image_write(morph, "/Users/stapelc/Desktop/FMratio_morph.gif")
+```

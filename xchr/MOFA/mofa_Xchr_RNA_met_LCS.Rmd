@@ -1,0 +1,384 @@
+---
+title: "Gastrulation: MOFA sex determination data preparation"
+output: 
+  BiocStyle::html_document:
+  toc: false
+fig_width: 10
+fig_height: 8
+---
+
+Prepare scNMT data in a matrix format as input to train MOFA
+
+```{r echo=FALSE, include=FALSE}
+#devtools::load_all("/Users/ricard/mofa/MOFAtools")
+library(scater)
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(dplyr)
+```
+
+```{r define_opts, echo=FALSE, include=FALSE}
+
+## Define I/O ##
+io <- list()
+io$basedir <- "/Users/stapelc/Documents/gastrulation_data"
+io$sample_metadata <- paste0(io$basedir,"/sample_metadata_scNMT.txt")
+io$met.data.parsed <- paste(io$basedir,"met/parsed",sep="/")
+io$features.dir <- paste(io$basedir,"features/filt", sep="/")
+io$rna.infile <- paste(io$basedir,"rna/parsed/sceset_scNMT.rds",sep="/")
+io$outdir <- "/Users/stapelc/Documents/GastrulaProject/Results/Xchr/MOFA"
+
+
+## Define options ##
+opts <- list()
+
+# Define views
+opts$nsites <- 200
+opts$ngenes <- 200
+opts$chr_met <- c("X","3")
+opts$chr_rna <- c("X","3")
+
+# Define stages and lineages (only embryonic tissues! Xchr dynamics are different in extraembryonic)
+opts$stage_lineage <- c("E4.5_EPI","E5.5_EPI","E6.5_EPI","E6.5_PS","E6.75_EPI","E6.75_PS","E7.5_Ectoderm", "E7.5_Mesoderm", "E7.5_Endoderm")
+#opts$stage_lineage <- c("E7.5_Ectoderm","E7.5_Mesoderm","E7.5_Endoderm")
+
+opts$stage <- c("E4.5","E5.5","E6.5","E6.75","E7.5")
+#opts$stage <- c("E6.5","E6.75")
+
+
+#opts$annos <- c("H3K27ac_distal_E6.5","H3K27ac_distal_E3.5","H3K27ac_distal_E7.5_common","prom_100_100_cgi","prom_100_100_noncgi","prom_2000_2000_cgi","prom_2000_2000_noncgi","CGI","genebody","LINE","LTR")
+opts$annos <- c("prom_2000_2000_cgi","prom_2000_2000_noncgi","CGI")
+
+# Define which cells to use
+opts$cells <- fread(io$sample_metadata) %>% 
+  .[KO_3b=="not"] %>%
+  .[,stage_lineage:=paste(stage,lineage,sep="_")] %>%
+  .[pass_metQC==T & pass_rnaQC==T & pass_sexQC==T & stage%in%opts$stage & stage_lineage%in%opts$stage_lineage,sample]
+
+```
+
+<!-- Load sample metadata -->
+```{r}
+sample_metadata <- fread(io$sample_metadata) %>% .[sample %in% opts$cells] %>% .[stage=="E6.75",stage:="E6.5"] %>% .[,stage_lineage:=paste(stage,lineage,sep="_")]
+
+#sample_metadata <- fread(io$sample_metadata) %>% .[sample %in% opts$cells] %>% .[,stage_lineage:=paste(stage,lineage,sep="_")]
+```
+
+<!-- Load anno data and merge with genomic info and sample metadata -->
+```{r load_data, echo=FALSE, include=FALSE}
+# Load methylation data per annotation
+data <- lapply(opts$annos, function(n) fread(sprintf("zcat < %s/%s.tsv.gz",io$met.data.parsed,n), showProgress=F)) %>% rbindlist %>% setnames(., c("V1","V2","V3","V4","V5","V6"), c("sample","id","anno","Nmet","N","rate")) %>% .[sample %in% opts$cells]
+
+# Convert beta value to M value (increase normality for MOFA)
+data[,m:=log2(((rate/100)+0.01)/(1-(rate/100)+0.01))]
+
+# Load genomic features from bed file
+metadata_anno <- lapply(opts$annos, function(n) fread(sprintf("%s/%s.bed",io$features.dir,n), showProgress=F)) %>% rbindlist  %>% setnames(., c("V1","V2","V3","V4","V5","V6"), c("chr", "start", "end", "strand", "id", "anno"))
+
+# Merge data and anno metadata
+data_anno <- merge(data, metadata_anno, by=c("anno","id")) %>% merge(.,sample_metadata[,c("sample","id_met","embryo","stage","lineage","stage_lineage","sex","pass_sexQC")], by="sample") %>% .[chr %in% opts$chr_met]
+
+# Merge with metadata
+# data_anno <- merge(data_anno, sample_metadata, by="id_met")
+
+```
+
+<!-- Filter data --> 
+```{r}
+# Filter features by weight
+opts$min.weight <- 1
+data_anno <- data_anno[N>=opts$min.weight]
+
+# Filter features by coverage (general) 
+#opts$min.coverage <- 15
+#keep_cov_sites <- data_anno %>% split(.$anno) %>% map(~ .[,.(cov=.N), by = c("id","anno")] %>% .[cov >= opts$min.coverage,id])
+#data_anno <- data_anno %>% split(.$anno) %>% map2(., names(.), function(x,y) x[id %in% keep_cov_sites[[y]]]) %>% rbindlist
+
+# Filter features by coverage (by stage) 
+opts$min.coverage <- 15
+for (sl in unique(data_anno$stage)) {
+ data_anno[stage==sl,Ntotal:=sample_metadata[stage==sl,.N]]
+}
+
+keep_cov_sites <- data_anno %>% split(.$stage) %>% map(~ .[, cov:=.N, by=c("id","anno")] %>% .[cov >= opts$min.coverage] %>% .[,id_anno:=paste(id,anno,sep="_")] %>% .$id_anno)
+data_anno <- data_anno %>% .[,id_anno:=paste(id,anno,sep="_")] %>% .[id_anno%in%Reduce("intersect",keep_cov_sites)] %>% .[,"Ntotal":=NULL]
+```
+
+<!-- Select high variance sites for model training -->
+```{r}
+tmp <- data_anno %>% split(., by=c("stage","chr")) #$stage)
+for (s in names(tmp)) {
+  keep_hv_sites <- tmp[[s]] %>% split(.$anno) %>% map(~ .[,.(var = var(rate)), by="id"] %>% setorder(-var)  %>% head(n = opts$nsites) %>% .$id)
+  tmp[[s]] <- tmp[[s]] %>% split(.$anno) %>% map2(.,names(.), function(x,y) x[id %in% keep_hv_sites[[y]]]) %>% rbindlist
+}
+data_anno <- rbindlist(tmp)
+
+
+# tmp <- data_anno %>% split(.$stage)
+# for (s in unique(data_anno$stage)) {
+#   keep_hv_sites <- tmp[[s]] %>% split(.$anno) %>% map(~ .[,.(var = var(rate)), by="id"] %>% setorder(-var)  %>% head(n = opts$nsites) %>% .$id)
+#   tmp[[s]] <- tmp[[s]] %>% split(.$anno) %>% map2(.,names(.), function(x,y) x[id %in% keep_hv_sites[[y]]]) %>% rbindlist
+# }
+# data_anno <- rbindlist(tmp)
+
+```
+
+<!-- Prepare matrix of met annotation data -->
+```{r}
+# generate separate tables for each anno and each chromosome
+matrix_met <- data_anno %>% split(.,by=c("anno","chr")) %>%
+ map(~
+   dcast(.[,c("sample","id","m")], formula=sample~id, value.var="m") %>% as.data.frame %>%
+     tibble::column_to_rownames("sample") %>% as.matrix %>% t
+    )
+
+# for genome wide data or single preselected chromosome
+# matrix_met <- data_anno %>% split(.$anno) %>%
+#  map(~
+#    dcast(.[,c("id_met","id","m")], formula=id_met~id, value.var="m") %>% as.data.frame %>%
+#      tibble::column_to_rownames("id_met") %>% as.matrix %>% t
+#     )
+```
+
+
+Load rna expression data and merge matrix with met annotation data
+
+<!-- Load expression data -->
+```{r load_expr, echo=FALSE, include=FALSE}
+
+# Load SCEset object
+sce <- readRDS(io$rna.infile)
+colnames(sce) <- colData(sce)$sample
+
+# Filter cells
+sce <- sce[,colnames(sce) %in% opts$cells]
+
+```
+
+<!-- Extract gene metadata -->
+```{r}
+gene_metadata_1 <- ranges(sce) %>% as.data.table %>% setnames("names", "ens_id")
+gene_metadata_2 <- rowRanges(sce) %>% as.data.table %>% setnames(c("seqnames", "symbol"), c("chr", "gene")) %>% 
+  .[,c("chr", "start", "end", "gene")] %>% .[,chr:=as.factor(sub("chr","",chr))]
+
+gene_metadata_all <- merge(gene_metadata_1, gene_metadata_2, by = c("start", "end"))
+```
+
+<!-- Create data.table from SCEset object -->
+```{r}
+rna <- exprs(sce) %>% t %>% as.data.table(keep.rownames="sample") %>% melt(id.vars="sample", value.name="expr", variable.name="ens_id") #%>%
+  #merge(fData(sce) %>% tibble::rownames_to_column("gene") %>% .[,c("gene","ens_id")] %>% as.data.table %>% setnames("ens_id","id"))
+```
+
+<!-- Merge data and metadata -->
+```{r}
+rna <- merge(rna, sample_metadata[,c("sample","stage","stage_lineage","embryo","sex")], by="sample") %>%
+  merge(gene_metadata_all[,c("chr","gene","ens_id")], by="ens_id")
+
+# rna <- merge(rna, sample_metadata_rna, by="sample")
+```
+
+<!-- Filter expression data -->
+```{r filter, echo=FALSE}
+# Select genes from chromosomes of interest
+rna <- rna[chr %in% opts$chr_rna]
+rna$chr <- factor(rna$chr)
+
+# Remove lowly expressed genes
+rna <- rna[,mean:=mean(expr),by="gene"] %>% .[mean>=1.0] %>% .[,mean:=NULL]
+
+# Remove genes with constant expression levels
+rna <- rna[,var:=var(expr),by="gene"] %>% .[var>0] %>% .[,var:=NULL]
+
+# Filter genes with low cellular detection rate and sites with low coverage across samples
+# opts$rna.min.cdr <- 0.25
+# rna <- rna[,cdr:=sum(expr>0)/length(opts$rna_cells), by="gene"] %>% .[cdr>=opts$rna_min.cdr] %>% .[,cdr:=NULL]
+
+# Extract top N highly variable genes
+tmp2 <- rna %>% split(., by="chr")
+for (s in opts$chr_rna){
+  keep_hv_genes <- tmp2[[s]] %>% .[,.(var=var(expr)), by="gene"] %>% setorder(-var)  %>% head(n = opts$ngenes) %>% .$gene
+  tmp2[[s]] <- tmp2[[s]] %>% .[gene %in% keep_hv_genes]
+  }
+rna <- rbindlist(tmp2)
+
+
+# keep_hv_genes <- rna[,.(var=var(expr)), by="gene"] %>% setorder(-var)  %>% head(n = opts$ngenes) %>% .$gene
+# rna <- rna[gene%in%keep_hv_genes]
+
+```
+
+<!-- Prepare matrix of rna expression data -->
+```{r}
+matrix_rna <- rna %>% split(.,by="chr") %>%
+ map(~
+   dcast(.[,c("sample","gene","expr")], formula=sample~gene, value.var="expr") %>% as.data.frame %>%
+     tibble::column_to_rownames("sample") %>% as.matrix %>% t
+    )
+
+# matrix_rna <- dcast(rna[,c("sample","gene","expr")], formula=sample~gene, value.var="expr") %>%
+#   as.data.frame %>%
+#   tibble::column_to_rownames("sample") %>%
+#   as.matrix %>%
+#   t
+```
+
+<!-- Merge matrices met annotation and rna expression data -->
+```{r}
+matrix_all <- c(matrix_rna, matrix_met)
+
+#matrix_all <- c(list('rna'=matrix_rna), matrix_met)
+```
+
+
+Run MOFA
+
+```{r echo=FALSE, include=FALSE}
+library(MOFAtools)
+```
+
+<!-- Fit MOFA model -->
+```{r,}
+MOFAobject <- createMOFAobject(matrix_all)   ### enter right matrix!!! 
+
+outfile <- paste0(io$outdir,"/model_sex_all_rnamet.hdf5")
+DirOptions <- list("dataDir" = tempdir(), "outFile" = outfile)
+
+# model options
+ModelOptions <- getDefaultModelOptions(MOFAobject)
+ModelOptions$learnIntercept <- T
+ModelOptions$numFactors <- 5
+ModelOptions$sparsity <- T
+
+# training options
+TrainOptions <- getDefaultTrainOptions()
+TrainOptions$maxiter <- 1000
+TrainOptions$tolerance <- 0.05
+TrainOptions$DropFactorThreshold <- 0.02
+TrainOptions$learnFactors <- F
+
+#DataOptions <- getDefaultDataOpts()
+#DataOptions$scaleViews <- F
+#DataOptions$centerFeatures <- T
+
+# ModelOptions$covariates <- data.frame(mean=sample_metadata$mean)
+
+MOFAobject <- prepareMOFA(
+  MOFAobject, 
+  DirOptions = DirOptions, 
+  #DataOptions = DataOptions, 
+  ModelOptions = ModelOptions, 
+  TrainOptions = TrainOptions)
+
+# saveRDS(MOFAobject, paste(io$outdir,"MOFAobject.rds",sep="/"))
+
+model <- runMOFA(MOFAobject, DirOptions, mofaPath = "/Users/stapelc/anaconda2/envs/carinemofa/bin/mofa")
+```
+
+<!-- Load previously saved model -->
+```{r}
+# model <- loadModel(paste(io$outdir,"model_Xchr_RNA_met.hdf5",sep="/"))
+```
+
+<!-- Plot the amount of variance that is explained by each factor for each feature -->
+```{r}
+plotVarianceExplained(model)
+```
+
+<!-- Plot importance of different features to factors -->
+```{r}
+plotWeights(model, view="CGI.X", factor=1, nfeatures = 10)
+
+asd = getWeights(model, views="CGI.X", factor=1)[[1]]
+```
+
+<!-- Filter metadata for color-coding plots -->
+```{r}
+sample_metadata_filt <- sample_metadata %>% setkey(sample) %>% .[MOFAtools::sampleNames(MOFAobject)]   #* change metadata table dependend on analysis!
+
+```
+
+<!-- Plot scatter plot between two factors -->
+```{r}
+plotFactorCor(model)
+
+plotFactorScatter(model, factors = c(1,2), sample_metadata_filt$sex)
+
+plotFactorBeeswarm(model, factors = 5, sample_metadata_filt$sex)
+```
+<!--Plot difference between male and female cells for hits-->
+```{r}
+# select top hits
+asd_hits <- asd[,1] %>% sort(., decreasing=TRUE) %>% .[1:20] %>% names(.)   ### check whether loading is + or - to decide whether decreasing or increasing!
+
+# plot DNAme hits
+ggplot(data_anno[id==asd_hits[1]], aes(x=sex, y=rate, colour=sex)) +
+  geom_boxplot() +
+  geom_point(stat="identity", position="jitter") 
+
+# plot RNA hits
+ggplot(rna[gene==asd_hits[1]], aes(x=sex, y=expr, colour=sex)) +
+  geom_boxplot() +
+  geom_point(stat="identity", position="jitter") 
+  
+```
+
+
+<!-- Plot variance explained for different models combined -->
+```{r}
+# load models
+weights_E4.5 <- loadModel(paste(io$outdir,"model_sex_E4-5.hdf5",sep="/")) %>% 
+  getWeights(., factors=1, as.data.frame=T) %>% as.data.table(.) %>% .[,stage:="E4.5"]
+weights_E5.5 <- loadModel(paste(io$outdir,"model_sex_E5-5.hdf5",sep="/")) %>% 
+  getWeights(., factors=1, as.data.frame=T) %>% as.data.table(.) %>% .[,stage:="E5.5"]
+weights_E6.5 <- loadModel(paste(io$outdir,"model_sex_E6-5.hdf5",sep="/")) %>% 
+  getWeights(., factors=1, as.data.frame=T) %>% as.data.table(.) %>% .[,stage:="E6.5"]
+weights_E6.75 <- loadModel(paste(io$outdir,"model_sex_E6-75.hdf5",sep="/")) %>% 
+  getWeights(., factors=3, as.data.frame=T) %>% as.data.table(.) %>% .[,stage:="E6.75"]
+weights_E6_all <- loadModel(paste(io$outdir,"model_sex_E6_all.hdf5",sep="/")) %>% 
+  getWeights(., factors=1, as.data.frame=T) %>% as.data.table(.) %>% .[,stage:="E6.5"]
+weights_E7.5 <- loadModel(paste(io$outdir,"model_sex_E7-5.hdf5",sep="/")) %>% 
+  getWeights(., factors=1, as.data.frame=T) %>% as.data.table(.) %>% .[,stage:="E7.5"]
+
+#weights_all <- rbind(weights_E4.5,weights_E5.5,weights_E6.5,weights_E6.75,weights_E7.5)
+weights_all <- rbind(weights_E4.5,weights_E5.5,weights_E6_all,weights_E7.5)
+weights_all$value <- abs(weights_all$value)
+
+weights_mean <- weights_all[,.(mean_value=mean(value)), by=c("view","factor","stage")]
+
+# exclude non-informative views
+exclude_views <- c(unique(grep("3+", weights_mean$view, value=TRUE)),"CGI.Y","prom_2000_2000_cgi.Y","prom_2000_2000_noncgi.Y")
+#exclude_views <- c("CGI.Y","prom_2000_2000_cgi.Y","prom_2000_2000_noncgi.Y")
+weights_mean <- weights_mean[!view %in% exclude_views]
+
+# specify axis order
+xaxis_order <- c("Y","X","CGI.X","prom_2000_2000_cgi.X","prom_2000_2000_noncgi.X","3","CGI.3","prom_2000_2000_cgi.3","prom_2000_2000_noncgi.3")
+
+# Plot grid with the variance explained per factor in each view per stage
+p <- ggplot(weights_mean, aes(x=factor(view,level=xaxis_order),y=stage)) + 
+        geom_tile(aes(fill=mean_value), color="black") +
+        #guides(fill=guide_colorbar("R2")) +
+        scale_fill_gradientn(colors=c("gray97","darkblue"), guide="colorbar") +
+        ylab("Latent factor") +
+        theme(
+          # plot.margin = margin(5,5,5,5),
+          plot.title = element_text(size=17, hjust=0.5),
+          axis.title.x = element_blank(),
+          axis.text.x = element_text(size=11, angle=60, hjust=1, vjust=1, color="black"),
+          axis.text.y = element_text(size=12, color="black"),
+          axis.title.y = element_text(size=15),
+          axis.line = element_blank(),
+          axis.ticks =  element_blank(),
+          panel.background = element_blank()
+          )
+p <- p + ggtitle("Variance explained per stage")  #+ 
+#guides(fill=guide_colorbar("R2"))
+
+print(p)
+
+ggsave(filename=(paste0(io$outdir,"/MOFA_sex_allStages_E6combined_wChr3.pdf")), plot=p)
+
+
+```
+

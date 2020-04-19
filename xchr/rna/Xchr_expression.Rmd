@@ -1,0 +1,199 @@
+---
+title: "Gastrulation: X chromosome expression"
+output: 
+  BiocStyle::html_document:
+  toc: false
+fig_width: 10
+fig_height: 8
+---
+
+Plot expression of X-Chr genes over time in females vs males
+
+```{r echo=FALSE, include=FALSE}
+library(scater)
+library(data.table)
+library(purrr)
+library(ggplot2)
+```
+
+```{r funcs, echo=FALSE}
+
+```
+
+```{r define_opts, echo=FALSE, include=FALSE}
+
+## Define I/O ##
+io <- list()
+io$basedir <- "/Users/stapelc/Documents/gastrulation_data"
+io$sample_metadata <- paste0(io$basedir,"/sample_metadata_scNMT.txt")
+io$rna.infile <- paste(io$basedir,"rna/parsed/sceset_scNMT.rds",sep="/")
+io$outdir <- "/Users/stapelc/Documents/GastrulaProject/Results/Xchr"
+
+## Define options ##
+opts <- list()
+
+# Define stages and lineages (only embryonic tissues! Xchr dynamics are different in extraembryonic)
+opts$stage_lineage <- c("E4.5_EPI","E5.5_EPI","E6.5_EPI","E6.5_PS","E6.75_EPI","E6.75_PS","E7.5_Ectoderm", "E7.5_Mesoderm", "E7.5_Endoderm")
+#opts$stage_lineage <- c("E7.5_Ectoderm","E7.5_Mesoderm","E7.5_Endoderm")
+
+opts$stage <- c("E4.5","E5.5","E6.5","E6.75","E7.5")
+#opts$stage <- c("E7.5")
+
+
+# Define which cells to use
+opts$cells <- fread(io$sample_metadata, header=T) %>% 
+  .[KO_3b=="not"] %>%
+  .[,stage_lineage:=paste(stage,lineage,sep="_")] %>% 
+  .[pass_rnaQC==T & pass_sexQC==T & stage%in%opts$stage & stage_lineage%in%opts$stage_lineage, sample]
+
+#opts$cells <- fread(io$sample_metadata, header=T) %>% .[pass_rnaQC==T, sample]
+```
+
+<!-- Load expression data -->
+```{r load_expr, echo=FALSE, include=FALSE}
+
+# Load SCEset object
+sce <- readRDS(io$rna.infile)
+colnames(sce) <- colData(sce)$sample
+
+# Filter cells
+sce <- sce[,colnames(sce) %in% opts$cells]
+
+```
+
+<!-- Load sample metadata -->
+```{r}
+sample_metadata <- fread(io$sample_metadata) %>% .[sample %in% opts$cells] %>% .[,stage_lineage:=paste(stage,lineage,sep="_")]
+```
+
+<!-- Extract gene metadata -->
+```{r}
+gene_metadata_1 <- ranges(sce) %>% as.data.table %>% setnames("names", "ens_id")
+gene_metadata_2 <- rowRanges(sce) %>% as.data.table %>% setnames(c("seqnames", "symbol"), c("chr", "gene")) %>% 
+  .[,c("chr", "start", "end", "gene")] %>% .[,chr:=as.factor(sub("chr","",chr))]
+
+gene_metadata_all <- merge(gene_metadata_1, gene_metadata_2, by = c("start", "end"))
+
+#gene_metadata <- fData(sce) %>% tibble::rownames_to_column("gene") %>% as.data.table %>%
+#  .[,c("chr","start","end","gene","ens_id")]  %>%
+#  .[,chr:=as.factor(sub("chr","",chr))] %>%
+#  setnames("ens_id","id")
+
+```
+
+<!-- Create data.table from SCEset object -->
+```{r}
+rna <- exprs(sce) %>% t %>% as.data.table(keep.rownames="sample") %>% melt(id.vars="sample", value.name="expr", variable.name="ens_id") #%>%
+  #merge(fData(sce) %>% tibble::rownames_to_column("gene") %>% .[,c("gene","ens_id")] %>% as.data.table %>% setnames("ens_id","id"))
+```
+
+<!-- Merge data and metadata -->
+```{r}
+rna <- merge(rna, sample_metadata[,c("sample","stage","stage_lineage","embryo","sex")], by="sample") %>%
+  merge(gene_metadata_all[,c("chr","gene","ens_id")], by="ens_id")
+```
+
+<!-- Filter expression data -->
+```{r filter, echo=FALSE}
+
+rna_filt <- rna[expr>=1 & chr!="MT"]
+
+# Extract genes on the X chromosome and on autosomes
+rna_X <- rna_filt[chr=="X"]
+rna_auto <- subset(rna_filt, chr!="X" & chr!="Y")
+```
+
+<!-- Plot X-Chr expression -->
+```{r}
+
+tmp_X <- rna_X[,.(expr=sum(expr)), by=c("sample", "stage", "sex", "embryo")] %>% setkey(., sex)
+
+# tmp <- rna_filt[,.(counts=sum(counts)), by=c("stage_lineage","embryo")] %>% 
+#   setkey(stage_lineage) %>% .[,sample:=factor(sample,levels=sample)]
+
+
+p <- ggplot(tmp_X, aes(x=stage, y=expr, color=sex)) + 
+  ggtitle("") +
+  geom_point(stat='identity', position="jitter") +
+  xlab("Embryo") + ylab("mean expr per cell in X chr") +
+  theme(
+    axis.title.y = element_text(colour="black", size=14, vjust=1.5),
+    axis.title.x = element_text(colour="black", size=14, vjust=1.5),
+    axis.text.x = element_text(angle=90, size=10, vjust=0.5, hjust=1.0), #, color=tmp$color
+    axis.text.y = element_text(colour="black",size=rel(1.3)),
+    axis.line = element_line(colour="black", size=0.5),
+    axis.ticks.x = element_line(colour="black", size=rel(0.8)),
+    axis.ticks.y = element_line(colour="black", size=rel(0.8)),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_blank()
+  )
+print(p)
+
+ggsave(filename=(paste0(io$outdir,"/scNMT_RNA_X_noNorm",".pdf")), plot=p)
+
+
+```
+
+<!-- Plot autosome expression -->
+```{r}
+
+tmp_auto <- rna_auto[,.(expr=sum(expr)/19), by=c("sample", "stage", "sex", "embryo")] %>% setkey(., sex)
+
+p <- ggplot(tmp_auto, aes(x=stage, y=expr, color=sex)) + 
+  ggtitle("") +
+  geom_point(stat='identity', position="jitter") +
+  xlab("Embryo") + ylab("mean expr per cell per autosome") +
+  theme(
+    axis.title.y = element_text(colour="black", size=14, vjust=1.5),
+    axis.title.x = element_text(colour="black", size=14, vjust=1.5),
+    axis.text.x = element_text(angle=90, size=10, vjust=0.5, hjust=1.0), # , color=tmp$color
+    axis.text.y = element_text(colour="black",size=rel(1.3)),
+    axis.line = element_line(colour="black", size=0.5),
+    axis.ticks.x = element_line(colour="black", size=rel(0.8)),
+    axis.ticks.y = element_line(colour="black", size=rel(0.8)),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_blank()
+  )
+print(p)
+
+ggsave(filename=(paste0(io$outdir,"/scNMT_RNA_auto",".pdf")), plot=p)
+
+
+```
+
+<!-- Plot X/autosome expression -->
+```{r}
+
+tmp_X$chrClass <- "sex"
+tmp_auto$chrClass <- "auto"
+tmp <- merge(tmp_X, tmp_auto, by = c("sample", "stage", "sex", "embryo")) %>% .[, ratio := expr.x / expr.y] %>% setkey(., sex)
+
+#emb <- subset(tmp, embryo == "E6.5_embryo2")
+
+p <- ggplot(tmp, aes(x=stage, y=ratio, color=sex)) + 
+  ggtitle("") +
+  geom_point(stat='identity', position="jitter") +
+  #geom_point(data=emb, colour="green", stat = "identity", position = "jitter") +
+  xlab("Embryo") + ylab("mean expr X-Chr / autosome") +
+  theme(
+    axis.title.y = element_text(colour="black", size=14, vjust=1.5),
+    axis.title.x = element_text(colour="black", size=14, vjust=1.5),
+    axis.text.x = element_text(angle=90, size=10, vjust=0.5, hjust=1.0), # , color=tmp$color
+    axis.text.y = element_text(colour="black",size=rel(1.3)),
+    axis.line = element_line(colour="black", size=0.5),
+    axis.ticks.x = element_line(colour="black", size=rel(0.8)),
+    axis.ticks.y = element_line(colour="black", size=rel(0.8)),
+    panel.background = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_blank()
+  )
+print(p)
+
+ggsave(filename=(paste0(io$outdir,"/scNMT_RNA_X_Norm",".pdf")), plot=p)
+
+
+```
+
+

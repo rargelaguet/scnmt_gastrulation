@@ -1,0 +1,173 @@
+---
+title: "Gastrulation MT: X chromosome expression"
+output: 
+  BiocStyle::html_document:
+  toc: false
+fig_width: 10
+fig_height: 8
+---
+
+Plot expression of X-Chr genes over time in females vs males
+
+```{r echo=FALSE, include=FALSE}
+library(scater)
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(biomaRt)
+
+#source("http://bioconductor.org/biocLite.R")
+#biocLite("biomaRt")
+
+```
+
+```{r funcs, echo=FALSE}
+
+```
+
+```{r define_opts, echo=FALSE, include=FALSE}
+
+## Define I/O ##
+io <- list()
+io$basedir <- "/Users/stapelc/Documents/gastrulation_data"
+io$sample_metadata <- paste0(io$basedir,"/other_metadata/carine/sample_metadata_sex.txt")
+io$rna.infile <- paste(io$basedir,"rna/parsed/sceset_scNMT.rds",sep="/")
+io$tf.file <- "/Users/stapelc/Documents/GastrulaProject/TFs/Mouse_TFs_TcoF-DB.txt"
+io$outdir <- "/Users/stapelc/Documents/GastrulaProject/Results/TFs"
+
+## Define options ##
+opts <- list()
+
+# Define stages and lineages
+#opts$stage_lineage <- c("E3.5_ICM","E4.5_EPI","E5.5_EPI","E6.5_early_EPI","E6.5_early_PS","E6.5_late_EPI", "E6.5_late_PS","E6.75_EPI","E6.75_PS","E7.5_Ectoderm", "E7.5_Mesoderm", "E7.5_Endoderm")
+opts$stage_lineage <- c("E7.5_Ectoderm","E7.5_Mesoderm","E7.5_Endoderm")
+
+# opts$stage_lineage <- "all"
+
+opts$nr_hits <- 50
+opts$threshold_fdr <- 0.0001
+
+# Define which cells to use
+opts$cells <- fread(io$sample_metadata, header=T) %>% .[,stage_lineage:=paste(stage,lineage,sep="_")] %>% 
+  .[pass_rnaQC==T & pass_sexQC==T & stage_lineage%in%opts$stage_lineage, sample]
+
+#opts$cells <- fread(io$sample_metadata, header=T) %>% .[pass_rnaQC==T, sample]
+```
+
+<!-- Load expression data -->
+```{r load_expr, echo=FALSE, include=FALSE}
+
+# Load SCEset object
+sce <- readRDS(io$rna.infile)
+colnames(sce) <- colData(sce)$sample
+
+# Filter cells
+sce <- sce[,colnames(sce) %in% opts$cells]
+
+```
+
+<!-- Load sample metadata -->
+```{r}
+sample_metadata <- fread(io$sample_metadata) %>% .[sample %in% opts$cells] %>% .[,stage_lineage:=paste(stage,lineage,sep="_")]
+```
+
+<!-- Extract gene metadata -->
+```{r}
+gene_metadata_1 <- ranges(sce) %>% as.data.table %>% setnames("names", "ens_id")
+gene_metadata_2 <- rowRanges(sce) %>% as.data.table %>% setnames(c("seqnames", "symbol"), c("chr", "gene")) %>% 
+  .[,c("chr", "start", "end", "gene")] %>% .[,chr:=as.factor(sub("chr","",chr))]
+
+gene_metadata_all <- merge(gene_metadata_1, gene_metadata_2, by = c("start", "end"))
+
+#gene_metadata <- fData(sce) %>% tibble::rownames_to_column("gene") %>% as.data.table %>%
+#  .[,c("chr","start","end","gene","ens_id")]  %>%
+#  .[,chr:=as.factor(sub("chr","",chr))] %>%
+#  setnames("ens_id","id")
+
+```
+
+<!-- Create data.table from SCEset object -->
+```{r}
+rna <- exprs(sce) %>% t %>% as.data.table(keep.rownames="sample") %>% melt(id.vars="sample", value.name="expr", variable.name="gene") #%>%
+  #merge(fData(sce) %>% tibble::rownames_to_column("gene") %>% .[,c("gene","ens_id")] %>% as.data.table %>% setnames("ens_id","id"))
+```
+
+<!-- Merge data and metadata -->
+```{r}
+rna <- merge(rna, sample_metadata[,c("sample","stage","stage_lineage","embryo","sex")], by="sample") %>%
+  merge(gene_metadata_all[,c("chr","gene","id")], by="gene")
+```
+
+<!-- Load list of mouse TFs -->
+```{r}
+tf_list <- fread(io$tf.file)
+```
+
+<!-- Select TF coding genes -->
+```{r filter, echo=FALSE}
+
+# Obtain ENS gene id for all genes
+GRCm38 <- useEnsembl(biomart="ensembl",dataset="mmusculus_gene_ensembl")
+gene_IDs <- getBM(attributes=c("external_gene_name","ensembl_gene_id"), mart=GRCm38)
+gene_IDs <- as.data.table(gene_IDs)
+
+# Extract genes that encode transcription factors
+TF_IDs <- gene_IDs[external_gene_name %in% tf_list$Symbol]
+
+rna_TF <- rna[id %in% TF_IDs$ensembl_gene_id]
+
+```
+
+<!-- Identify most highly expressed TFs for each cell type -->
+```{r}
+rna_TF_filt <- rna_TF[expr>=1 & chr!="MT"]
+
+expr_TF <- rna_TF_filt[,.(mean_expr=mean(expr)), by=c("gene","stage_lineage")] 
+
+hits_TF_ecto <- expr_TF %>% .[stage_lineage=="E7.5_Ectoderm"] %>% setorder(.,-mean_expr) %>% head(., n=opts$nr_hits)
+hits_TF_meso <- expr_TF %>% .[stage_lineage=="E7.5_Mesoderm"] %>% setorder(.,-mean_expr) %>% head(., n=opts$nr_hits)
+hits_TF_endo <- expr_TF %>% .[stage_lineage=="E7.5_Endoderm"] %>% setorder(.,-mean_expr) %>% head(., n=opts$nr_hits)
+
+unique_TF_ecto <- hits_TF_ecto[!gene %in% hits_TF_meso$gene & !gene %in% hits_TF_endo$gene]
+unique_TF_meso <- hits_TF_meso[!gene %in% hits_TF_ecto$gene & !gene %in% hits_TF_endo$gene]
+unique_TF_endo <- hits_TF_endo[!gene %in% hits_TF_ecto$gene & !gene %in% hits_TF_meso$gene]
+unique_TF_mesendo <- hits_TF_meso[gene %in% hits_TF_endo$gene & !gene %in% hits_TF_ecto$gene]
+
+
+hits_TF_all <- hits_TF_ecto[gene %in% hits_TF_meso$gene & gene %in% hits_TF_endo$gene] %>% head(., n=20)
+
+
+```
+
+<!-- Differential expression -->
+```{r}
+# Normal assumption: t-test
+diff_expr <- rna_TF[,.(N1 = .SD[stage_lineage%in%opts$stage_lineage[1],.N], N2 = .SD[stage_lineage%in%opts$stage_lineage[2],.N], 
+    # .SD == Subset of Data
+    # .N == determine length; number of cells for each of the stage_lineages
+  mean_expr_ecto = mean(.SD[stage_lineage%in%opts$stage_lineage[1],expr]),
+  mean_expr_meso = mean(.SD[stage_lineage%in%opts$stage_lineage[2],expr]),
+  mean_diff = mean(.SD[stage_lineage%in%opts$stage_lineage[1],expr]) - mean(.SD[stage_lineage%in%opts$stage_lineage[2],expr]),
+  log_fold_diff = log2(mean(.SD[stage_lineage%in%opts$stage_lineage[1],expr]) / mean(.SD[stage_lineage%in%opts$stage_lineage[2],expr])),
+  p.value = t.test(x=.SD[stage_lineage%in%opts$stage_lineage[1],expr], y=.SD[stage_lineage%in%opts$stage_lineage[2],expr], paired = FALSE, var.equal=FALSE)[["p.value"]]), by = "gene"] %>%   # by = c("gene","id")]
+  .[, c("padj_fdr") := list(p.adjust(p.value, method = "fdr"))] %>%
+  .[, c("log_padj_fdr") := list(-log10(padj_fdr))] %>%
+  .[, sig := padj_fdr <= opts$threshold_fdr] %>%
+  .[complete.cases(sig)] %>% setorder(padj_fdr) %>%
+  .[mean_expr_ecto >=1 | mean_expr_meso >=1]
+
+
+diff_expr_filt <- diff_expr[sig==T & (log_fold_diff>=1 | log_fold_diff<=-1) & (mean_expr_ecto>(quantile(expr_TF$mean_expr, 0.5)) | mean_expr_meso>(quantile(expr_TF$mean_expr, 0.5)))]
+
+
+out_filt <- out[abs(mean_diff)>4 & padj_fdr<opts$threshold_fdr]   # could have filtered by 'sig' as well? only difference is < vs <=
+```
+
+
+
+<!-- -->
+```{r}
+
+```
+
+

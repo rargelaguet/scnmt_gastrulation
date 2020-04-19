@@ -1,0 +1,282 @@
+---
+title: "Differential expression analysis - comparison of methods"
+output: 
+  BiocStyle::html_document:
+  toc: false
+fig_width: 10
+fig_height: 8
+---
+  
+```{r echo=FALSE, include=FALSE}
+library(scater)
+library(data.table)
+library(purrr)
+library(ggplot2)
+```
+
+```{r define_opts, echo=FALSE, include=FALSE}
+
+io <- list()
+io$basedir <- "/Users/Carine/Documents/gastrulation_data"
+io$sample_metadata <- paste0(io$basedir,"/sample_metadata_scNMT.txt")
+io$rna.infile <- paste(io$basedir,"rna/parsed/sceset_scNMT.rds",sep="/")
+io$outdir <- "/Users/stapelc/Documents/GastrulaProject/Results/DE"
+
+## Define options
+
+opts <- list()
+
+# Define stages and lineages (only embryonic tissues! Xchr dynamics are different in extraembryonic)
+#opts$stage_lineage <- c("E3.5_ICM","E4.5_EPI","E5.5_EPI","E6.5_early_EPI","E6.5_early_PS","E6.5_late_EPI", "E6.5_late_PS","E6.75_EPI","E6.75_PS","E7.5_Ectoderm", "E7.5_Mesoderm", "E7.5_Endoderm")
+opts$stage_lineage <- c("E7.5_Ectoderm", "E7.5_Mesoderm")
+
+opts$threshold_fdr <- 0.0001
+
+# Define which cells to use
+opts$cells <- fread(io$sample_metadata, header=T) %>% 
+  .[KO_3b=="not"] %>%
+  .[,stage_lineage:=paste(stage,lineage,sep="_")] %>% 
+  .[pass_rnaQC==T & stage_lineage%in%opts$stage_lineage,sample] 
+
+```
+
+<!-- Load sample metadata -->
+```{r}
+# sample_metadata <- fread(io$sample_metadata) %>% .[sample%in%opts$cells]
+sample_metadata <- fread(io$sample_metadata) %>% .[sample %in% opts$cells] %>% .[,stage_lineage:=paste(stage,lineage,sep="_")]
+```
+
+<!-- Load expression data -->
+```{r load_expr, echo=FALSE, include=FALSE}
+
+# Load SCEset object
+sce <- readRDS(io$rna.infile)
+colnames(sce) <- colData(sce)$sample
+
+# Filter cells
+sce <- sce[,colnames(sce) %in% opts$cells]
+
+```
+
+<!-- Create data.table from SCEset object -->
+```{r}
+rna <- exprs(sce) %>% t %>% as.data.table(keep.rownames="sample") %>% melt(id.vars="sample", value.name="expr", variable.name="gene") #%>%
+  #merge(fData(sce) %>% tibble::rownames_to_column("gene") %>% .[,c("gene","ens_id")] %>% as.data.table %>% setnames("ens_id","id"))
+```
+
+<!-- Merge data and metadata -->
+```{r}
+rna <- merge(rna, sample_metadata[,c("sample","stage_lineage")], by="sample")
+```
+
+<!-- Filter data -->
+```{r filter, echo=FALSE}
+
+# select data for DE test
+x <- rna[stage_lineage %in% opts$stage_lineage[1]]
+y <- rna[stage_lineage %in% opts$stage_lineage[2]]
+
+# filter genes based on dropout
+genes.keep.x <- x %>% .[,.(N_dropout=sum(expr>0), N=.N),  by="gene"] %>% .[,keep:=(N-N_dropout)>5] %>% .[keep==TRUE] %>% .$gene
+genes.keep.y <- y %>% .[,.(N_dropout=sum(expr>0), N=.N),  by="gene"] %>% .[,keep:=(N-N_dropout)>5] %>% .[keep==TRUE] %>% .$gene
+
+genes.keep <- intersect(genes.keep.x, genes.keep.y)
+
+x <- x[gene %in% genes.keep]
+y <- y[gene %in% genes.keep]
+
+rna_filt <- rbind(x,y)
+
+# Or should I remove all dropouts with expr>0. This would generate more normally distributed data.
+
+
+# Filter genes based on dropout
+# opts$max.dropout <- 0.25
+# rna <- rna[,dropout:=mean(expr<0.1),by="gene"] %>% .[dropout<=opts$max.dropout] %>% .[,dropout:=NULL]
+
+# Filter genes based on variance
+# opts$fvar <- 0.5
+# genes_var <- names(tail(sort(apply(exprs(sce_filt),1,var)), n=nrow(sce_filt)*opts$fvar))
+# sce_filt <- sce_filt[genes_var,opts$cells]
+ 
+# Filter genes based on biological overdispersion
+# opts$fvar <- 0.5
+# genes_var <- rownames(sce_filt)[tail(sort(rowData(sce_filt)$bioVar, index.return=TRUE)$ix, n=nrow(sce_filt)*opts$fvar)]
+# sce_filt <- sce_filt[genes_var,opts$cells]
+# genes_oversdispersion <- rownames(sce_filt)[rowData(sce_filt)$bioVar > 1]
+# sce_filt <- sce_filt[genes_oversdispersion,opts$cells]
+```
+
+<!-- Test for normality -->
+```{r}
+
+# qqplot for one gene
+test <- rna_filt[gene==unique(rna$gene)[102]]   #* rna[gene=="Snai1"] to test for gene of interest
+qqnorm(test$expr)
+
+# remove dropouts and replot qqplot
+test <- test[expr>0]
+qqnorm(test$expr)
+
+```
+
+<!-- t-test -->
+```{r}
+# Normal assumption: t-test
+DE_ttest <- rna_filt[,.(N1 = .SD[stage_lineage%in%opts$stage_lineage[1],.N], N2 = .SD[stage_lineage%in%opts$stage_lineage[2],.N], 
+    # .SD == Subset of Data
+    # .N == determine length; number of cells for each of the stage_lineages
+  mean_expr_ecto = mean(.SD[stage_lineage%in%opts$stage_lineage[1],expr]),
+  mean_expr_meso = mean(.SD[stage_lineage%in%opts$stage_lineage[2],expr]),
+  mean_diff = mean(.SD[stage_lineage%in%opts$stage_lineage[1],expr]) - mean(.SD[stage_lineage%in%opts$stage_lineage[2],expr]),
+  log_fold_diff = log2(mean(.SD[stage_lineage%in%opts$stage_lineage[1],expr]) / mean(.SD[stage_lineage%in%opts$stage_lineage[2],expr])),
+  p.value_ttest = t.test(x=.SD[stage_lineage%in%opts$stage_lineage[1],expr], y=.SD[stage_lineage%in%opts$stage_lineage[2],expr], paired = FALSE, var.equal=FALSE)[["p.value"]]), by = "gene"] %>%   # by = c("gene","id")]
+  .[, padj_fdr_ttest := list(p.adjust(p.value_ttest, method = "fdr"))] %>%
+  .[, log_padj_fdr_ttest := list(-log10(padj_fdr_ttest))] %>%
+  .[, sig_ttest := padj_fdr_ttest <= opts$threshold_fdr] %>%
+  .[complete.cases(sig_ttest)] %>% setorder(padj_fdr_ttest) %>%
+  .[mean_expr_ecto >=1 | mean_expr_meso >=1]
+
+DE_ttest_filt <- DE_ttest[sig_ttest==T & (log_fold_diff>=1 | log_fold_diff<=-1)] #& (mean_expr_ecto>(quantile(expr_TF$mean_expr, 0.5)) | mean_expr_meso>(quantile(expr_TF$mean_expr, 0.5)))]
+
+
+# Normal assumption: t-test, dropouts excluded to increase normality
+# Compare results to t-test without dropout filtering
+rna_filt_drop <- rna_filt[expr>0]
+
+a <- rna_filt_drop[stage_lineage %in% opts$stage_lineage[1]]
+b <- rna_filt_drop[stage_lineage %in% opts$stage_lineage[2]]
+
+genes.keep.a <- a %>% .[,.(N=.N),  by="gene"] %>% .[,keep:=N>5] %>% .[keep==TRUE] %>% .$gene
+genes.keep.b <- b %>% .[,.(N=.N),  by="gene"] %>% .[,keep:=N>5] %>% .[keep==TRUE] %>% .$gene
+
+genes.keep <- intersect(genes.keep.a, genes.keep.b)
+
+a <- a[gene %in% genes.keep]
+b <- b[gene %in% genes.keep]
+
+rna_filt_drop <- rbind(a,b)
+
+DE_ttest_drop <- rna_filt_drop[,.(N1 = .SD[stage_lineage%in%opts$stage_lineage[1],.N], N2 = .SD[stage_lineage%in%opts$stage_lineage[2],.N], 
+    # .SD == Subset of Data
+    # .N == determine length; number of cells for each of the stage_lineages
+  mean_expr_ecto = mean(.SD[stage_lineage%in%opts$stage_lineage[1],expr]),
+  mean_expr_meso = mean(.SD[stage_lineage%in%opts$stage_lineage[2],expr]),
+  mean_diff = mean(.SD[stage_lineage%in%opts$stage_lineage[1],expr]) - mean(.SD[stage_lineage%in%opts$stage_lineage[2],expr]),
+  log_fold_diff = log2(mean(.SD[stage_lineage%in%opts$stage_lineage[1],expr]) / mean(.SD[stage_lineage%in%opts$stage_lineage[2],expr])),
+  p.value_ttest = t.test(x=.SD[stage_lineage%in%opts$stage_lineage[1],expr], y=.SD[stage_lineage%in%opts$stage_lineage[2],expr], paired = FALSE, var.equal=FALSE)[["p.value"]]), by = "gene"] %>%   # by = c("gene","id")]
+  .[, padj_fdr_ttest := list(p.adjust(p.value_ttest, method = "fdr"))] %>%
+  .[, log_padj_fdr_ttest := list(-log10(padj_fdr_ttest))] %>%
+  .[, sig_ttest := padj_fdr_ttest <= opts$threshold_fdr] %>%
+  .[complete.cases(sig_ttest)] %>% setorder(padj_fdr_ttest) %>%
+  .[mean_expr_ecto >=1 | mean_expr_meso >=1]
+
+DE_ttest_drop_filt <- DE_ttest_drop[sig_ttest==T & (log_fold_diff>=1 | log_fold_diff<=-1)] #& (mean_expr_ecto>(quantile(expr_TF$mean_expr, 0.5)) | mean_expr_meso>(quantile(expr_TF$mean_expr, 0.5)))]
+
+```
+
+<!-- Wilcoxon test -->
+```{r}
+# Wilcoxon test tests difference in median between two samples
+
+DE_Wilcoxon_test <- suppressWarnings(rna_filt[,.(N1 = .SD[stage_lineage%in%opts$stage_lineage[1],.N], N2 = .SD[stage_lineage%in%opts$stage_lineage[2],.N], 
+    # .SD == Subset of Data
+    # .N == determine length; number of cells for each of the stage_lineages
+  mean_expr_ecto = mean(.SD[stage_lineage%in%opts$stage_lineage[1],expr]),
+  mean_expr_meso = mean(.SD[stage_lineage%in%opts$stage_lineage[2],expr]),
+  mean_diff = mean(.SD[stage_lineage%in%opts$stage_lineage[1],expr]) - mean(.SD[stage_lineage%in%opts$stage_lineage[2],expr]),
+  log_fold_diff = log2(mean(.SD[stage_lineage%in%opts$stage_lineage[1],expr]) / mean(.SD[stage_lineage%in%opts$stage_lineage[2],expr])),
+  p.value_wilcox = wilcox.test(x=.SD[stage_lineage%in%opts$stage_lineage[1],expr], y=.SD[stage_lineage%in%opts$stage_lineage[2],expr])[["p.value"]]), by = "gene"]) %>% 
+  .[, padj_fdr_wilcox := list(p.adjust(p.value_wilcox, method = "fdr"))] %>%
+  .[, log_padj_fdr_wilcox := list(-log10(padj_fdr_wilcox))] %>%
+  .[, sig_wilcox := padj_fdr_wilcox <= opts$threshold_fdr] %>%
+  .[complete.cases(sig_wilcox)] %>% setorder(padj_fdr_wilcox) %>%
+  .[mean_expr_ecto >=1 | mean_expr_meso >=1]
+
+DE_Wilcoxon_test_filt <- DE_Wilcoxon_test[sig_wilcox==TRUE & (log_fold_diff>=1 | log_fold_diff<=-1)] #& (mean_expr_ecto>(quantile(expr_TF$mean_expr, 0.5)) | mean_expr_meso>(quantile(expr_TF$mean_expr, 0.5)))]
+
+
+```
+
+<!-- Kolmogorov-Smirnov test -->
+```{r}
+# KS test tests difference in distribution (mean expression & variability) between two samples
+
+DE_KStest <- suppressWarnings(rna_filt[,.(N1 = .SD[stage_lineage%in%opts$stage_lineage[1],.N], N2 = .SD[stage_lineage%in%opts$stage_lineage[2],.N], 
+    # .SD == Subset of Data
+    # .N == determine length; number of cells for each of the stage_lineages
+  mean_expr_ecto = mean(.SD[stage_lineage%in%opts$stage_lineage[1],expr]),
+  mean_expr_meso = mean(.SD[stage_lineage%in%opts$stage_lineage[2],expr]),
+  mean_diff = mean(.SD[stage_lineage%in%opts$stage_lineage[1],expr]) - mean(.SD[stage_lineage%in%opts$stage_lineage[2],expr]),
+  log_fold_diff = log2(mean(.SD[stage_lineage%in%opts$stage_lineage[1],expr]) / mean(.SD[stage_lineage%in%opts$stage_lineage[2],expr])),
+  p.value_KS = ks.test(x=.SD[stage_lineage%in%opts$stage_lineage[1],expr], y=.SD[stage_lineage%in%opts$stage_lineage[2],expr])[["p.value"]]), by = "gene"]) %>% 
+  .[, padj_fdr_KS := list(p.adjust(p.value_KS, method = "fdr"))] %>%
+  .[, log_padj_fdr := list(-log10(padj_fdr_KS))] %>%
+  .[, sig_KS := padj_fdr_KS <= opts$threshold_fdr] %>%
+  .[complete.cases(sig_KS)] %>% setorder(padj_fdr_KS) %>%
+  .[mean_expr_ecto >=1 | mean_expr_meso >=1]
+
+DE_KStest_filt <- DE_KStest[sig_KS==TRUE & (log_fold_diff>=1 | log_fold_diff<=-1)] #& (mean_expr_ecto>(quantile(expr_TF$mean_expr, 0.5)) | mean_expr_meso>(quantile(expr_TF$mean_expr, 0.5)))]
+
+```
+
+
+<!-- edgeR -->
+```{r}
+#source("https://bioconductor.org/biocLite.R")
+biocLite("edgeR")
+library(edgeR)
+
+
+
+```
+
+<!-- DESeq2 -->
+```{r}
+# Widely used package. "The package DESeq2 provides methods to test for differential expression by use of negative binomial generalized linear models; the estimates of dispersion and logarithmic fold changes incorporate data-driven prior distributions." DESeq2 uses counts data for DE analysis.
+
+biocLite("DESeq2")
+library("DESeq2")
+
+# Transform sce object to DEsce object. Indicate colData for which to compare (in this case stage & lineage).
+DEsce <- DESeqDataSet(sce, design = ~ lineage) #* use ~ stage + lineage if not filtered by stage previously
+
+# run DE analysis
+DE_DESeq2 <- DESeq(DEsce)
+results_DESeq2 <- results(DE_DESeq2)
+
+results_DESeq2_filt <- results(DE_DESeq2, lfcThreshold=1)
+results_DESeq2_filt <- as.data.frame(results_DESeq2_filt) %>%
+  as.data.table(., keep.rownames=TRUE) %>%
+  setnames(., 1, "gene") %>%
+  .[, log_padj_fdr := list(-log10(padj))] %>%
+  .[, sig_DESeq2 := padj <= opts$threshold_fdr] %>%
+  .[complete.cases(sig_DESeq2)] %>% setorder(padj)
+
+DE_DESeq2_filt <- results_DESeq2_filt[sig_DESeq2==TRUE] #& (log2_fold_diff>=1 | log_fold_diff<=-1) & (mean_expr_ecto>(quantile(expr_TF$mean_expr, 0.5)) | mean_expr_meso>(quantile(expr_TF$mean_expr, 0.5)))]
+```
+
+<!-- STDE (recommendation Irene) -->
+```{r}
+
+```
+
+
+<!-- Compare outcomes different DE analyses -->
+```{r}
+# overlap between different methods
+t_KS <- intersect(DE_ttest_filt$gene, DE_KStest_filt$gene)            #* 72% overlap
+t_W <- intersect(DE_ttest_filt$gene, DE_Wilcoxon_test_filt$gene)      #* 96% overlap
+t_DESeq <- intersect(DE_ttest_filt$gene, DE_DESeq2_filt$gene)         #* 79% overlap
+KS_W <- intersect(DE_KStest_filt$gene, DE_Wilcoxon_test_filt$gene)    #* 100% overlap
+KS_DESeq <- intersect(DE_KStest_filt$gene, DE_DESeq2_filt$gene)       #* 69% overlap
+W_DESeq <- intersect(DE_Wilcoxon_test_filt$gene, DE_DESeq2_filt$gene) #* 78% overlap
+
+
+overlap1 <- intersect(DE_KStest_filt$gene, DE_DESeq2_filt$gene)
+overlap2 <- intersect(overlap1, DE_ttest_filt$gene)
+overlap3 <- intersect(overlap2, DE_Wilcoxon_test_filt$gene)
+universal_hits <- DE_ttest_filt[gene %in% overlap3]
+
+
+```

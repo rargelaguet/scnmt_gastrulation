@@ -1,0 +1,273 @@
+---
+title: "Gastrulation: sex specific feature DNAme XChr"
+output: html_document
+---
+
+Determine the correlation between differential (X-Chr) methylation in Female vs Male and CG density.
+When using small bin sizes, first run 'Xchr_CG_diff_met_cluster.R' on the cluster to calculate CG density and methylation rates per bin and load the results here.
+
+```{r echo=FALSE, include=FALSE}
+library(scater)
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(dplyr)
+library(BSgenome)
+library(stringr)
+
+source("/Users/stapelc/Documents/gastrulation_scripts_old/met/enhancers/utils.R")
+
+#source("https://bioconductor.org/biocLite.R")
+#biocLite("BSgenome.Mmusculus.UCSC.mm10")
+```
+
+```{r funcs, echo=FALSE}
+
+```
+
+```{r define_opts, echo=FALSE, include=FALSE}
+
+## Define I/O ##
+io <- list()
+io$basedir <- "/Users/stapelc/Documents/gastrulation_data"
+io$sample_metadata <- paste0(io$basedir,"/sample_metadata_scNMT.txt")
+io$met.data.indir <- paste(io$basedir,"met/raw",sep="/")
+io$outdir <- "/Users/stapelc/Documents/GastrulaProject/Results/XChr/met/CGbins"
+
+## Define options ##
+opts <- list()
+
+# Define stages and lineages (only embryonic tissues! Xchr dynamics are different in extraembryonic)
+opts$stage_lineage <- c("E7.5_Ectoderm", "E7.5_Mesoderm")  # removed Endo because seems to behave slightly differently. Maybe because contaminated with ExE endo?
+opts$stage <- c("E4.5","E5.5","E6.5","E7.5")
+
+opts$chr1 <- "chrX"
+opts$chr2 <- "X"
+
+# Filtering criteria
+#opts$min.weight <- 3
+#opts$min.coverage <- 0.3
+#opts$fraction.sites <- 0.75
+opts$min.n <- 5
+
+opts$cells <- fread(io$sample_metadata) %>% 
+  .[KO_3b == "not"] %>%
+  .[,stage_lineage:=paste(stage,lineage,sep="_")] %>%
+  .[pass_metQC==T & pass_sexQC==T & stage%in%opts$stage & stage_lineage%in%opts$stage_lineage,sample]
+
+```
+
+<!-- Load sample metadata -->
+```{r}
+sample_metadata <- fread(io$sample_metadata) %>% .[sample %in% opts$cells] %>% .[,stage_lineage:=paste(stage,lineage,sep="_")] #%>% setnames("sample","sample_old") %>% setnames("id_met","sample") 
+```
+
+<!-- Load genome sequence, define bins, and calculate CG density per bin -->
+```{r}
+# load genome sequence
+Mmusculus <- getBSgenome("BSgenome.Mmusculus.UCSC.mm10")
+chr <-Mmusculus[[opts$chr1]]
+
+# define bins
+length_chr <- length(chr)  # can analyze for different chromosomes, chr3 similar length to X
+
+nr_bins <- 100000
+step <- length_chr / nr_bins
+
+start <- seq(from=1, to=(length_chr-step), by=step)
+
+# calculate CG density per bin
+CGdens <- list()
+
+#samples <- unique(met$sample)
+
+for (i in 1:length(start)){
+
+  tmp <- chr[start[i]:(start[i]+step)]
+  CGdens$CG_density[i] <- dinucleotideFrequency(tmp)["CG"] / length(tmp)
+  CGdens$bin[i] <- i
+  
+}
+CGdens <- as.data.table(CGdens)
+
+```
+
+<!-- Load and bin methylation data -->
+```{r load_met, echo=FALSE, include=FALSE}
+
+# Need to modify to calculate separately for male and female cells!!!
+
+result <- list()
+met_list_bin <- list()
+
+for (cell in opts$cells) {
+
+  foo <- fread(sprintf("zcat < %s/%s.tsv.gz",io$met.data.indir,cell), showProgress=F) %>%
+    .[,c("chr","pos","rate")] %>% .[,sample:=cell] %>% .[chr %in% opts$chr2]  # can analyze different chromosomes
+  
+  for(i in 1:length(start)){
+    bar <- foo[foo$pos >= start[i] & foo$pos <= (start[i]+step)]
+    if(length(bar$rate) != 0){
+      result$rate[i] <- mean(bar$rate)
+    }
+    else{
+      result$rate[i] <- 0
+    }
+    result$bin[i] <- i
+    result$sample[i] <- cell
+  }
+  
+  met_list_bin[[cell]] <- result
+}
+met_bin <- rbindlist(met_list_bin) %>% merge(sample_metadata[,c("sample", "stage", "stage_lineage", "sex")], by="sample")
+# rm(met_list)
+``` 
+
+<!-- Parse data -->
+```{r load_data, echo=FALSE, include=FALSE}
+# sum met data by sex
+met_rate_bin <- met_bin[,.(meanRate=mean(rate)), by=c("bin", "stage", "sex")] %>% .[stage=="E7.5"]
+
+met_bin_F <- met_rate_bin[sex=="female"] %>% .[,meanRate_F:=meanRate] %>% .[,meanRate:=NULL] %>% .[,sex:=NULL]
+met_bin_M <- met_rate_bin[sex=="male"] %>% .[,meanRate_M:=meanRate] %>% .[,meanRate:=NULL] %>% .[,sex:=NULL]
+met_bin_all <- merge(met_bin_F, met_bin_M, by=c("bin", "stage")) %>% .[!meanRate_M==0] %>% .[!meanRate_F==0] %>% .[,ratioFM:=(meanRate_F/meanRate_M)] %>% .[,log_ratio:=log2(ratioFM)] %>% .[,diff:=meanRate_F-meanRate_M]
+
+# Merge met data and CG dens
+data <- merge(met_bin_all, CGdens, by="bin") %>% setkey(., CG_density)
+
+# Save results
+write.csv(data, file=(paste0(io$outdir, "/data_CGdens_bins_", opts$stage, "_chr", opts$chr2, "_", opts$nr_bins,".csv")))
+
+```
+
+<!-- Load results from cluster -->
+```{r}
+opts$resultFiles <- list.files(paste0(io$outdir, "/cluster"), pattern = "100000", full.names=TRUE) 
+opts$resultFiles2 <- list.files(paste0(io$outdir, "/cluster"), pattern = "100000")
+
+
+Results <- NULL
+
+for(i in 1:length(opts$resultFiles)){
+  fileName <- opts$resultFiles2[i]
+  x <- fread(opts$resultFiles[i])
+  
+  x$CG_density_log2 <- log2(x$CG_density)
+  x$stage <- word(fileName, 4, sep="_") 
+  x$chr <- word(fileName, 5, sep="_")
+  
+  setnames(x,c("V1","bin"), c("bin","loc"))
+  
+  Results <- rbind(Results,x)
+  
+}
+
+```
+
+<!-- Plot correlation log2 DNAme rate female/male and CG density -->
+```{r load_data, echo=FALSE, include=FALSE}
+
+# Determine correlation (log2) CG content and log2 methylation ratio female/male on X
+cor_cpg = Results[,.(cor=cor(CG_density, log_ratio), cor_log=cor(CG_density_log2, log_ratio)), by=c("stage","chr")]
+
+# Plot CG content vs log2 methylation ratio female/male correlation 
+  p <- ggplot(Results[chr=="chrX"], aes(x=CG_density_log2, y=log_ratio, color=stage)) +
+    geom_point() +
+    geom_smooth(method="loess") +
+    #geom_smooth(method="lm") +
+    ggtitle("Chromosome X") +
+    #annotate(geom="text", label=paste("r^2 =", round(cor(data$CG_density, data$log_ratio),3)), x=max(data$CG_density_log2)*1.2, y=max(data$log_ratio)*0.8, size=6) +
+    xlab("log CG density") + ylab("log ratio met") +
+    #xlim() +
+    #ylim() +
+    theme(
+      plot.title = element_text(colour="black", size=22, hjust=0.5),
+      axis.title.y = element_text(colour="black", size=18, vjust=1.5),
+      axis.title.x = element_text(colour="black", size=18, vjust=1.5),
+      axis.text.x = element_text(angle=90, size=16, vjust=0.5, hjust=1.0), #, color=tmp$color
+      axis.text.y = element_text(colour="black",size=16),
+      axis.line = element_line(colour="black", size=0.5),
+      axis.ticks.x = element_line(colour="black", size=rel(0.8)),
+      axis.ticks.y = element_line(colour="black", size=rel(0.8)),
+      panel.background = element_blank(),
+      panel.grid = element_blank(),
+      panel.border = element_blank()
+  )
+print(p)
+
+ggsave(filename=(paste0(io$outdir,"/cor_log2CG_log2FM_allStages_","chrX_100000",".pdf")), plot=p)
+
+
+```
+
+<!-- Bin results by CG density and calculate ratio female/male per bin -->
+```{r}
+# define bins
+max_CG_dens <- max(Results$CG_density)
+nr_bins <- 50
+step <- max_CG_dens / nr_bins
+
+start <- seq(from=0, to=(max_CG_dens), by=step)
+
+# calculate met and CGdens ratio F/M
+CGbin <- list()
+
+#samples <- unique(met$sample)
+
+for (i in 1:length(start)){
+  tmp <- Results[CG_density >= start[i] & CG_density < start[i] + step]
+  y <- tmp %>% .[,.(log_ratio=mean(log_ratio)), by=c("stage","chr")]
+  
+  y$bin <- i
+  y$nrObs <- length(tmp$CG_density)
+  y$CG_density <- start[i]
+  y$CG_density_log2 <- log2(start[i])
+  
+  CGbin <- rbind(CGbin,y)
+}
+CGbin <- as.data.table(CGbin)
+CGbin <- CGbin[nrObs>=10]
+
+```
+
+<!-- Plot correlation log2 DNAme rate female/male and log2 CG density for binned data -->
+```{r}
+# Determine correlation (log2) CG content and log2 methylation ratio female/male on X
+cor_cpg_bin = CGbin[,.(cor=cor(CG_density, log_ratio), cor_log=cor(CG_density_log2, log_ratio)), by=c("stage","chr")]
+
+# Plot CG content vs log2 methylation ratio female/male correlation 
+  p2 <- ggplot(CGbin[chr=="chrX"], aes(x=CG_density_log2, y=log_ratio, color=stage)) +
+    geom_point() +
+    geom_smooth(inherit.aes=TRUE, method="loess") +
+    #geom_smooth(inherit.aes=TRUE, method="lm") +
+    ggtitle("Chromosome X") +
+    #annotate(geom="text", label=paste("r^2 =", round(cor(CGbin$CG_density, CGbin$log_ratio),3)), x=max(CGbin$CG_density)*1.1, y=max(CGbin$log_ratio)*0.9, size=6) +
+    xlab("log CG density bin") + ylab("log ratio met") +
+    #xlim() +
+    ylim(-2.5,4.5) +
+    theme(
+      plot.title = element_text(colour="black", size=22, hjust=0.5),
+      axis.title.y = element_text(colour="black", size=18, vjust=1.5),
+      axis.title.x = element_text(colour="black", size=18, vjust=1.5),
+      axis.text.x = element_text(angle=90, size=16, vjust=0.5, hjust=1.0), #, color=tmp$color
+      axis.text.y = element_text(colour="black",size=16),
+      axis.line = element_line(colour="black", size=0.5),
+      axis.ticks.x = element_line(colour="black", size=rel(0.8)),
+      axis.ticks.y = element_line(colour="black", size=rel(0.8)),
+      panel.background = element_blank(),
+      panel.grid = element_blank(),
+      panel.border = element_blank()
+  )
+print(p2)
+
+ggsave(filename=(paste0(io$outdir,"/cor_logCGbin_log2FM_allStages_","chrX_100000",".pdf")), plot=p2)
+
+```
+
+
+<!-- Parse data -->
+```{r transform_data}
+
+# Convert beta value to M value
+data[,m:=log2(((rate/100)+0.01)/(1-(rate/100)+0.01))]
+```
