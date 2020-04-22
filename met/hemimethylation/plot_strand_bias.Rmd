@@ -1,0 +1,161 @@
+---
+title: "Gastrulation: strand bias"
+output:
+  BiocStyle::html_document: 
+    toc: false
+    fig_width: 10
+    fig_height: 8
+---
+
+```{r load_modules, echo=FALSE, include=FALSE}
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(RColorBrewer)
+library(ggpubr)
+```
+
+<!-- Define settings -->
+```{r define_opts, echo=FALSE}
+
+################
+## Define I/O ##
+################
+
+io <- list()
+io$basedir <- "/Users/ricard/data/gastrulation"
+io$metadata <- paste0(io$basedir,"/sample_metadata.txt")
+io$data <- paste0(io$basedir,"/met/raw")
+io$annos_dir  <- "/Users/ricard/data/gastrulation/features/filt"
+io$outdir <- "/Users/ricard/data/gastrulation/met/stats/samples"
+
+####################
+## Define options ##
+####################
+
+opts <- list()
+
+# Define which cells to use (use NULL for all cells)
+opts$stage_lineage10x <- c(
+  "E4.5_Epiblast",
+  "E4.5_Primitive_endoderm",
+  "E5.5_Epiblast",
+  "E5.5_Visceral_endoderm",
+  "E6.5_Epiblast",
+  "E6.5_Primitive_Streak",
+  "E6.5_Mesoderm",
+  "E6.5_Visceral_endoderm",
+  "E7.5_Primitive_Streak",
+  "E7.5_Endoderm",
+  "E7.5_Mesoderm",
+  "E7.5_Epiblast",
+  "E7.5_Ectoderm"
+)
+# opts$stage_lineage10x <- NULL
+
+# Define which cells to use
+tmp <- fread(io$metadata) %>% .[!is.na(id_met)] 
+if (is.null(opts$stage_lineage10x)) {
+  opts$cells <- tmp[,id_met]
+} else {
+  opts$cells <- tmp %>%
+    .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")] %>%
+    .[pass_metQC==T & stage_lineage%in%opts$stage_lineage,id_met]
+}
+```
+
+<!-- Load sample metadata -->
+```{r}
+metadata <- fread(io$metadata) %>% 
+  .[id_met%in%opts$cells] %>%
+  .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")]
+```
+
+<!-- Load genomic contexts metadata -->
+```{r load_genomiccontexts}
+if (!is.null(opts$annos)) {
+  anno_dt <- lapply(opts$annos, function(anno) fread(sprintf("%s/%s.bed",io$annos_dir,anno))) %>%  
+    rbindlist %>% setnames(c("chr","start","end","strand","id","anno"))
+}
+```
+
+<!-- Load strand bias results -->
+```{r read_stats, echo=FALSE}
+strand.bias <- fread("/Users/ricard/data/gastrulation/met/strand_bias/strand_bias.tsv.gz") %>%
+  .[,c("id_met","discor","cov")] %>% merge(metadata, by="id_met")
+```
+
+<!-- Load cell cycle results -->
+```{r}
+# cell.cycle <- fread("/Users/ricard/data/gastrulation/rna/cell_cycle/cell_cycle_scran.txt.gz") %>%
+#   # .[phase2!="unknown"] %>%
+#   merge(metadata, by="id_rna")
+```
+
+<!-- Merge strand bias with cell cycle assignments -->
+```{r}
+# foo <- merge(strand.bias, cell.cycle, by="id_met")
+```
+
+<!-- Boxplots of methylation discordance between strands -->
+```{r}
+to.plot <- strand.bias %>% .[!is.na(lineage10x_2)]
+
+p <- ggplot(to.plot, aes(stage_lineage, y=discor)) +
+  geom_boxplot(alpha=1.0, fill="#F8766D", outlier.shape = NA) +
+  # facet_grid(~stage, scales="free_x", space = "free_x") +
+  geom_jitter(alpha=0.5, color="#F8766D", size=0.50) +
+  labs(x="", y="Strand bias (discordance)") +
+  theme_classic() +
+  theme(
+    axis.text.x = element_text(colour="black",size=rel(1.2), angle=45, hjust=1, vjust=1),
+    strip.background = element_blank(),
+    strip.text = element_text(color="black", size=rel(1.2))
+  )
+print(p)
+
+# pdf(paste0(io$outdir,"/globalmet_stages.pdf"), width=9, height=5, useDingbats = F)
+# print(p)
+# dev.off()
+```
+
+```{r}
+# to.plot <- foo %>% .[plate!="PS_VE_Plate5"]
+# 
+# p <- ggplot(to.plot, aes(plate, y=discor)) +
+#   geom_boxplot(alpha=1.0, fill="#F8766D", outlier.shape = NA) +
+#   facet_grid(~stage, scales="free_x", space = "free_x") +
+#   geom_jitter(alpha=0.5, color="#F8766D", size=0.50) +
+#   labs(x="", y="DNA methylation discordance") +
+#   theme_classic() +
+#   theme(
+#     axis.text.x = element_text(colour="black",size=rel(1.2), angle=45, hjust=1, vjust=1),
+#     strip.background = element_blank(),
+#     strip.text = element_text(color="black", size=rel(1.2))
+#   )
+# print(p)
+# 
+# # pdf(paste0(io$outdir,"/globalmet_stages.pdf"), width=9, height=5, useDingbats = F)
+# # print(p)
+# # dev.off()
+```
+
+```{r}
+to.plot[,stage_plate:=paste(stage,plate,sep="_")]
+
+p <- ggplot(to.plot, aes(phase2, y=discor)) +
+  geom_boxplot(alpha=1.0, fill="#F8766D", outlier.shape = NA) +
+  # facet_wrap(~stage, scales="free_y", nrow=1) +
+  facet_wrap(~stage, scales="fixed", nrow=1) +
+  geom_jitter(alpha=0.5, color="#F8766D", size=0.50) +
+  labs(x="", y="DNA methylation discordance") +
+  theme_classic() +
+  theme(
+    axis.text.x = element_text(colour="black",size=rel(1.2), angle=45, hjust=1, vjust=1),
+    strip.background = element_blank(),
+    strip.text = element_text(color="black", size=rel(1.2))
+  )
+print(p)
+```
+
+

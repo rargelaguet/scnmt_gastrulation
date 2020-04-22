@@ -1,0 +1,232 @@
+```{r load_modules, echo=FALSE, include=FALSE}
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(RColorBrewer)
+library(ggpubr)
+library(BSgenome.Mmusculus.UCSC.mm10)
+```
+
+```{r}
+theme_pub <- function() {
+  theme(
+    axis.title.y = element_text(colour="black", size=rel(1.3)),
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(colour="black",size=rel(1.3)),
+    axis.ticks = element_line(colour="black"),
+    legend.position = "top",
+    legend.title = element_blank(),
+    legend.direction = "horizontal",
+    legend.key.width = unit(1.2,"line"),
+    legend.key.height = unit(1.0,"line"),
+    legend.text = element_text(size=15)
+  )
+}
+```
+
+<!-- Define settings -->
+```{r define_opts, echo=FALSE}
+
+################
+## Define I/O ##
+################
+
+io <- list()
+io$basedir <- "/Users/ricard/data/gastrulation"
+io$metadata <- paste0(io$basedir,"/sample_metadata.txt")
+io$data <- paste0(io$basedir,"/met/cpg_level")
+io$annos_dir  <- "/Users/ricard/data/gastrulation/features/filt"
+io$outdir <- "/Users/ricard/data/gastrulation/met/results/hemimethylation"
+
+####################
+## Define options ##
+####################
+
+opts <- list()
+
+# Define which cells to use (use NULL for all cells)
+# opts$stage_lineage10x <- c(
+#   "E4.5_Epiblast",
+#   "E4.5_Primitive_endoderm",
+#   "E5.5_Epiblast",
+#   "E5.5_Visceral_endoderm",
+#   "E6.5_Epiblast",
+#   "E6.5_Primitive_Streak",
+#   # "E6.5_Mesoderm",
+#   "E6.5_Visceral_endoderm",
+#   "E7.5_Primitive_Streak",
+#   "E7.5_Endoderm",
+#   "E7.5_Mesoderm",
+#   "E7.5_Epiblast",
+#   "E7.5_Ectoderm"
+# )
+opts$stage_lineage10x <- NULL
+
+# Define genomic contexts (use NULL for no genomic context filtering)
+opts$annos <- c(
+  "genebody" = "Gene bodies",
+  # "prom_2000_2000_cgi",
+  # "prom_2000_2000_noncgi",
+  "prom_2000_2000" = "Promoters",
+  # "H3K27ac_distal_E7.5_union_intersect12_500",
+  "H3K27ac_distal_E7.5_Mes_intersect12_500" = "Mesoderm enh.",
+  "H3K27ac_distal_E7.5_Ect_intersect12_500" = "Ectoderm enh.",
+  "H3K27ac_distal_E7.5_End_intersect12_500" = "Endoderm enh.",
+  # "exons",
+  # "introns",
+  # "CGI",
+  # "LINE",
+  "LTR" = "LTR"
+)
+# opts$annos <- NULL
+
+# Define which cells to use
+tmp <- fread(io$metadata) %>% .[!is.na(id_met)]
+if (is.null(opts$stage_lineage10x)) {
+  opts$cells <- tmp[,id_met]
+} else {
+  opts$cells <- tmp %>%
+    .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")] %>%
+    .[stage_lineage%in%opts$stage_lineage,id_met]
+}
+```
+
+<!-- Load sample metadata -->
+```{r}
+metadata <- fread(io$metadata) %>% 
+  .[id_met%in%opts$cells]
+```
+
+<!-- Load genomic contexts metadata -->
+```{r load_genomiccontexts}
+if (!is.null(opts$annos)) {
+  anno_dt <- lapply(names(opts$annos), function(i) fread(sprintf("%s/%s.bed.gz",io$annos_dir,i))) %>%  
+    rbindlist %>% setnames(c("chr","start","end","strand","id","anno"))
+}
+```
+
+<!-- Load methylation data and calculate strand bias statistics -->
+```{r load_data_and_calculate_stats, echo=FALSE}
+stats <- data.table(expand.grid(opts$cells,c(names(opts$annos),"all"))) %>% 
+  setnames(c("id_met","anno")) %>%
+  .[,c("coverage","hemimethylation"):=as.numeric(NA)]
+
+for (i in opts$cells) {
+  if (file.exists(sprintf("%s/%s.tsv.gz",io$data,i))) {
+    # print(sprintf("Loading %s methylation...",i))
+
+    # Load sample methylation data
+    data <- fread(sprintf("%s/%s.tsv.gz",io$data,i)) %>% .[!chr%in%c("MT")] %>% setorder(chr,pos)
+    
+    # Re-calculate rates and remove sites at 50%
+    data <- data[,rate:=met_reads/(met_reads+nonmet_reads)] %>% 
+      .[rate!=0.5] %>% .[,rate:=round(rate)] %>% setorder(chr,pos)
+    
+    # Get genomic sequence
+    seq <- unname( as.character(getSeq(Mmusculus, paste0("chr",data$chr), data$pos-1, data$pos+1)) )
+    data[,c("base_up","base","base_down") := list(substr(seq,1,1),substr(seq,2,2),substr(seq,3,3))]
+    
+    data <- data %>%
+      .[,strand:=ifelse(base=="C","+","-")] %>%   # Add strand information
+      .[,pos:=ifelse(strand=="-",pos,pos+1)] %>%  # Convert all positions to the positive strand
+      .[,N:=.N,by=c("chr","pos")] %>%
+      .[N==2,.(rate=mean(rate)),c("chr","pos")]
+    print(table(data$rate))
+    
+    # Compute strand bias statistics
+    stats[id_met==i & anno=="all", hemimethylation:=data[rate==0.5,.N]/nrow(data)]
+    stats[id_met==i & anno=="all", coverage:=nrow(data)]
+
+    # Calculate statistics per genomic context
+    data[,c("start","end") := list(pos,pos)] %>% setkey(chr,start,end)
+    if ((!is.null(opts$annos[1])) & (nrow(data)>0)) {
+      for (k in names(opts$annos)) {
+        data_k <- foverlaps(data, anno_dt[anno==k] %>% setkey(chr,start,end), nomatch=0) %>%
+          .[,c("start","end","strand","i.start","i.end"):=NULL]
+        if (nrow(data_k)>0) {
+          stats[id_met==i & anno==k, hemimethylation:=data_k[rate==0.5,.N]/nrow(data_k)]
+          stats[id_met==i & anno==k, coverage:=nrow(data_k)]
+        }
+      }
+    }
+
+  } else {
+    print(sprintf("Sample %s not found for methylation",i))
+  }
+}
+# stats <- stats[complete.cases(stats)]
+fwrite(stats, paste0(io$outdir,"/hemimethylation.txt.gz"), sep="\t", row.names=F, col.names=T)
+``` 
+
+```{r}
+stop()
+```
+
+```{r read_stats, echo=FALSE}
+stats <- fread(paste0(io$outdir,"/hemimethylation.txt.gz")) %>% 
+  merge(metadata, by="id_met")
+```
+
+
+<!-- Boxplots -->
+
+```{r}
+samples <- stats[anno=="all" & coverage>1000,id_met]
+to.plot <- stats[sample%in%samples] %>%
+  .[!is.na(lineage10x_2)] %>%
+  .[coverage>=50] %>%
+  .[,anno:=stringr::str_replace_all(anno,opts$annos)] %>%
+  .[lineage10x_2!="ExE_ectoderm"]
+```
+
+```{r}
+for (i in unique(to.plot$stage)) {
+  p <- ggplot(to.plot[stage==i], aes(x=anno, y=hemimethylation)) +
+    geom_boxplot(outlier.shape = NA, color="black") +
+    facet_grid(~lineage10x_2, scales="free_x", space = "free_x") +
+    # geom_jitter(alpha=0.75, size=1.5) +
+    # geom_jitter(alpha=0.75, color="#F8766D", size=1.5) +
+    # coord_cartesian(ylim=c(0,100)) +
+    labs(x="", y="Hemimethylation") +
+    theme_bw() +
+    # theme_pub() +
+    theme(
+      axis.text.x = element_text(colour="black",size=rel(0.9), angle=90, hjust=1, vjust=1),
+      # axis.text.x = element_text(colour="black",size=rel(1.2)),
+      strip.background = element_blank(),
+      strip.text = element_text(color="black", size=rel(1.2))
+    )
+  
+  # pdf(paste0(io$outdir,"/globalmet_stages.pdf"), width=9, height=5, useDingbats = F)
+  print(p)
+  # dev.off()
+  
+}
+```
+
+
+<!-- Boxplots -->
+```{r}
+to.plot <- stats[coverage>100]
+
+p <- ggplot(to.plot, aes(x=embryo, y=hemimethylation)) +
+  geom_boxplot(alpha=0.75, fill="#F8766D", outlier.shape = NA) +
+  facet_grid(~anno, scales="free_x", space = "free_x") +
+  geom_jitter(alpha=0.75, color="#F8766D", size=1.5) +
+  # coord_cartesian(ylim=c(0,100)) +
+  ylab("Hemimethylation") +
+  theme_bw() +
+  # theme_pub() +
+  theme(
+    # axis.text.x = element_text(colour="black",size=rel(1.2), angle=45, hjust=1, vjust=1),
+    axis.text.x = element_text(colour="black",size=rel(1.2)),
+    strip.background = element_blank(),
+    strip.text = element_text(color="black", size=rel(1.2))
+  )
+print(p)
+
+# pdf(paste0(io$outdir,"/globalmet_stages.pdf"), width=9, height=5, useDingbats = F)
+# print(p)
+# dev.off()
+```
