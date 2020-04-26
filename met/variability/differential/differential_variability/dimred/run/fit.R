@@ -1,8 +1,4 @@
-suppressPackageStartupMessages(library(data.table))
-suppressPackageStartupMessages(library(purrr))
 suppressPackageStartupMessages(library(argparse))
-suppressPackageStartupMessages(library(umap))
-suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(MOFA2))
 
 ######################
@@ -16,9 +12,8 @@ p$add_argument('--outprefix',   type="character",              help='Output dire
 args <- p$parse_args(commandArgs(TRUE))
 
 # args <- list()
-# args$model <- "gaussian"
-# args$anno <- c("distal_H3K27ac_cortex")
-# args$outprefix <- "/Users/ricard/data/Ecker_2017/mouse/variability/dimred_vs_hvg/test/test"
+# args$anno <- c("prom_2000_2000")
+# args$outprefix <- "/Users/ricard/data/gastrulation/met/results/variability/differential/differential_variability/dimred/test"
 # args$hvg <- 100
 
 ############################
@@ -26,9 +21,9 @@ args <- p$parse_args(commandArgs(TRUE))
 ############################
 
 if (grepl("ricard",Sys.info()['nodename'])) {
-  source("/Users/ricard/scnmt_gastrulation/met/variability/differential/dimred/load_settings.R")
+  source("/Users/ricard/scnmt_gastrulation/met/variability/differential/differential_variability/dimred/run/load_settings.R")
 } else if (grepl("ebi",Sys.info()['nodename'])) {
-  source("/homes/ricard/scnmt_gastrulation/met/variability/differential/dimred/load_settings.R")
+  source("/homes/ricard/scnmt_gastrulation/met/variability/differential/differential_variability/dimred/run/load_settings.R")
 } else {
   stop("Computer not recognised")
 }
@@ -37,11 +32,9 @@ if (grepl("ricard",Sys.info()['nodename'])) {
 ## Load precomputed differential variability estimates ##
 #########################################################
 
-diff_dt <- opts$anno %>%
+diff_dt <- args$anno %>%
   map(~ fread(sprintf("%s/%s_epsilon.txt.gz",io$scmet.diff,.))
 ) %>% rbindlist
-
-# id,overall_mean,overall_res_disp,res_disp_A,res_disp_B,res_disp_LOR,res_disp_OR,res_disp_diff_tail_prob,res_disp_diff_test,evidence_thresh,efdr,efnr,anno
 
 ###########################
 ## Load methylation data ##
@@ -56,6 +49,8 @@ met_dt <- args$anno %>%
 ## Filter data ##
 #################
 
+# Features have been filtered a priori when running scMET
+
 # Filter features by minimum number of CpG sites
 # met_dt <- met_dt[Ntotal>=opts$min.CpGs]
 
@@ -66,8 +61,8 @@ met_dt <- args$anno %>%
 diff_dt <- diff_dt[res_disp_diff_test=="E7.5+"] %>%
   .[res_disp_diff_tail_prob>=opts$tail_prob_threshold & abs(res_disp_LOR)>=opts$LOR_threshold] %>% 
   .[,abs_epsilon_diff:=abs(res_disp_A-res_disp_B)] %>%
-  setorder(-abs_epsilon_diff) %>%
-  hvgs <- diff_dt$id %>% head(args$hvg)
+  setorder(-abs_epsilon_diff)
+hvgs <- diff_dt$id %>% head(args$hvg)
 
 met_dt <- met_dt[id%in%hvgs]
 
@@ -81,7 +76,7 @@ met_dt[,m:=log2(((rate/100)+0.01)/(1-(rate/100)+0.01))]
 # prepare data for MOFA
 met_dt <- met_dt %>% 
   .[,c("id_met","id","m")] %>%
-  setnames(c("id_met","feature","value"))
+  setnames(c("sample","feature","value"))
 
 ####################
 ## Fit MOFA model ##
@@ -140,16 +135,14 @@ Z.mofa <- Z.mofa %>% as.data.table %>% .[,sample:=rownames(Z.mofa)]
 ## Plot dimensionality reduction coloured by cell type labels ##
 ################################################################
 
-# to.plot <- Z.umap %>% 
-#   merge(sample_metadata,by="sample")
+to.plot <- Z.mofa %>% 
+  .[,c("sample","Factor1","Factor2")] %>% setnames(c("sample","V1","V2")) %>%
+  merge(sample_metadata[,c("id_met","lineage10x_2")] %>% setnames("id_met","sample"),by="sample")
 
-# pdf(sprintf("%s_1.pdf",args$outprefix), useDingbats=F, width=5.5, height=4)
-# plot_dimred(to.plot, color.by="`Neuron type 1`")
-# dev.off()
-
-# pdf(sprintf("%s_2.pdf",args$outprefix), useDingbats=F, width=5.5, height=4)
-# plot_dimred(to.plot, color.by="`Neuron type 2`")
-# dev.off()
+pdf(sprintf("%s_scatterplot.pdf",args$outprefix), useDingbats=F, width=5.5, height=4)
+plot_dimred(to.plot, color.by="lineage10x_2") +
+  scale_fill_manual(values=opts$colors_lineages)
+dev.off()
 
 ################
 ## Clustering ##

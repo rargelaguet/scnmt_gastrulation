@@ -6,7 +6,9 @@ ClusterPurity <- function(clusters, classes) {
   sum(apply(table(classes, clusters), 2, max)) / length(clusters)
 }
 
-dt <- sample_metadata %>% merge(Z.mofa,by="id_met")
+dt <- sample_metadata %>% 
+  .[,c("id_met","lineage10x_2")] %>% setnames("id_met","sample") %>%
+  merge(Z.mofa,by="sample")
 
 ################
 ## Clustering ##
@@ -39,14 +41,13 @@ dt <- dt %>% merge( data.table(sample=names(clustering), cluster=clustering), by
 
 tmp <- data.table(
   anno = paste(args$anno, collapse=" "),
-  model = args$model,
   hvg = args$hvg,
-  r2 = model@cache[["variance_explained"]]$r2_total[[1]][[1]],
+  # r2 = model@cache[["variance_explained"]]$r2_total[[1]][[1]],
   adj_rand_index = as.numeric(NA),
   jaccard_index = as.numeric(NA),
   silhouette = as.numeric(NA),
-  purity = as.numeric(NA),
-  prediction_accuracy = as.numeric(NA)
+  purity = as.numeric(NA)
+  # prediction_accuracy = as.numeric(NA)
 )
 
 # Calculate silhouette (from 0 to 1)
@@ -63,16 +64,16 @@ tmp$adj_rand_index <- adjustedRand(cl1=as.numeric(true_clusters), cl2=as.numeric
 tmp$jaccard_index <- adjustedRand(cl1=as.numeric(true_clusters), cl2=as.numeric(dt$cluster), randMethod="Jaccard")
 
 # Random Forest prediction
-df <- get_factors(model, as.data.frame = T) %>% as.data.table %>%
-  merge(sample_metadata, by="sample") %>%
-  dcast(sample+`Neuron type 3`~factor, value.var="value") %>%
-  .[,`Neuron type 3`:=as.factor(`Neuron type 3`)] %>%
-  tibble::column_to_rownames("sample")
-
-rf <- randomForest(formula=`Neuron type 3`~., ntree=250, data=df)
-accuracy <- mean(rf$predicted==df$`Neuron type 3`)
-
-tmp$prediction_accuracy <- round(accuracy,3)
+# df <- get_factors(model, as.data.frame = T) %>% as.data.table %>%
+#   merge(sample_metadata, by="sample") %>%
+#   dcast(sample+lineage10x_2~factor, value.var="value") %>%
+#   .[,lineage10x_2:=as.factor(lineage10x_2)] %>%
+#   tibble::column_to_rownames("sample")
+# 
+# rf <- randomForest(formula=lineage10x_2~., ntree=250, data=df)
+# accuracy <- mean(rf$predicted==df$lineage10x_2)
+# 
+# tmp$prediction_accuracy <- round(accuracy,3)
 
 #################
 ## Save output ##
