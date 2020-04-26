@@ -1,0 +1,183 @@
+---
+title: ""
+---
+
+```{r load_modules, echo=FALSE, include=FALSE}
+library(RColorBrewer)
+library(ggpubr)
+```
+
+```{r}
+theme_pub <- function() {
+  theme(
+    axis.title.y = element_text(colour="black", size=rel(1.3)),
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_text(colour="black",size=rel(1.3)),
+    axis.ticks = element_line(colour="black"),
+    legend.position = "top",
+    legend.title = element_blank(),
+    legend.direction = "horizontal",
+    legend.key.width = unit(1.2,"line"),
+    legend.key.height = unit(1.0,"line"),
+    legend.text = element_text(size=15)
+  )
+}
+```
+
+```{r}
+################
+## Define I/O ##
+################
+
+io <- list()
+if (grepl("ricard",Sys.info()['nodename'])) {
+  io$basedir <- "/Users/ricard/data/gastrulation"
+} else if (grepl("ebi",Sys.info()['nodename'])) {
+  io$basedir <- "/hps/nobackup2/research/stegle/users/ricard/scnmt_gastrulation"
+} else {
+  stop("Computer not recognised")
+}  
+io$metadata <- paste0(io$basedir,"/sample_metadata.txt")
+io$indir <- paste0(io$basedir,"/met/results/hemimethylation")
+io$outdir <- paste0(io$basedir,"/met/results/hemimethylation/pdf")
+
+####################
+## Define options ##
+####################
+
+opts <- list()
+
+# Define genomic contexts (use NULL for no genomic context filtering)
+opts$annos <- c(
+  "all",
+  # "genebody",
+  # "prom_2000_2000_cgi",
+  # "prom_2000_2000_noncgi",
+  # "prom_2000_2000"
+  # "H3K27ac_distal_E7.5_Mes_intersect12",
+  # "H3K27ac_distal_E7.5_Ect_intersect12",
+  # "H3K27ac_distal_E7.5_End_intersect12",
+  "H3K27ac_distal_E7.5_Mes_intersect12_500"
+  # "H3K27ac_distal_E7.5_Ect_intersect12_500",
+  # "H3K27ac_distal_E7.5_End_intersect12_500"
+  # "exons",
+  # "introns",
+  # "CGI",
+  # "LINE",
+  # "LTR" = "LTR"
+)
+# opts$annos <- NULL
+```
+
+Load metadata
+```{r}
+metadata <- fread(io$metadata) %>%
+  .[!is.na(lineage10x_2) & lineage10x_2!="ExE_ectoderm"] %>%
+  .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")]
+```
+
+```{r}
+io$pseudotime <- paste0(io$basedir,"/metaccrna/mesendoderm_commitment/mesoderm/destiny_mesoderm.tsv.gz")
+pseudotime <- fread(io$pseudotime)[,c("sample","x")] %>% 
+  setnames(c("id_rna","pseudotime"))
+
+# metadata <- merge(metadata,pseudotime,by="id_rna")
+```
+
+Load pre-computed results
+
+```{r read_stats, echo=FALSE}
+stats <- fread(paste0(io$indir,"/hemimethylation_full.txt.gz")) %>% 
+  .[anno%in%opts$annos] %>%
+  merge(metadata, by="sample")
+```
+
+```{r}
+io$diff.met <- paste0(io$basedir,"/met/results/differential")
+
+opts$diff.annos <- c(
+  "H3K27ac_distal_E7.5_Mes_intersect12",
+  "H3K27ac_distal_E7.5_Ect_intersect12",
+  "H3K27ac_distal_E7.5_End_intersect12",
+  "H3K27ac_distal_E7.5_Mes_intersect12_500",
+  "H3K27ac_distal_E7.5_Ect_intersect12_500",
+  "H3K27ac_distal_E7.5_End_intersect12_500"
+)
+
+diff.met.mes <- lapply(opts$diff.annos, function(x)
+  fread(sprintf("%s/E7.5Mesoderm_vs_E7.5EndodermEctoderm_%s.txt.gz",io$diff.met,x))
+) %>% rbindlist
+diff.met.ect <- lapply(opts$diff.annos, function(x)
+  fread(sprintf("%s/E7.5Ectoderm_vs_E7.5MesodermEndoderm_%s.txt.gz",io$diff.met,x))
+) %>% rbindlist
+diff.met.end <- lapply(opts$diff.annos, function(x)
+  fread(sprintf("%s/E7.5Endoderm_vs_E7.5MesodermEctoderm_%s.txt.gz",io$diff.met,x))
+) %>% rbindlist
+diff.dt <- rbindlist(list(diff.met.mes,diff.met.ect,diff.met.end)) %>% .[sig==T]
+```
+
+```{r}
+stats[,diff:=ifelse(id%in%diff.dt$id,T,F)]
+```
+
+```{r}
+to.plot <- stats %>%
+  .[,.(hemimethylation=mean(hemimethylation), number_cpgs=sum(number_cpgs)),by=c("stage","stage_lineage","anno","diff")] %>%
+  .[number_cpgs>=30] 
+```
+
+
+<!-- Plots -->
+
+```{r}
+for (i in unique(to.plot$stage)) {
+  p <- ggplot(to.plot[stage==i], aes(x=anno, y=hemimethylation, fill=diff)) +
+    geom_bar(stat="identity", color="black", position="dodge") +
+    # geom_boxplot(outlier.shape=NA) +
+    # facet_grid(~stage_lineage, scales="free_x", space = "free_x") +
+    facet_wrap(~stage_lineage, scales="fixed") +
+    # geom_jitter(alpha=0.75, color="#F8766D", size=1.5) +
+    # coord_cartesian(ylim=c(0,100)) +
+    ylab("Hemimethylation") +
+    theme_bw() +
+    theme(
+      axis.text.x = element_text(colour="black",size=rel(0.8), angle=90, hjust=1, vjust=0.5),
+      # axis.text.x = element_text(colour="black",size=rel(1.2)),
+      strip.background = element_blank(),
+      strip.text = element_text(color="black", size=rel(1.2))
+    )
+  
+  # pdf(sprintf("%s/hemimeth_%s.pdf",io$outdir,i), width=9, height=5, useDingbats = F)
+  print(p)
+  # dev.off()
+}
+```
+
+```{r}
+to.plot <- stats %>%
+  .[,.(hemimethylation=mean(hemimethylation), number_cpgs=sum(number_cpgs)),by=c("id_rna","stage","stage_lineage","anno")] %>%
+  .[number_cpgs>=50] %>%
+  merge(pseudotime, by="id_rna")
+```
+
+```{r}
+p <- ggplot(to.plot, aes(x=-pseudotime, y=hemimethylation, fill=stage_lineage)) +
+  geom_point(shape=21, size=1.5, color="black") +
+  # stat_smooth(method="loess") +
+  facet_wrap(~anno) +
+  labs(y="Hemimethylation", x="Pseudotime") +
+  theme_bw() +
+  theme(
+    # axis.text.x = element_text(colour="black",size=rel(0.8), angle=90, hjust=1, vjust=0.5),
+    # axis.text.x = element_text(colour="black",size=rel(1.2)),
+    # strip.background = element_blank(),
+    # strip.text = element_text(color="black", size=rel(1.2))
+  )
+
+# pdf(sprintf("%s/hemimeth_%s.pdf",io$outdir,i), width=9, height=5, useDingbats = F)
+print(p)
+# dev.off()
+```
+
+

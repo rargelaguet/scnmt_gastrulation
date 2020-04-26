@@ -1,3 +1,6 @@
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(purrr))
+suppressPackageStartupMessages(library(ggplot2))
 
 #########
 ## I/O ##
@@ -29,30 +32,45 @@ io$rna <- paste0(io$basedir,"/rna/SingleCellExperiment.rds")
 io$features.dir <- paste0(io$basedir,"/features/genomic_contexts")
 # io$cpg.density <- paste0(io$basedir,"/met/stats/features/cpg_density_perfeature.txt.gz")
 
+io$scmet <- paste0(io$basedir,"/met/results/variability")
+
 #############
 ## Options ##
 #############
 
 opts <- list()
 
-opts$stage_lineage <- c(
+# opts$stage_lineage <- c(
 
-  # E4.5
-  "E4.5_Epiblast",
+#   # E4.5
+#   "E4.5_Epiblast",
 
-  # E5.5
-  "E5.5_Epiblast",
+#   # E5.5
+#   "E5.5_Epiblast",
   
-  # E6.5
-  "E6.5_Epiblast",
-  "E6.5_Primitive_Streak",
+#   # E6.5
+#   "E6.5_Epiblast",
+#   "E6.5_Primitive_Streak",
   
-  # E7.5
-  "E7.5_Epiblast",
-  "E7.5_Ectoderm",
-  "E7.5_Primitive_Streak",
-  "E7.5_Endoderm",
-  "E7.5_Mesoderm"
+#   # E7.5
+#   "E7.5_Epiblast",
+#   "E7.5_Ectoderm",
+#   "E7.5_Primitive_Streak",
+#   "E7.5_Endoderm",
+#   "E7.5_Mesoderm"
+# )
+
+opts$colors_lineages <- c(
+  "Epiblast"="grey70",
+  "Mesoderm"="#CD3278",
+  "Primitive_Streak"="sandybrown",
+  "Endoderm"="#43CD80",
+  "Ectoderm"="steelblue"
+)
+
+opts$colors_stages <- c(
+  "E6.5"="grey70",
+  "E7.5"="#CD3278"
 )
 
 ##########################

@@ -1,9 +1,6 @@
 library(BSgenome.Mmusculus.UCSC.mm10)
 library(data.table)
 library(purrr)
-library(ggplot2)
-library(RColorBrewer)
-library(ggpubr)
 
 #####################
 ## Define settings ##
@@ -19,7 +16,6 @@ if (grepl("ricard",Sys.info()['nodename'])) {
   io$basedir <- "/Users/ricard/data/gastrulation"
 } else if (grepl("ebi",Sys.info()['nodename'])) {
   io$basedir <- "/hps/nobackup2/research/stegle/users/ricard/scnmt_gastrulation"
-  source("/homes/ricard/Ecker_2017/utils.R")
 } else {
   stop("Computer not recognised")
 }  
@@ -40,6 +36,9 @@ opts$annos <- c(
   "prom_2000_2000_cgi",
   "prom_2000_2000_noncgi",
   # "prom_2000_2000"
+  "H3K27ac_distal_E7.5_Mes_intersect12",
+  "H3K27ac_distal_E7.5_Ect_intersect12",
+  "H3K27ac_distal_E7.5_End_intersect12",
   "H3K27ac_distal_E7.5_Mes_intersect12_500",
   "H3K27ac_distal_E7.5_Ect_intersect12_500",
   "H3K27ac_distal_E7.5_End_intersect12_500",
@@ -53,8 +52,7 @@ opts$annos <- c(
 
 # Define which cells to use
 opts$cells <- fread(io$metadata) %>% 
-  .[!is.na(id_met) & pass_metQC==TRUE,id_met] %>%
-  head
+  .[!is.na(id_met) & pass_metQC==TRUE,id_met]
 
 # Output lists
 stats_short <- list()

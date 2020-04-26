@@ -1,0 +1,87 @@
+---
+title: "Differential methylation (mean) analysis"
+---
+
+Load libraries
+```{r}
+# suppressPackageStartupMessages(library(ggpubr))
+# suppressPackageStartupMessages(library(viridis))
+# suppressPackageStartupMessages(library(scattermore))
+# suppressPackageStartupMessages(library(logitnorm))
+```
+
+Define settings
+```{r}
+if (grepl("ricard",Sys.info()['nodename'])) {
+  source("/Users/ricard/scnmt_gastrulation/settings.R")
+  io$dir.lib <- "/Users/ricard/bbreg/lib/"
+  io$bayes.dir <- paste0(io$scmet,"/differential/bayes")
+  io$point_estimates.dir <- paste0(io$scmet,"/differential/bayes/txt")
+  io$out.dir <- paste0(io$scmet,"/differential/differential_mean/pdf")
+  source("/Users/ricard/Ecker_2017/variability/differential/differential_mean/volcano_plots/utils.R")
+} else {
+  stop("Computer not recognised")
+}
+
+# Source project lib directory
+R.utils::sourceDirectory(io$dir.lib, modifiedOnly = FALSE)
+```
+
+Options
+```{r}
+# Define genomic contexts
+opts$anno <- c(
+  "H3K27ac_distal_E7.5_union_intersect12_500",
+  "H3K27ac_distal_E7.5_union_intersect12",
+  "prom_2000_2000"
+)
+
+# Define groups
+opts$groups <- c("E6.5", "E7.5")
+
+# Differential testing hyperparameters
+opts$min.LOR <- log(2)
+opts$tail_prob <- 0.8
+```
+
+
+Load pre-computed differential analysis results
+```{r}
+diff.dt <- opts$anno %>% 
+  map(~ fread(sprintf("%s/%s_mu.txt.gz", io$point_estimates.dir, .))) %>%
+  rbindlist
+```
+
+
+Call differentially methylated features
+```{r}
+diff.dt %>%
+  .[,sig:=abs(mean_LOR)>=opts$min.LOR & mean_diff_tail_prob>=opts$tail_prob] %>%
+  .[sig==F,mean_diff_test:="Nodiff"] %>%
+  .[sig==T & mean_LOR>0,mean_diff_test:=paste0(opts$groups[1],"+")] %>%
+  .[sig==T & mean_LOR<0,mean_diff_test:=paste0(opts$groups[2],"+")]
+
+diff.dt[,mean(sig),by="anno"]
+```
+
+Volcano plots
+```{r, echo=FALSE}
+for (i in opts$anno) {
+  
+  p <- volcano_plot(
+    diff_obj = diff.dt[anno==i],
+    mode = "mu",
+    evidence_thresh = opts$tail_prob,
+    change_thresh = opts$min.LOR,
+    xlab = "Log odds ratio"
+  )
+  p <- p + 
+    scale_fill_manual(values = c("lightpink3", "darkolivegreen3","#595959")) +
+    scale_size_manual(values = c(1.75,1.75,0.6)) +
+    scale_alpha_manual(values = c(0.8,0.8,0.4))
+  
+  pdf(sprintf("%s/volcano_plots/volcano_%s_mu.pdf",io$out.dir,i), width = 7, height = 5, useDingbats = F)
+  print(p)
+  dev.off()
+}
+```
