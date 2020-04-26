@@ -5,10 +5,10 @@
 
 if (grepl("ricard",Sys.info()['nodename'])) {
   source("/Users/ricard/scnmt_gastrulation/settings.R")
-  setwd("/Users/ricard/scnmt_gastrulation/met/variability/differential/differential_variability/dimred/run")
+  setwd("/Users/ricard/scnmt_gastrulation/met/variability/differential/differential_mean/dimred/run")
 } else if (grepl("ebi",Sys.info()['nodename'])) {
   source("/homes/ricard/scnmt_gastrulation/settings.R")
-  setwd("/homes/ricard/scnmt_gastrulation/met/variability/differential/differential_variability/dimred/run")
+  setwd("/homes/ricard/scnmt_gastrulation/met/variability/differential/differential_mean/dimred/run")
 } else {
   stop("Computer not recognised")
 }
@@ -30,8 +30,8 @@ io$scmet.diff <- paste0(io$scmet,"/differential/bayes/txt")
 # opts$LOR_threshold <- log(2.5)
 
 # opts$stage_lineage <- c(
-#   # "E6.5_Epiblast",
-#   # "E6.5_Primitive_Streak",
+# "E6.5_Epiblast",
+# "E6.5_Primitive_Streak",
 #   "E7.5_Epiblast",
 #   "E7.5_Ectoderm",
 #   "E7.5_Endoderm",
@@ -51,9 +51,9 @@ opts$lineages <- c(
 
 sample_metadata <- sample_metadata %>%
   .[pass_metQC==T & stage=="E7.5" & lineage10x_2%in%opts$lineages] %>%
+  .[lineage10x!="Visceral_endoderm"] %>%
   .[lineage10x_2%in%c("Epiblast","Ectoderm"),lineage10x_2:="Epiblast/Ectoderm"] %>%
-  .[,c("id_met","sample","stage","lineage10x","lineage10x_2")]
-
+  .[,c("sample","stage","lineage10x","lineage10x_2")]
 
 ############################
 ## User-defined functions ##

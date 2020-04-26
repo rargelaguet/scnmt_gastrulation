@@ -11,7 +11,7 @@ if (grepl("ricard",Sys.info()['nodename'])) {
   io$basedir <- "/Users/ricard/data/gastrulation"
   io$gene.metadata <- "/Users/ricard/data/ensembl/"
 } else if (grepl("ebi",Sys.info()['nodename'])) {
-  io$basedir <- "/hps/nobackup2/research/stegle/users/ricard/gastrulation"
+  io$basedir <- "/hps/nobackup2/research/stegle/users/ricard/scnmt_gastrulation"
   io$gene.metadata <- "/hps/nobackup2/research/stegle/users/ricard/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
 } else {
   stop("Computer not recognised")
@@ -65,7 +65,8 @@ opts$colors_lineages <- c(
   "Mesoderm"="#CD3278",
   "Primitive_Streak"="sandybrown",
   "Endoderm"="#43CD80",
-  "Ectoderm"="steelblue"
+  "Ectoderm"="steelblue",
+  "Epiblast/Ectoderm"="steelblue"
 )
 
 opts$colors_stages <- c(

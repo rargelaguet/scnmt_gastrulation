@@ -5,15 +5,15 @@
 
 if (grepl("ricard",Sys.info()['nodename'])) {
   source("/Users/ricard/scnmt_gastrulation/settings.R")
-  io$script <- "/Users/ricard/scnmt_gastrulation/met/variability/differential/differential_variability/dimred/run/fit.R"
+  io$script <- "/Users/ricard/scnmt_gastrulation/met/variability/differential/differential_mean/dimred/run/fit.R"
 } else if (grepl("ebi",Sys.info()['nodename'])) {
   source("/homes/ricard/scnmt_gastrulation/settings.R")
-  io$script <- "/homes/ricard/scnmt_gastrulation/met/variability/differential/differential_variability/dimred/run/fit.R"
+  io$script <- "/homes/ricard/scnmt_gastrulation/met/variability/differential/differential_mean/dimred/run/fit.R"
 } else {
   stop("Computer not recognised")
 }
-io$outdir <- paste0(io$basedir, "/met/results/variability/differential/differential_variability/dimred")
-io$tmpdir <- paste0(io$basedir, "/met/results/variability/differential/differential_variability/dimred/tmp")
+io$outdir <- paste0(io$basedir, "/met/results/variability/differential/differential_mean/dimred")
+io$tmpdir <- paste0(io$basedir, "/met/results/variability/differential/differential_mean/dimred/tmp")
 
 #############
 ## Options ##
@@ -27,23 +27,24 @@ opts$anno <- list(
 )
 # opts$anno <- list("prom_2000_2000" = c("prom_2000_2000"))
 
-# Number of highly variable genes
-opts$number.hvg <- seq(100,2500,by=50)
+# Number of features
+# opts$number.hvg <- seq(100,2500,by=50)
+opts$number.hvg <- c(100,500)
 
 #########
 ## Run ##
 #########
 
-# Differential variability hits
+# Differential hits
 for (i in names(opts$anno)) {
   for (j in opts$number.hvg) {
-    outprefix <- sprintf("%s/diffvar_%s_%d", io$outdir, i, j)
+    outprefix <- sprintf("%s/diffmean_%s_%d", io$outdir, i, j)
 
     # Define LSF command
     if (grepl("ricard",Sys.info()['nodename'])) {
       lsf <- ""
     } else if (grepl("ebi",Sys.info()['nodename'])) {
-      lsf <- sprintf("bsub -M 3000 -n 1 -q research-rh74 -o %s/diffvar_%s_%d.txt", io$tmpdir,i,j)
+      lsf <- sprintf("bsub -M 3000 -n 1 -q research-rh74 -o %s/%s_%d.txt", io$tmpdir,i,j)
     }
     # lsf <- ""
 

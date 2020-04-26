@@ -6,9 +6,7 @@ ClusterPurity <- function(clusters, classes) {
   sum(apply(table(classes, clusters), 2, max)) / length(clusters)
 }
 
-dt <- sample_metadata %>% 
-  .[,c("id_met","lineage10x_2")] %>% setnames("id_met","sample") %>%
-  merge(Z.mofa,by="sample")
+dt <- sample_metadata %>% merge(Z.mofa,by="sample")
 
 ################
 ## Clustering ##
