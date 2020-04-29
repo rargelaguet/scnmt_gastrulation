@@ -30,8 +30,8 @@ io$scmet.diff <- paste0(io$scmet,"/differential/bayes/txt")
 # opts$LOR_threshold <- log(2.5)
 
 # opts$stage_lineage <- c(
-# "E6.5_Epiblast",
-# "E6.5_Primitive_Streak",
+#   "E6.5_Epiblast",
+#   "E6.5_Primitive_Streak",
 #   "E7.5_Epiblast",
 #   "E7.5_Ectoderm",
 #   "E7.5_Endoderm",

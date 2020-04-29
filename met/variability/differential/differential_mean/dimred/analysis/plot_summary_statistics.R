@@ -9,8 +9,8 @@ library(ggpubr)
 
 io <- list()
 if (grepl("ricard",Sys.info()['nodename'])) {
-  io$indir <- "/Users/ricard/data/gastrulation/met/results/variability/differential/differential_variability/dimred/txt"
-  io$outdir <- "/Users/ricard/data/gastrulation/met/results/variability/differential/differential_variability/dimred"
+  io$indir <- "/Users/ricard/data/gastrulation/met/results/variability/differential/differential_mean/dimred/txt"
+  io$outdir <- "/Users/ricard/data/gastrulation/met/results/variability/differential/differential_mean/dimred"
 } else {
   stop("Computer not recognised")
 }
@@ -36,7 +36,7 @@ opts$number.hvg <- seq(100,2500,by=50)
 opts$metrics <- c(
   # "silhouette" = "Cluster silhouette",
   "purity" = "Cluster purity",
-  "prediction_accuracy" = "Prediction accuracy",
+  # "prediction_accuracy" = "Prediction accuracy",
   # "r2" = "Variance explained (%)",
   "adj_rand_index" = "Adjusted rand index",
   "jaccard_index" = "Jaccard index"
@@ -47,11 +47,9 @@ opts$metrics <- c(
 ###############################
 
 foo <- list()
-
-# laod gamma
 for (i in names(opts$anno)) {
   for (j in opts$number.hvg) {
-    file <- sprintf("%s/diffvar_%s_%d_clustering.txt", io$indir,i,j)
+    file <- sprintf("%s/diffmean_%s_%d_clustering.txt", io$indir,i,j)
     if (file.exists(file)) {
       foo[[file]] <- fread(file,sep=",")
     } else {
@@ -60,33 +58,32 @@ for (i in names(opts$anno)) {
   }
 }
 
+##########
+## Plot ##
+##########
+
 to.plot <- rbindlist(foo) %>%
   .[,anno:=stringr::str_replace_all(anno, opts$anno)] %>%
   melt(id.vars=c("anno","hvg"), variable.name="metric") %>%
   setorder(anno,hvg) %>%
   .[,value2:=frollmean(value, align="right", n=4), by=c("anno","metric")] %>%
   .[is.na(value2),value2:=value]
-  
 
-##########
-## Plot ##
-##########
 
-# for (i in names(opts$metrics)) {
-  # p <- ggline(to.plot[metric==i], x="hvg", y="value2", color = "anno", plot_type="l", size=0.5, point_size=0)  +
-  p <- ggline(to.plot, x="hvg", y="value2", color = "anno", plot_type="l", size=0.5, point_size=0)  +
+for (i in names(opts$metrics)) {
+  p <- ggline(to.plot[metric==i], x="hvg", y="value", color = "anno", plot_type="l", size=0.5, point_size=0)  +
     scale_color_brewer(palette="Dark2") +
-    facet_wrap(~metric, nrow=2, scales="fixed") +
+    # facet_wrap(~metric, nrow=2, scales="fixed") +
     labs(x="Number of HVF", y=opts$metrics[i]) +
     theme(
       legend.position = "right",
       axis.text = element_text(size=rel(0.7))
     )
 
-  # pdf(sprintf("%s/%s.pdf",io$outdir,i), width=6, height=4)
+  pdf(sprintf("%s/%s.pdf",io$outdir,i), width=6, height=4)
   print(p)
-  # dev.off()
-# }
+  dev.off()
+}
 
 
 

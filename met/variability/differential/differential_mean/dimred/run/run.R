@@ -28,8 +28,7 @@ opts$anno <- list(
 # opts$anno <- list("prom_2000_2000" = c("prom_2000_2000"))
 
 # Number of features
-# opts$number.hvg <- seq(100,2500,by=50)
-opts$number.hvg <- c(100,500)
+opts$number.hvg <- seq(100,2500,by=50)
 
 #########
 ## Run ##
@@ -46,7 +45,6 @@ for (i in names(opts$anno)) {
     } else if (grepl("ebi",Sys.info()['nodename'])) {
       lsf <- sprintf("bsub -M 3000 -n 1 -q research-rh74 -o %s/%s_%d.txt", io$tmpdir,i,j)
     }
-    # lsf <- ""
 
     cmd <- sprintf("%s Rscript %s --anno %s --hvg %d --outprefix %s", 
                    lsf, io$script, paste(opts$anno[[i]], collapse=" "), j, outprefix)
