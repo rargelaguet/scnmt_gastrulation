@@ -28,7 +28,8 @@ if (!dir.exists(io$pdf.dir)) { dir.create(io$pdf.dir, showWarnings = FALSE) }
 opts$anno <- c(
   "H3K27ac_distal_E7.5_union_intersect12_500",
   "H3K27ac_distal_E7.5_union_intersect12",
-  "prom_2000_2000"
+  "prom_2000_2000",
+  "H3K4me3_E7.5_union"
 )
 
 # Define groups

@@ -8,11 +8,13 @@ suppressPackageStartupMessages(library(ggplot2))
 ######################
 
 p <- ArgumentParser(description='')
-p$add_argument('--id',    type="character",   nargs='+',   help='feature id(s)')
-p$add_argument('--anno',  type="character",                help='genomic context')
-p$add_argument('--outdir',  type="character",              help='Output directory')
+p$add_argument('--id',    type="character",   nargs='+',  help='feature id(s)')
+p$add_argument('--anno',  type="character",               help='genomic context')
+p$add_argument('--min_cpg',  type="integer", default=1,   help='Minimum number of CpG sites per genomic feaure and cell')
+p$add_argument('--outdir',  type="character",             help='Output directory')
 args <- p$parse_args(commandArgs(TRUE))
 
+## START TEST ##
 # args$id <- c(
 #   "H3K27ac_distal_E7.5_union_intersect12_500_12616",
 #   "H3K27ac_distal_E7.5_union_intersect12_500_11546",
@@ -21,6 +23,8 @@ args <- p$parse_args(commandArgs(TRUE))
 #   "H3K27ac_distal_E7.5_union_intersect12_500_11470"
 # )
 # args$anno <- "H3K27ac_distal_E7.5_union_intersect12_500"
+# # args$outdir <- "/Users/ricard/data/gastrulation/met/results/boxplots"
+## END TEST ##
 
 #####################
 ## Define settings ##
@@ -37,18 +41,30 @@ if (grepl("ricard",Sys.info()['nodename'])) {
 }
 
 if (is.null(args$outdir)) args$outdir <- paste0(io$basedir,"/boxplots")
+if (is.null(args$min.cpg)) args$min.cp <- paste0(io$basedir,"/boxplots")
 
-# Define filtering criteria
-opts$min.cpg <- 3
 
 opts$stage_lineage <- c(
   "E6.5_Epiblast",
   "E6.5_Primitive_Streak",
+  "E7.5_Epiblast",
   "E7.5_Ectoderm",
   "E7.5_Endoderm",
   "E7.5_Mesoderm"
 )
-sample_metadata <- sample_metadata[stage_lineage%in%opts$stage_lineage]
+
+
+############################
+## Update sample metadata ##
+############################
+
+sample_metadata <- sample_metadata %>%
+  .[stage_lineage%in%opts$stage_lineage] %>%
+  .[lineage10x!="Visceral_endoderm"] %>%
+  .[stage=="E7.5" & lineage10x_2%in%c("Epiblast","Ectoderm"),lineage10x_2:="Epiblast/Ectoderm"] %>%
+  .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")]
+  
+table(sample_metadata$lineage10x_2)
 
 ###############################
 ## Load DNA methylation data ##
@@ -59,7 +75,7 @@ data <- fread(sprintf("%s/%s.tsv.gz",io$met_data_parsed,args$anno), showProgress
   .[id%in%args$id]
 
 # Filter by coverage
-data <- data[Ntotal>=opts$min.cpg]
+data <- data[Ntotal>=args$min_cpg]
 
 # Merge methylation data and sample metadata
 data <- data %>% merge(sample_metadata, by="id_met")

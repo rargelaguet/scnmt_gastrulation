@@ -1,0 +1,122 @@
+
+# Define settings 
+
+```{r define_opts, echo=FALSE}
+source("/Users/ricard/scnmt_gastrulation/met/variability/differential/differential_variability/metacc_profiles/load_settings.R")
+source("/Users/ricard/scnmt_gastrulation/met/variability/differential/differential_variability/metacc_profiles/utils.R")
+
+# Size of figures
+opts$width = 10
+opts$height = 5
+```
+
+# Load data
+
+Load methylation data
+```{r load_data, echo=FALSE, include=FALSE}
+met_dt <- lapply(names(opts$met.annos), function(n) {
+  fread(sprintf("%s/%s.tsv.gz",io$met_data_parsed,n)) %>% .[V1%in%opts$met_cells]
+}) %>% rbindlist %>% setnames(c("id_met","id","anno","Nmet","Ntotal","rate"))
+```
+
+Load accessibility data
+```{r load_data, echo=FALSE, include=FALSE}
+acc_dt <- lapply(names(opts$acc.annos), function(n) {
+  fread(sprintf("%s/%s.tsv.gz",io$acc_data_parsed,n)) %>% .[V1%in%opts$acc_cells]
+}) %>% rbindlist %>% setnames(c("id_acc","id","anno","Nmet","Ntotal","rate"))
+```
+
+Merge data with metadata
+```{r merge}
+acc_dt <- merge(acc_dt, sample_metadata, by="id_acc")
+met_dt <- merge(met_dt, sample_metadata, by="id_met")
+```
+
+Load differential methylation results
+```{r}
+diff <- names(opts$met.annos) %>%
+  map(~ fread(sprintf("%s/%s_mu.txt.gz",io$diff.dir,.))
+) %>% rbindlist %>%
+  .[mean_LOR<0] %>%  # subset E7.5 hits
+  .[,abs_mean_diff:=abs(mean_A-mean_B)] %>%
+  .[mean_diff_tail_prob>=opts$tail_prob_threshold & abs_mean_diff>opts$min.change]
+```
+
+```{r}
+# unique(met_dt$id) %in% unique(diff$id)
+# unique(diff$id) %in% unique(met_dt$id)
+```
+
+# Parse data
+
+Subset features
+```{r}
+hits <- diff[,foo:=paste(id,anno,sep="-")] %>% .$foo
+met_dt <- met_dt %>% .[,foo:=paste(id,anno,sep="-")] %>% .[foo%in%hits] %>% .[,foo:=NULL]
+```
+
+Filter by minimum number of measurements per cell
+```{r}
+# opts$min.acc.observations <- 50
+# acc_dt <- acc_dt[,N:=.N, by=c("sample","stage_lineage","anno")] %>% .[N>=opts$min.acc.observations] %>% .[,N:=NULL]
+# 
+# opts$min.met.observations <- 10
+# met_dt <- met_dt[,N:=.N, by=c("sample","stage_lineage","anno")] %>% .[N>=opts$min.met.observations] %>% .[,N:=NULL]
+```
+
+# Plot 
+
+Rename annotations
+```{r}
+met_dt <- met_dt %>% .[,anno:=stringr::str_replace_all(anno,opts$met.annos)]
+acc_dt <- acc_dt %>% .[,anno:=stringr::str_replace_all(anno,opts$acc.annos)]
+```
+
+Boxplots with accessibility rate per genomic context and stage_lineage
+
+```{r}
+to.plot.acc <- acc_dt %>%
+  .[,.(rate=100*(sum(Nmet)/sum(Ntotal)), Nmet=sum(Nmet), N=sum(Ntotal)),by=c("sample","stage_lineage","anno")]# %>%
+  # .[,stage_lineage:=factor(stage_lineage, levels=names(colors))]
+```
+
+```{r}
+p <- ggplot(to.plot.acc, aes(x=stage_lineage, y=rate)) +
+  geom_boxplot(aes(fill=stage_lineage), outlier.shape=NA, coef=1) +
+  # scale_fill_manual(values=colors) +
+  labs(x="", y="Accessibility (%)") +
+  facet_wrap(~anno, nrow=1, scales="fixed") +
+  # coord_cartesian(ylim=c(21,55)) +
+  theme_bw() +
+  guides(color=F, fill=F) +
+  theme_pb() +
+  theme(strip.background = element_rect(fill="#00BFC4"))
+print(p)
+
+# pdf(paste0(io$outdir,"/boxplots_acc2.pdf"), useDingbats = F, onefile = F, width=14, height=6)
+# print(p)
+# dev.off()
+```
+
+Boxplots with methylation rate per genomic context and stage_lineage
+```{r}
+to.plot.met <- met_dt %>%
+  .[,.(rate=100*(sum(Nmet)/sum(Ntotal)), Nmet=sum(Nmet), N=sum(Ntotal)),by=c("sample","stage_lineage","anno")]# %>%
+  # .[,stage_lineage:=factor(stage_lineage, levels=names(colors))]
+
+p <- ggplot(to.plot.met, aes(x=stage_lineage, y=rate)) +
+  geom_boxplot(aes(fill=stage_lineage), outlier.shape=NA, coef=1) +
+  # scale_fill_manual(values=colors) +
+  labs(x="", y="Methylation (%)") +
+  facet_wrap(~anno, nrow=1, scales="fixed") +
+  # coord_cartesian(ylim=c(8,93)) +
+  theme_bw() +
+  guides(color=F, fill=F) +
+  theme_pb() +
+  theme(strip.background = element_rect(fill="#F37A71"))
+print(p)
+
+# pdf(paste0(io$outdir,"/boxplots_met2.pdf"), useDingbats = F, onefile = F, width=14, height=6)
+# print(p)
+# dev.off()
+```

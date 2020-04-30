@@ -33,6 +33,7 @@ Options
 opts$anno <- c(
   "H3K27ac_distal_E7.5_union_intersect12_500",
   "H3K27ac_distal_E7.5_union_intersect12",
+  "H3K4me3_E7.5_union",
   "prom_2000_2000"
 )
 
@@ -56,10 +57,10 @@ diff.dt <- opts$anno %>%
 Call differentially variable features
 ```{r}
 diff.dt %>%
-  .[,sig:=abs(res_disp_LOR)>=opts$min.LOR & res_disp_diff_tail_prob>=opts$tail_prob] %>%
+  .[,sig:=abs(res_disp_change)>=opts$min.LOR & res_disp_diff_tail_prob>=opts$tail_prob] %>%
   .[sig==F,res_disp_diff_test:="Nodiff"] %>%
-  .[sig==T & res_disp_LOR>0,res_disp_diff_test:=paste0(opts$groups[1],"+")] %>%
-  .[sig==T & res_disp_LOR<0,res_disp_diff_test:=paste0(opts$groups[2],"+")]
+  .[sig==T & res_disp_change>0,res_disp_diff_test:=paste0(opts$groups[1],"+")] %>%
+  .[sig==T & res_disp_change<0,res_disp_diff_test:=paste0(opts$groups[2],"+")]
 
 diff.dt[,mean(sig),by="anno"]
 ```
