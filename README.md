@@ -46,4 +46,4 @@ Contact
 -------
 * Ricard Argelaguet (ricard@ebi.ac.uk)
 * Stephen Clark (stephen.clark@babraham.ac.uk)
-
+* Slack channel: [here is the link](https://join.slack.com/t/scnmt-seq/shared_invite/zt-45hmvtd2-2s4pgGyT5vKz2h833AkJYg)
