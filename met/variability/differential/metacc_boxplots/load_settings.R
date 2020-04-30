@@ -26,18 +26,18 @@ opts$stage_lineage <- c(
 
 # Define genomic contexts for methylation
 opts$met.annos <- c(
-  # "H3K27ac_distal_E7.5_Mes_intersect12"="Mesoderm enhancers",
-  # "H3K27ac_distal_E7.5_End_intersect12"="Endoderm enhancers",
-  # "H3K27ac_distal_E7.5_Ect_intersect12"="Ectoderm enhancers"
-  "H3K27ac_distal_E7.5_union_intersect12"="All enhancers"
+  "H3K27ac_distal_E7.5_Mes_intersect12_500"="Mesoderm enhancers",
+  "H3K27ac_distal_E7.5_End_intersect12_500"="Endoderm enhancers"
+  # "H3K27ac_distal_E7.5_Ect_intersect12_500"="Ectoderm enhancers"
+  # "H3K27ac_distal_E7.5_union_intersect12"="All enhancers"
 )
 
 # Define genomic contexts for accessibility
 opts$acc.annos <- c(
-  # "H3K27ac_distal_E7.5_Mes_intersect12"="Mesoderm enhancers",
-  # "H3K27ac_distal_E7.5_End_intersect12"="Endoderm enhancers",
+  "H3K27ac_distal_E7.5_Mes_intersect12"="Mesoderm enhancers",
+  "H3K27ac_distal_E7.5_End_intersect12"="Endoderm enhancers"
   # "H3K27ac_distal_E7.5_Ect_intersect12"="Ectoderm enhancers"
-  "H3K27ac_distal_E7.5_union_intersect12"="All enhancers"
+  # "H3K27ac_distal_E7.5_union_intersect12"="All enhancers"
 )
 
 # Differential methylation parmeters 

@@ -28,7 +28,7 @@ opts$anno <- list(
 # opts$anno <- list("prom_2000_2000" = c("prom_2000_2000"))
 
 # Number of highly variable genes
-opts$number.hvg <- seq(100,2500,by=50)
+opts$number.hvg <- seq(25,500,by=25)
 
 #########
 ## Run ##

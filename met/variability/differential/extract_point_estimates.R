@@ -26,10 +26,16 @@ if (!dir.exists(io$pdf.dir)) { dir.create(io$pdf.dir, showWarnings = FALSE) }
 
 # Define genomic contexts
 opts$anno <- c(
-  "H3K27ac_distal_E7.5_union_intersect12_500",
-  "H3K27ac_distal_E7.5_union_intersect12",
-  "prom_2000_2000",
-  "H3K4me3_E7.5_union"
+  # "H3K27ac_distal_E7.5_union_intersect12_500",
+  # "H3K27ac_distal_E7.5_union_intersect12",
+  # "prom_2000_2000",
+  # "H3K4me3_E7.5_union"
+  "H3K27ac_distal_E7.5_Mes_intersect12_500",
+  "H3K27ac_distal_E7.5_Mes_intersect12",
+  "H3K27ac_distal_E7.5_End_intersect12_500",
+  "H3K27ac_distal_E7.5_End_intersect12",
+  "H3K27ac_distal_E7.5_Ect_intersect12_500",
+  "H3K27ac_distal_E7.5_Ect_intersect12"
 )
 
 # Define groups

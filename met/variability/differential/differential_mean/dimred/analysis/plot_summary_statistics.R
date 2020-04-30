@@ -30,7 +30,7 @@ opts$anno <- c(
 )
 
 # Number of highly variable genes
-opts$number.hvg <- seq(100,2500,by=50)
+opts$number.hvg <- seq(25,500,by=25)
 
 # Metrics to plot
 opts$metrics <- c(

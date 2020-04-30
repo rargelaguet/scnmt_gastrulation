@@ -1,0 +1,108 @@
+---
+title: "Differential methylation versus differential overdispersion"
+---
+
+```{r}
+library(ggpubr)
+```
+
+# Define settings
+
+I/O
+```{r}
+if (grepl("ricard",Sys.info()['nodename'])) {
+  source("/Users/ricard/scnmt_gastrulation/settings.R")
+} else {
+  stop("Computer not recognised")
+}
+
+io$diff.dir <- paste0(io$scmet,"/differential/bayes/txt")
+io$out.dir <- paste0(io$scmet,"/differential/mean_vs_var")
+```
+
+Options
+```{r}
+# Define genomic contexts
+opts$anno <- c(
+  # "H3K27ac_distal_E7.5_union_intersect12_500",
+  # "H3K27ac_distal_E7.5_union_intersect12",
+  # "H3K4me3_E7.5_union",
+  # "prom_2000_2000"
+  "H3K27ac_distal_E7.5_Mes_intersect12_500" = "Mesoderm enhancers",
+  # "H3K27ac_distal_E7.5_Mes_intersect12",
+  "H3K27ac_distal_E7.5_End_intersect12_500" = "Endoderm enhancers",
+  # "H3K27ac_distal_E7.5_End_intersect12",
+  "H3K27ac_distal_E7.5_Ect_intersect12_500" = "Ectoderm enhancers"
+  # "H3K27ac_distal_E7.5_Ect_intersect12"
+)
+
+# Define groups
+# opts$groups <- c("E6.5", "E7.5")
+
+# Differential testing hyperparameters
+# opts$min.LOR <- log(2)
+# opts$tail_prob <- 0.8
+```
+
+# Load data
+
+Load pre-computed differential analysis results
+```{r}
+diff.mu.dt <- names(opts$anno) %>% 
+  map(~ fread(sprintf("%s/%s_mu.txt.gz", io$diff.dir, .))) %>%
+  rbindlist %>% .[,mean_diff:=mean_B-mean_A] %>%
+  .[,c("id","anno","mean_diff","mean_diff_tail_prob")] %>%
+  setnames(c("id","anno","mean_diff","mean_prob"))# %>%
+  # .[mean_prob>0.80]
+
+diff.resdisp.dt <- names(opts$anno) %>%
+  map(~ fread(sprintf("%s/%s_epsilon.txt.gz", io$diff.dir, .))) %>%
+  rbindlist %>% .[,c("id","anno","res_disp_change","res_disp_diff_tail_prob")] %>%
+  setnames(c("id","anno","res_disp_diff","res_disp_prob"))# %>%
+  # .[disp_prob>0.80]
+
+diff.disp.dt <- names(opts$anno) %>% 
+  map(~ fread(sprintf("%s/%s_gamma.txt.gz", io$diff.dir, .))) %>%
+  rbindlist %>% .[,disp_change:=disp_B-disp_A] %>%
+  .[,c("id","anno","disp_change","disp_diff_tail_prob")] %>%
+  setnames(c("id","anno","disp_diff","disp_prob"))# %>%
+  # .[disp_prob>0.80]
+```
+
+Merge
+```{r}
+diff.dt <- merge(diff.mu.dt, diff.disp.dt, by=c("id","anno")) %>%
+  merge(diff.resdisp.dt, by=c("id","anno")) %>%
+   .[,anno:=stringr::str_replace_all(anno,opts$anno)]
+```
+
+# Plot 
+
+```{r}
+# diff.dt[,alpha:=abs(mean_prob)*res_disp_prob]
+
+ggscatter(diff.dt, x="mean_diff", y="disp_diff", fill="anno", alpha=0.7, shape=21, size=1.25) +
+  	stat_smooth(aes_string(group="anno", color="anno"), method="lm", size=0.75, se=T, alpha=0.25) +
+  	stat_cor(method="pearson", aes_string(group="anno", color="anno"), label.x.npc = 0.6, label.y.npc = 0.9, size=3) +
+  geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
+  geom_vline(xintercept = 0, color = "black", linetype = "dashed") +
+  labs(x="Differential mean", y="Differential overdispersion") +
+  coord_cartesian(xlim=c(-0.29,0.29), ylim=c(-0.20,0.25)) +
+  theme(
+    axis.text = element_text(size=rel(0.75)),
+    legend.position = "right"
+  )
+```
+
+```{r}
+ggscatter(diff.dt, x="mean_diff", y="res_disp_diff", fill="anno", shape=21, size=1.25) +
+	stat_smooth(aes_string(group="anno", color="anno"), method="lm", size=0.75, se=T, alpha=0.25) +
+	stat_cor(method="pearson", aes_string(group="anno", color="anno"), label.x.npc = 0.6, label.y.npc = 0.12, size=3) +
+  geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
+  geom_vline(xintercept = 0, color = "black", linetype = "dashed") +
+  labs(x="Differential mean", y="Differential residual overdispersion") +
+  theme(
+    axis.text = element_text(size=rel(0.75)),
+    legend.position = "right"
+  )
+```

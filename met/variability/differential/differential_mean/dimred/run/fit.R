@@ -13,8 +13,9 @@ args <- p$parse_args(commandArgs(TRUE))
 
 # args <- list()
 # args$anno <- c("H3K27ac_distal_E7.5_union_intersect12")
-# args$outprefix <- "/Users/ricard/data/gastrulation/met/results/variability/differential/differential_mean/dimred/test"
-# args$hvg <- 2000
+# # args$outprefix <- "/Users/ricard/data/gastrulation/met/results/variability/differential/differential_mean/dimred/test"
+# args$outprefix <- "/hps/nobackup2/research/stegle/users/ricard/gastrulation/met/results/variability/differential/differential_mean/dimred/test"
+# args$hvg <- 500
 
 ############################
 ## Define I/O and options ##
@@ -79,9 +80,9 @@ met_dt %>%
   .[,m:=log2(((rate/100)+0.01)/(1-(rate/100)+0.01))]
 
 # Regress out global methylation rate differences
-met_dt %>%
-  .[,mean:=mean(m),by="sample"] %>%
-  .[,m:=lm(formula=m~mean)[["residuals"]], by="id"]
+# met_dt %>%
+#   .[,mean:=mean(m),by="sample"] %>%
+#   .[,m:=lm(formula=m~mean)[["residuals"]], by="id"]
 
 # prepare data for MOFA
 met_dt <- met_dt %>% 

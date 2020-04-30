@@ -64,7 +64,7 @@ sample_metadata <- sample_metadata %>%
   .[stage=="E7.5" & lineage10x_2%in%c("Epiblast","Ectoderm"),lineage10x_2:="Epiblast/Ectoderm"] %>%
   .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")]
   
-table(sample_metadata$lineage10x_2)
+# table(sample_metadata$lineage10x_2)
 
 ###############################
 ## Load DNA methylation data ##

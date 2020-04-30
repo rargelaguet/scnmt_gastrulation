@@ -13,8 +13,8 @@ args <- p$parse_args(commandArgs(TRUE))
 
 # args <- list()
 # args$anno <- c("H3K27ac_distal_E7.5_union_intersect12")
-# args$outprefix <- "/Users/ricard/data/gastrulation/met/results/variability/differential/differential_variability/dimred/test"
-# args$hvg <- 2000
+# args$outprefix <- "/hps/nobackup2/research/stegle/users/ricard/gastrulation/met/results/variability/differential/differential_variability/dimred/test"
+# args$hvg <- 500
 
 ############################
 ## Define I/O and options ##
@@ -39,7 +39,7 @@ dir.create(paste0(args$outprefix,"/pdf"), showWarnings = F)
 diff_dt <- args$anno %>%
   map(~ fread(sprintf("%s/%s_epsilon.txt.gz",io$scmet.diff,.))
 ) %>% rbindlist %>%
-  .[,c("id", "res_disp_A", "res_disp_B", "res_disp_LOR", "res_disp_diff_tail_prob", "res_disp_diff_test")]
+  .[,c("id", "res_disp_A", "res_disp_B", "res_disp_change", "res_disp_diff_tail_prob", "res_disp_diff_test")]
 
 ###########################
 ## Load methylation data ##
@@ -64,10 +64,8 @@ met_dt <- args$anno %>%
 
 # Filter features by differential variability
 hvgs <- diff_dt %>% 
-  .[res_disp_LOR<0] %>%
-  # .[res_disp_diff_tail_prob>=opts$tail_prob_threshold & abs(res_disp_LOR)>=opts$LOR_threshold] %>% 
-  # .[,abs_epsilon_diff:=abs(res_disp_A-res_disp_B)] %>%
-  setorder(-res_disp_diff_tail_prob,res_disp_LOR) %>%
+  .[res_disp_change<0] %>%
+  setorder(-res_disp_diff_tail_prob,res_disp_change) %>%
   head(args$hvg) %>% .[,id]
 
 met_dt <- met_dt[id%in%hvgs]
@@ -81,9 +79,9 @@ met_dt %>%
   .[,m:=log2(((rate/100)+0.01)/(1-(rate/100)+0.01))]
 
 # Regress out global methylation rate differences
-met_dt %>%
-  .[,mean:=mean(m),by="id_met"] %>%
-  .[,m:=lm(formula=m~mean)[["residuals"]], by="id"]
+# met_dt %>%
+#   .[,mean:=mean(m),by="id_met"] %>%
+#   .[,m:=lm(formula=m~mean)[["residuals"]], by="id"]
 
 # prepare data for MOFA
 met_dt <- met_dt %>% 
