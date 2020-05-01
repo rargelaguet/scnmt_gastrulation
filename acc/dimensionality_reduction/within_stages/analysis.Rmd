@@ -1,0 +1,145 @@
+---
+title: "Gastrulation scNMT-seq: dimensionality reduction on accessibility data using MOFA"
+---
+
+```{r load_modules, echo=FALSE, include=FALSE}
+library(MOFA)
+library(umap)
+library(Rtsne)
+```
+
+```{r define_opts, echo=FALSE, include=FALSE}
+source("/Users/ricard/scnmt_gastrulation/acc/dimensionality_reduction/within_stages/load_settings.R")
+```
+
+Load pretrained MOFA model
+```{r}
+model <- loadModel(io$outfile)
+```
+
+Sort sample metadata to match the order of the sample names in MOFA
+```{r}
+sample_metadata_filt <- sample_metadata %>% setkey(id_acc) %>% 
+  .[MOFA::sampleNames(model)]
+```
+
+Classify cells as embryonic or extra-embryonic
+```{r}
+sample_metadata_filt %>% 
+  .[,embryonic:=ifelse(lineage10x_2%in%c("Visceral_endoderm","Primitive_endoderm"),"ExE","Embryonic")]
+```
+
+Calculate variance explained per factor and view
+```{r}
+r2 <- calculateVarianceExplained(model)$R2PerFactor
+```
+
+<!-- (Optional) Rotate a factor -->
+```{r}
+# model@Expectations$Z[,1] <- -model@Expectations$Z[,1]
+```
+
+Scatter plots of Factor 1 vs Factor 2
+```{r}
+p <- plotFactorScatter(
+  model, 
+  factors=c(1,2),
+  color_by=sample_metadata_filt$embryonic
+)
+
+p <- p + 
+  scale_colour_manual(values=opts$colors) +
+  labs(x=sprintf("Factor 1 (%.2f%%)",r2["LF1",]*100), y=sprintf("Factor 2 (%.2f%%)",r2["LF2",]*100))
+
+# pdf(sprintf("%s/pdf/mofa_acc_%s_%s.pdf",io$outdir,paste(names(opts$annos), collapse="_"), paste(opts$stage_lineage, collapse="_")), useDingbats = F, width=6, height=6)
+print(p)
+# dev.off()
+```
+
+<!-- (Optional) Non-linear dimensionality reduction from MOFA factors -->
+```{r}
+# # Define settings
+# algorithms <- c("umap")
+# 
+# # Fetch factors
+# Z <- getFactors(model)
+# 
+# for (algorithm in algorithms) {
+# 
+#   set.seed(1)
+#   if (algorithm=="tsne") {
+#     tsne <- Rtsne::Rtsne(Z, check_duplicates=FALSE, pca=FALSE, theta=0.5, dims=2)
+#     Z.out <- tsne$Y
+#   } else if (algorithm=="umap") {
+#     umap.defaults$n_neighbors <- 20
+#     umap.defaults$min_dist <- 0.7
+#     umap.out <- umap(Z, config = umap.defaults)
+#     Z.out <- umap.out$layout
+#   }
+# 
+#   to.plot <- Z.out %>% as.data.table %>% .[,id_acc:=rownames(Z)] %>%
+#       merge(sample_metadata, by="id_acc")
+# 
+#   p <- ggplot(to.plot, aes(x=V1, y=V2, color=lineage10x_2)) +
+#     geom_point(alpha=1.0, size=1.25) +
+#     scale_color_manual(values=opts$colors) +
+#     guides(colour = guide_legend(override.aes = list(size=3))) +
+#     labs(x="Dimension 1", y="Dimension 2") +
+#     theme_classic() +
+#     theme(
+#       axis.text = element_blank(),
+#       axis.ticks = element_blank(),
+#       legend.position = "none"
+#     )
+# 
+# print(p)
+# }
+```
+
+
+<!-- (Optional) Correlate Factor 1 with global accessiblity differences -->
+
+```{r}
+# foo <- fread(io$acc.stats) %>% .[,c("id_acc","mean")] %>% 
+#   merge(sample_metadata_filt, by="id_acc") %>%
+#   setnames("id_acc","sample") %>%# .[,mean:=100*mean] %>%
+#   setkey(sample) %>% .[MOFA::sampleNames(model)] 
+# 
+# Z <- getFactors(model, 1, as.data.frame=T) %>% 
+#   as.data.table %>% merge(foo, by="sample") 
+# 
+#  p <- ggscatter(Z, x="value", y="mean", color="embryonic",
+#   add="reg.line", add.params = list(color="black", fill="lightgray"), conf.int=TRUE) +
+#   stat_cor(method = "pearson", label.x = 1.5, label.y = 40) +
+#   labs(x="Factor 1", y="Global accessibility rate") +
+#   scale_colour_manual(values=opts$colors) +
+#   theme(
+#     axis.title = element_text(size=rel(1.2)),
+#     legend.position = "none"
+#   )
+#  
+# pdf(sprintf("%s/pdf/mofa_acc_CORRELATION.pdf",io$outdir), useDingbats = F, width=6, height=6)
+# print(p)
+# dev.off()
+```
+
+```{r}
+# p <- plotFactorScatter(
+#   model, 
+#   factors=c("LF1","LF2"), 
+#   color_by=foo$mean
+# )
+# 
+# p <- p + 
+#   scale_colour_gradientn(colours = brewer.pal(9, "Blues")) +
+#   labs(x=sprintf("Factor 1 (%.2f%%)",r2["LF1",]*100), y=sprintf("Factor 2 (%.2f%%)",r2["LF2",]*100)) +
+#   theme(
+#     axis.title = element_text(size=rel(1.2)),
+#     legend.position = "none"
+#   )
+# 
+# pdf(sprintf("%s/pdf/mofa_acc_COLORBYMEAN.pdf",io$outdir), useDingbats = F, width=6, height=6)
+# print(p)
+# dev.off()
+```
+

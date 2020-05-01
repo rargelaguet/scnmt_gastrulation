@@ -1,16 +1,13 @@
 library(data.table)
 library(purrr)
+library(ggplot2)
 
 ################
 ## Define I/O ##
 ################
 
 io <- list()
-if (grepl("ricard",Sys.info()['nodename'])) {
-  io$basedir <- "/Users/ricard/data/gastrulation"
-} else {
-  io$basedir <- "/hps/nobackup/stegle/users/ricard/gastrulation"
-}
+io$basedir <- "/Users/ricard/data/gastrulation"
 io$data.dir <- paste0(io$basedir,"/met/feature_level")
 io$sample.metadata <- paste0(io$basedir,"/sample_metadata.txt")
 io$met.stats <- paste0(io$basedir,"/met/results/stats/sample_stats.txt")
@@ -55,14 +52,6 @@ opts$cells <- fread(io$sample.metadata) %>%
   .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")] %>%
   .[pass_metQC==T & stage_lineage%in%opts$stage_lineage,id_met]
 
-# Stage colors
-# opts$colors <- c(
-#   "E4.5"="#FDCC8A", 
-#   "E5.5"="#FC8D59", 
-#   "E6.5"="#E34A33", 
-#   "E7.5"="#600707"
-# )
-
 # Lineage colors
 opts$colors <- c(
   ExE="#fc8d62", 
@@ -91,4 +80,4 @@ io$outfile = sprintf("%s/hdf5/model_%s_%s.hdf5",io$outdir,paste(names(opts$annos
 sample_metadata <- fread(io$sample.metadata) %>% 
   .[id_met%in%opts$cells] %>%
   .[,c("id_met","stage","lineage10x_2")] %>%
-  .[,stage_lineage:=as.factor(paste(stage,lineage10x_2,sep="_"))] %>% droplevels()
+  .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")]

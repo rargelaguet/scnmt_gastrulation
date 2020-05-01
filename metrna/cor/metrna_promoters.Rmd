@@ -1,9 +1,5 @@
 ---
 title: "Gastrulation scNMT-seq: correlation per gene (across cells) between RNA expression and DNA methylation"
-output: 
-  BiocStyle::html_document: 
-    fig_width: 12
-    fig_height: 8
 ---
 
 ```{r echo=FALSE, include=FALSE}
@@ -19,7 +15,7 @@ suppressPackageStartupMessages(library(data.table))
 
 <!-- Define functions -->
 ```{r echo=FALSE, include=FALSE}
-source("/Users/ricard/gastrulation/metrna/cor/utils.R")
+source("/Users/ricard/scnmt_gastrulation/metrna/cor/utils.R")
 ```
 
 <!-- Define I/O and options -->
