@@ -53,27 +53,27 @@ diff.mu.dt <- names(opts$anno) %>%
   rbindlist %>% .[,mean_diff:=mean_B-mean_A] %>%
   .[,c("id","anno","mean_diff","mean_diff_tail_prob")] %>%
   setnames(c("id","anno","mean_diff","mean_prob"))# %>%
-  # .[mean_prob>0.80]
+# .[mean_prob>0.80]
 
 diff.resdisp.dt <- names(opts$anno) %>%
   map(~ fread(sprintf("%s/%s_epsilon.txt.gz", io$diff.dir, .))) %>%
   rbindlist %>% .[,c("id","anno","res_disp_change","res_disp_diff_tail_prob")] %>%
   setnames(c("id","anno","res_disp_diff","res_disp_prob"))# %>%
-  # .[disp_prob>0.80]
+# .[disp_prob>0.80]
 
 diff.disp.dt <- names(opts$anno) %>% 
   map(~ fread(sprintf("%s/%s_gamma.txt.gz", io$diff.dir, .))) %>%
   rbindlist %>% .[,disp_change:=disp_B-disp_A] %>%
   .[,c("id","anno","disp_change","disp_diff_tail_prob")] %>%
   setnames(c("id","anno","disp_diff","disp_prob"))# %>%
-  # .[disp_prob>0.80]
+# .[disp_prob>0.80]
 ```
 
 Merge
 ```{r}
 diff.dt <- merge(diff.mu.dt, diff.disp.dt, by=c("id","anno")) %>%
   merge(diff.resdisp.dt, by=c("id","anno")) %>%
-   .[,anno:=stringr::str_replace_all(anno,opts$anno)]
+  .[,anno:=stringr::str_replace_all(anno,opts$anno)]
 ```
 
 # Plot 
@@ -82,8 +82,8 @@ diff.dt <- merge(diff.mu.dt, diff.disp.dt, by=c("id","anno")) %>%
 # diff.dt[,alpha:=abs(mean_prob)*res_disp_prob]
 
 ggscatter(diff.dt, x="mean_diff", y="disp_diff", fill="anno", alpha=0.7, shape=21, size=1.25) +
-  	stat_smooth(aes_string(group="anno", color="anno"), method="lm", size=0.75, se=T, alpha=0.25) +
-  	stat_cor(method="pearson", aes_string(group="anno", color="anno"), label.x.npc = 0.6, label.y.npc = 0.9, size=3) +
+  stat_smooth(aes_string(group="anno", color="anno"), method="lm", size=0.75, se=T, alpha=0.25) +
+  stat_cor(method="pearson", aes_string(group="anno", color="anno"), label.x.npc = 0.6, label.y.npc = 0.9, size=3) +
   geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
   geom_vline(xintercept = 0, color = "black", linetype = "dashed") +
   labs(x="Differential mean", y="Differential overdispersion") +
@@ -96,8 +96,8 @@ ggscatter(diff.dt, x="mean_diff", y="disp_diff", fill="anno", alpha=0.7, shape=2
 
 ```{r}
 ggscatter(diff.dt, x="mean_diff", y="res_disp_diff", fill="anno", shape=21, size=1.25) +
-	stat_smooth(aes_string(group="anno", color="anno"), method="lm", size=0.75, se=T, alpha=0.25) +
-	stat_cor(method="pearson", aes_string(group="anno", color="anno"), label.x.npc = 0.6, label.y.npc = 0.12, size=3) +
+  stat_smooth(aes_string(group="anno", color="anno"), method="lm", size=0.75, se=T, alpha=0.25) +
+  stat_cor(method="pearson", aes_string(group="anno", color="anno"), label.x.npc = 0.6, label.y.npc = 0.12, size=3) +
   geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
   geom_vline(xintercept = 0, color = "black", linetype = "dashed") +
   labs(x="Differential mean", y="Differential residual overdispersion") +
@@ -106,3 +106,37 @@ ggscatter(diff.dt, x="mean_diff", y="res_disp_diff", fill="anno", shape=21, size
     legend.position = "right"
   )
 ```
+
+# Barplots with number of hits per quadrant
+
+
+```{r}
+diff.dt %>%
+  .[mean_diff>0 & disp_diff>0,quadrant:="2"] %>%
+  .[mean_diff>0 & disp_diff<0,quadrant:="4"] %>%
+  .[mean_diff<0 & disp_diff<0,quadrant:="3"] %>%
+  .[mean_diff<0 & disp_diff>0,quadrant:="1"]
+
+diff.dt[,Ntotal:=.N,by="anno"]
+to.plot <- diff.dt %>%
+  .[,.(value=.N/unique(Ntotal)),by=c("quadrant","anno")] %>%
+  .[!is.na(quadrant)]
+```
+
+```{r}
+diff.dt[,.N,by="anno"]
+```
+
+```{r}
+ggbarplot(to.plot, x="anno", y="value", fill="anno", facet="quadrant", width=0.9) +
+  labs(x="", y="Fraction of features") +
+  theme(
+    strip.background = element_blank(),
+    strip.text = element_blank(),
+    axis.text.y = element_text(size=rel(0.75)),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    legend.position = "none"
+  )
+```
+
