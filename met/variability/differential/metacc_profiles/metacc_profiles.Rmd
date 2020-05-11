@@ -1,9 +1,5 @@
 ---
 title: "Gastrulation scNMT-seq: pseudobulked profiles of DNA methylation and chromatin accessibility"
-output: 
-  BiocStyle::html_document: 
-    fig_width: 10
-    fig_height: 8
 ---
 
 ```{r load_modules, echo=FALSE, include=FALSE}
@@ -17,7 +13,7 @@ library(ggpubr)
 ```{r define_options, echo=FALSE}
 if (grepl("ricard",Sys.info()['nodename'])) {
   base <- "/Users/ricard/scnmt_gastrulation/met/variability/differential/metacc_profiles"
-} else if (grepl("yoda",Sys.info()['nodename'])) {
+} else if (grepl("ebi",Sys.info()['nodename'])) {
   base <- "/homes/ricard/scnmt_gastrulation/met/variability/differential/metacc_profiles"
 } else {
   stop("Computer not recognised")
@@ -46,7 +42,25 @@ Load DNA methylation and chromatin accessibility data
 source(paste0(base,"/load_data.R"))
 ```
 
-<!-- Merge DNA methylation and chromatin acessibility data -->
+Load results from differential analysis
+```{r}
+source("/Users/ricard/scnmt_gastrulation/met/variability/differential/load_differential_results.R")
+```
+
+Calculate quartiles
+```{r}
+
+```
+
+
+# Parse data
+
+Subset features by quartile
+```{r}
+
+```
+
+Merge DNA methylation and chromatin acessibility data
 ```{r merge}
 data <- rbind(
   met[,c("sample","stage","id","anno","dist","rate","context")],
@@ -63,7 +77,7 @@ data[,rate:=rate*100]
 Load pre-computed object
 ```{r}
 # saveRDS(data, paste0(io$outdir,"/precomputed.rds"))
-data <- readRDS(paste0(io$outdir,"/precomputed.rds"))
+# data <- readRDS(paste0(io$outdir,"/precomputed.rds"))
 ```
 
 <!-- Load genome-wide global methylation and accessibility rates -->
