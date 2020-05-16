@@ -79,18 +79,35 @@ diff.dt <- merge(diff.mu.dt, diff.disp.dt, by=c("id","anno")) %>%
 # Plot 
 
 ```{r}
-# diff.dt[,alpha:=abs(mean_prob)*res_disp_prob]
-
 ggscatter(diff.dt, x="mean_diff", y="disp_diff", fill="anno", alpha=0.7, shape=21, size=1.25) +
   stat_smooth(aes_string(group="anno", color="anno"), method="lm", size=0.75, se=T, alpha=0.25) +
-  stat_cor(method="pearson", aes_string(group="anno", color="anno"), label.x.npc = 0.6, label.y.npc = 0.9, size=3) +
+  # stat_cor(method="pearson", aes_string(group="anno", color="anno"), label.x.npc = 0.6, label.y.npc = 0.9, size=3) +
+  facet_wrap(~anno) + 
   geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
   geom_vline(xintercept = 0, color = "black", linetype = "dashed") +
   labs(x="Differential mean", y="Differential overdispersion") +
-  coord_cartesian(xlim=c(-0.29,0.29), ylim=c(-0.20,0.25)) +
+  # coord_cartesian(xlim=c(-0.29,0.29), ylim=c(-0.25,0.25)) +
   theme(
     axis.text = element_text(size=rel(0.75)),
-    legend.position = "right"
+    legend.position = "none"
+  )
+```
+
+```{r}
+# ggscatter(diff.dt, x="mean_diff", y="disp_diff", fill="disp_prob", shape=21, size=1.25) +
+ggscatter(diff.dt, x="mean_diff", y="disp_diff", fill="mean_prob", shape=21, size=1.25) +
+  
+  # stat_smooth(aes_string(group="anno", color="anno"), method="lm", size=0.75, se=T, alpha=0.25) +
+  # stat_cor(method="pearson", aes_string(group="anno", color="anno"), label.x.npc = 0.6, label.y.npc = 0.9, size=3) +
+  facet_wrap(~anno) + 
+  scale_fill_gradient(low = "white", high = "magenta") +
+  geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
+  geom_vline(xintercept = 0, color = "black", linetype = "dashed") +
+  labs(x="Differential mean", y="Differential overdispersion") +
+  coord_cartesian(xlim=c(-0.29,0.29), ylim=c(-0.25,0.25)) +
+  theme(
+    axis.text = element_text(size=rel(0.75)),
+    legend.position = "none"
   )
 ```
 
@@ -98,12 +115,13 @@ ggscatter(diff.dt, x="mean_diff", y="disp_diff", fill="anno", alpha=0.7, shape=2
 ggscatter(diff.dt, x="mean_diff", y="res_disp_diff", fill="anno", shape=21, size=1.25) +
   stat_smooth(aes_string(group="anno", color="anno"), method="lm", size=0.75, se=T, alpha=0.25) +
   stat_cor(method="pearson", aes_string(group="anno", color="anno"), label.x.npc = 0.6, label.y.npc = 0.12, size=3) +
+  facet_wrap(~anno) + 
   geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
   geom_vline(xintercept = 0, color = "black", linetype = "dashed") +
   labs(x="Differential mean", y="Differential residual overdispersion") +
   theme(
     axis.text = element_text(size=rel(0.75)),
-    legend.position = "right"
+    legend.position = "none"
   )
 ```
 

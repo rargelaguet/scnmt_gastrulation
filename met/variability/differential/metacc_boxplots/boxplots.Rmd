@@ -45,7 +45,7 @@ diff.mu.dt <- names(opts$met.annos) %>%
   rbindlist %>% .[,mean_diff:=mean_B-mean_A] %>%
   .[,c("id","anno","mean_diff","mean_diff_tail_prob")] %>%
   setnames(c("id","anno","mean_diff","mean_prob")) %>%
-  .[mean_diff<0 & mean_prob>=0.80] %>%
+  # .[mean_diff<0 & mean_prob>=0.80] %>%
   .[,anno:=stringr::str_replace_all(anno,opts$met.annos)] %>%
   .[,id:=stringr::str_replace_all(id,"_500","")]
 ```
@@ -57,7 +57,7 @@ diff.disp.dt <- names(opts$met.annos) %>%
   rbindlist %>% .[,disp_change:=disp_B-disp_A] %>%
   .[,c("id","anno","disp_change","disp_diff_tail_prob")] %>%
   setnames(c("id","anno","disp_diff","disp_prob")) %>%
-  .[disp_prob>=0.70 & disp_diff>0] %>%
+  # .[disp_prob>=0.70 & disp_diff>0] %>%
   .[,anno:=stringr::str_replace_all(anno,opts$met.annos)] %>%
   .[,id:=stringr::str_replace_all(id,"_500","")]
 ```
@@ -65,6 +65,17 @@ diff.disp.dt <- names(opts$met.annos) %>%
 merge
 ```{r}
 diff.dt <- merge(diff.mu.dt, diff.disp.dt, by=c("id","anno")) 
+```
+
+Divide genomic elements into the four quadrants
+```{r}
+diff.dt %>%
+  .[mean_diff>0 & disp_diff>0,quadrant:="2"] %>%
+  .[mean_diff>0 & disp_diff<0,quadrant:="4"] %>%
+  .[mean_diff<0 & disp_diff<0,quadrant:="3"] %>%
+  .[mean_diff<0 & disp_diff>0,quadrant:="1"]
+
+table(diff.dt$quadrant)
 ```
 
 # Parse data
@@ -81,7 +92,6 @@ Merge data with metadata
 acc_dt <- merge(acc_dt, sample_metadata, by="id_acc")
 met_dt <- merge(met_dt, sample_metadata, by="id_met")
 ```
-
 
 Filter by minimum number of measurements per cell
 ```{r}
@@ -123,9 +133,15 @@ print(p)
 Boxplots with methylation rate per genomic context and stage_lineage
 
 ```{r}
+# to.plot.met <- met_dt %>%
+#   .[,.(rate=100*(sum(Nmet)/sum(Ntotal)), Nmet=sum(Nmet), N=sum(Ntotal)),by=c("sample","stage_lineage","anno")]# %>%
+#   # .[,stage_lineage:=factor(stage_lineage, levels=names(colors))]
+```
+
+```{r}
 to.plot.met <- met_dt %>%
-  .[,.(rate=100*(sum(Nmet)/sum(Ntotal)), Nmet=sum(Nmet), N=sum(Ntotal)),by=c("sample","stage_lineage","anno")]# %>%
-  # .[,stage_lineage:=factor(stage_lineage, levels=names(colors))]
+  merge(diff.dt[,c("id","anno","quadrant")], by=c("id","anno")) %>%
+  .[,.(rate=100*(sum(Nmet)/sum(Ntotal)), Nmet=sum(Nmet), N=sum(Ntotal)),by=c("sample","stage_lineage","quadrant")]
 ```
 
 ```{r}
@@ -133,7 +149,7 @@ p <- ggplot(to.plot.met, aes(x=stage_lineage, y=rate)) +
   geom_boxplot(aes(fill=stage_lineage), outlier.shape=NA, coef=1) +
   # scale_fill_manual(values=colors) +
   labs(x="", y="Methylation (%)") +
-  facet_wrap(~anno, nrow=1, scales="fixed") +
+  facet_wrap(~anno+quadrant, nrow=3, scales="fixed") +
   # coord_cartesian(ylim=c(8,93)) +
   theme_bw() +
   guides(color=F, fill=F) +
@@ -145,3 +161,4 @@ print(p)
 # print(p)
 # dev.off()
 ```
+
