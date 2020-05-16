@@ -1,0 +1,47 @@
+```{r}
+library(MOFA2)
+```
+
+<!-- Gene set enrichment analysis -->
+
+Load MsigDb gene set
+```{r go_enrichment, echo=FALSE}
+# I/O MSigDB
+msigFile <- "/Users/ricard/data/MSigDB/v6.0/mus_musculus/C5/bp_binary_matrix_ensembl.rds"
+# io$msigFile <- "/Users/ricard/data/MSigDB/v6.0/mus_musculus/C2/binary_matrix_ensembl.rds"
+
+# Load MSigDB files
+gene.sets <- readRDS(msigFile)
+```
+
+```{r}
+model.go <- model
+```
+
+```{r}
+colnames(gene.sets)
+features(model.go)[["RNA expression"]] <- toupper(features(model.go)[["RNA expression"]])
+```
+
+```{r}
+enrichment.out <- run_enrichment(model.go,
+  view = "RNA expression",
+  feature.sets = gene.sets,
+  statistical.test = "parametric",
+  alpha = 0.01
+)
+```
+
+```{r}
+View(enrichment.out$pval.adj)
+```
+
+```{r}
+p <- plot_enrichment(enrichment.out, factor=7, max.pathways = 15)
+
+pdf(paste0(io$pdfdir,"/Factor7_enrichment.pdf"), width=10, height=4, useDingbats = F)
+print(p)
+dev.off()
+```
+
+

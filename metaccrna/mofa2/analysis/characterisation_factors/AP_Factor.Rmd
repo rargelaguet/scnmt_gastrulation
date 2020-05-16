@@ -1,0 +1,76 @@
+
+```{r}
+io$pdfdir2 <- paste0(io$pdfdir,"/characterisation_factors/AP_factor")
+
+opts$factors.width <- 4.5
+opts$factors.height <- 4
+
+factor <- 8
+```
+
+```{r}
+# samples <- model@samples_metadata[model@samples_metadata$lineage10x_2!="ExE Endoderm","sample"]
+# model.subset <- subset_samples(model, samples)
+```
+
+<!-- Plot factor values colored by cell type assignment -->
+```{r}
+p <- plot_factor(
+  model,
+  factor = factor,
+  color_by = "lineage10x_2", scale = T,
+  add_violin = T, color_violin = T, 
+  dodge=T, dot_size=1, legend = F, rasterize = F
+)
+p <- p + scale_color_manual(values=opts$colors) + scale_fill_manual(values=opts$colors)
+p <- p + theme(
+  strip.text = element_text(size=rel(1.1), color="black"),
+  strip.background = element_blank(),
+)
+
+pdf(paste0(io$pdfdir2,"/Factor_values_violin.pdf"), width=5, height=4, useDingbats = F)
+print(p)
+dev.off()
+```
+
+```{r}
+p <- plot_weights(
+  model,
+  view="RNA expression",
+  factor = factor,
+  nfeatures = 8,
+  text_size = 6,
+  scale = T
+)
+
+pdf(paste0(io$pdfdir2,"/Factor_loadings_RNA.pdf"), width=7, height=4, useDingbats = F)
+print(p)
+dev.off()
+```
+
+<!-- Plot RNA expression values for top genes  -->
+
+```{r}
+# genes <- names(head(sort(get_weights(model, views="RNA expression", factor=factor)[[1]][,1]), n=1))
+# genes <- names(tail(sort(get_weights(model, views="RNA expression", factor=factor)[[1]][,1]), n=10))
+genes <- names(tail(sort(abs(get_weights(model, views="RNA expression", factor=factor)[[1]][,1])), n=10))
+
+for (i in genes) {
+  p <- plot_factor(model,
+    factor = factor,
+    color_by = i,
+    legend = FALSE,
+    dot_size = 2.5,
+  ) + scale_colour_gradientn(colours = terrain.colors(10)) +
+    theme(
+      axis.text = element_blank(),
+      axis.title = element_blank(),
+      axis.ticks.x = element_blank(),
+      strip.text = element_blank()
+    )
+  
+  pdf(sprintf("%s/Factor_rna_%s.pdf",io$pdfdir2,i), width=opts$width/1.5, height=opts$height/2, useDingbats = F)
+  print(p)
+  dev.off()
+}
+```

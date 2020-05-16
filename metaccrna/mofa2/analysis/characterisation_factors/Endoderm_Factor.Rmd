@@ -1,0 +1,156 @@
+
+```{r}
+io$pdfdir2 <- paste0(io$pdfdir,"/characterisation_factors/Endoderm_factor")
+opts$factors.width <- 4.5
+opts$factors.height <- 4
+
+factor <- 4
+```
+
+<!-- Plot factor values colored by cell type assignment -->
+```{r}
+p <- plot_factor(
+  model,
+  factor = factor,
+  color_by = "lineage10x_2", scale = T,
+  add_violin = T, color_violin = T, 
+  dodge=T, dot_size=1, legend = F, rasterize = F
+)
+p <- p + scale_color_manual(values=opts$colors) + scale_fill_manual(values=opts$colors)
+p <- p + theme(
+  strip.text = element_text(size=rel(1.1), color="black"),
+  strip.background = element_blank(),
+)
+
+# pdf(paste0(io$pdfdir2,"/Factor_values_violin.pdf"), width=5, height=4, useDingbats = F)
+print(p)
+# dev.off()
+```
+
+
+<!-- Plot RNA expression values for top genes  -->
+
+```{r}
+# genes <- names(head(sort(get_weights(model, views="RNA expression", factor=factor)[[1]][,1]), n=1))
+genes <- names(tail(sort(get_weights(model, views="RNA expression", factor=factor)[[1]][,1]), n=10))
+
+for (i in genes) {
+  p <- plot_factor(model,
+    factor = factor,
+    color_by = i,
+    legend = FALSE,
+    dot_size = 2.5,
+  ) + scale_colour_gradientn(colours = terrain.colors(10)) +
+    theme(
+      axis.text = element_blank(),
+      axis.title = element_blank(),
+      axis.ticks.x = element_blank(),
+      strip.text = element_blank()
+    )
+  
+  pdf(sprintf("%s/Factor_rna_%s.pdf",io$pdfdir2,i), width=opts$width/1.5, height=opts$height/2, useDingbats = F)
+  print(p)
+  dev.off()
+}
+```
+
+```{r}
+p <- plot_weights(
+  model,
+  view="RNA expression",
+  factor = factor,
+  nfeatures = 8,
+  scale = T
+)
+
+pdf(paste0(io$pdfdir2,"/Factor_loadings_RNA.pdf"), width=5, height=4, useDingbats = F)
+print(p)
+dev.off()
+```
+
+
+
+
+DNA methylation: joint plot of promoters and enhancers
+
+```{r}
+loadings.dt <- get_weights(
+  model, 
+  views = grep("methylation",views(model)),
+  factors = factor, 
+  as.data.frame = T
+) %>% as.data.table
+
+loadings.dt[,value:=value/max(abs(value))] %>%
+  setorder(value) %>% .[,feature:=factor(feature,levels=feature)]
+```
+
+```{r}
+p <- ggplot(loadings.dt, aes(x = value)) +
+  geom_density(aes(y=..scaled..), alpha=0.85, fill="#e34a33") + 
+  facet_wrap(~view, scales = "fixed", nrow=2) +
+  # coord_cartesian(xlim=c(-0.21,0.21), ylim=c(0,20)) +
+  scale_x_continuous(breaks = c(-1,0,1), limits = c(-1,1)) +
+  scale_y_continuous(breaks = c(0,0.5,1)) +
+  # scale_fill_manual(values=c("#d73027","#fdae61")) +
+  # scale_fill_brewer(palette = "YlOrRd", direction=1) +
+  labs(x="Loading", y="Density") +
+  geom_vline(xintercept=0, linetype="dashed") +
+  theme_classic() +
+  theme(
+      axis.text = element_text(size=rel(1.1), color="black"),
+      axis.title = element_text(size=rel(1.3), color="black"),
+      strip.background = element_blank(),
+      strip.text = element_text(size=rel(1.3), color="black"),
+  )
+
+# pdf(paste0(io$pdfdir2,"/Factor_loadings_met_joint.pdf"), width=4, height=5.1, useDingbats = F)
+print(p)
+# dev.off()
+```
+
+
+
+
+
+Chromatin accessibility: joint plot of promoters and enhancers
+
+```{r}
+loadings.dt <- get_weights(
+  model, 
+  views = grep("accessibility",views(model)),
+  factors = factor, 
+  as.data.frame = T
+) %>% as.data.table
+
+loadings.dt[,value:=value/max(abs(value))] %>%
+  setorder(value) %>% .[,feature:=factor(feature,levels=feature)]
+```
+
+```{r}
+p <- ggplot(loadings.dt, aes(x = value)) +
+  geom_density(aes(y=..scaled..), alpha=0.85, fill="#2b8cbe") + 
+  facet_wrap(~view, scales = "fixed", nrow=2) +
+  # coord_cartesian(xlim=c(-0.35,0.35), ylim=c(0,17)) +
+  scale_x_continuous(breaks = c(-1,0,1), limits = c(-1,1)) +
+  scale_y_continuous(breaks = c(0,0.5,1)) +
+  # scale_fill_manual(values=c("#4575b4","#e0f3f8")) +
+  # scale_fill_brewer(palette = "GnBu", direction=1) +
+  labs(x="Loading", y="Density") +
+  geom_vline(xintercept=0, linetype="dashed") +
+  theme_classic() +
+  theme(
+      axis.text = element_text(size=rel(1.1), color="black"),
+      axis.title = element_text(size=rel(1.3), color="black"),
+      strip.background = element_blank(),
+      strip.text = element_text(size=rel(1.3), color="black"),
+  )
+fa
+# pdf(paste0(io$pdfdir2,"/Factor_loadings_acc_joint.pdf"), width=4, height=5.1, useDingbats = F)
+print(p)
+# dev.off()
+```
+
+
+
+

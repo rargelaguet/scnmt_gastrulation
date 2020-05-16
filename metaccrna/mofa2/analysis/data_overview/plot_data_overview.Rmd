@@ -1,0 +1,47 @@
+
+<!-- Plot dimensionalities per group and view -->
+
+```{r}
+colors <- c(
+  "RNA expression" = "#3CB54E",
+  "Enhancer accessibility" = "#00BFC4",
+  "Promoter accessibility" = "#00BFC4",
+  "Enhancer methylation" = "#F37A71",
+  "Promoter methylation" = "#F37A71"
+)
+colors = colors[views(model)]
+```
+
+```{r}
+p <- plot_data_overview(model, colors = colors)
+# p <- plot_data_overview(model)
+
+pdf(sprintf("%s/data_overview.pdf",io$pdfdir), height=10, width=7)
+print(p)
+dev.off()
+```
+
+
+<!-- Plot fraction of missing values per cell and view -->
+```{r}
+foo <- get_data(model, as.data.frame = T, add_intercept = F, na.rm=F) %>% as.data.table
+to.plot <- foo[,mean(is.na(value)),by=c("view","group","sample")]
+
+p <- ggplot(to.plot, aes(x=sample, y=view, fill=V1)) +
+  geom_tile() + 
+  scale_fill_gradient(low = "black", high = 'white') +
+  facet_wrap(~group, scales="free_x", ncol=1) +
+  labs(x="Cells", y="") +
+  theme(
+    axis.text.x = element_blank(),
+    strip.background = element_blank(),
+    axis.ticks = element_blank(),
+    axis.line = element_line(color="black"),
+    legend.title = element_blank()
+  )
+
+pdf(sprintf("%s/data_overview_NAs.pdf",io$pdfdir), height=10, width=7)
+print(p)
+dev.off()
+```
+
