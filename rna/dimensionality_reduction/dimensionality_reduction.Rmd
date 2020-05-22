@@ -7,89 +7,61 @@ output:
 ---
   
 ```{r load_modules, echo=FALSE, include=FALSE}
-library(data.table)
-library(purrr)
 library(scater)
-library(ggplot2)
 library(RColorBrewer)
 library(umap)
 ```
 
 <!-- Define I/O -->
 ```{r define_io, echo=FALSE}
-io <- list()
-io$basedir <- "/Users/ricard/data/gastrulation"
-io$sample_metadata <- paste0(io$basedir,"/sample_metadata.txt")
-io$rna <- paste0(io$basedir,"/rna/SingleCellExperiment.rds")
+source("/Users/ricard/scnmt_gastrulation/settings.R")
 io$outdir <- paste0(io$basedir,"/rna/dimensionality_reduction")
 ```
 
 <!-- Define options -->
 ```{r}
-opts <- list()
-
 # Define which cells to use
 opts$stage_lineage <- c(
-  
-  # # E4.5
-  "E4.5_Epiblast",
-  
-  # E5.5
-  "E5.5_Epiblast",
-
-  # 6.5
-  "E6.5_Epiblast",
-  "E6.5_Primitive_Streak",
-  "E6.5_Mesoderm",
-
-  # E7.5
+  # "E4.5_Epiblast",
+  # "E5.5_Epiblast",
+  # "E6.5_Epiblast",
+  # "E6.5_Primitive_Streak",
+  # "E6.5_Mesoderm",
   "E7.5_Epiblast",
-  "E7.5_Primitive_Streak",
-  "E7.5_Ectoderm",
-  "E7.5_Endoderm",
-  "E7.5_Mesoderm"
+  # "E7.5_Primitive_Streak",
+  "E7.5_Ectoderm"
+  # "E7.5_Endoderm",
+  # "E7.5_Mesoderm"
 )
 
 # Stage-specific colors for RNA
-opts$colors <- c(
+opts$stage.colors <- c(
   E4.5="#B2E2E2", 
   E5.5="#66C2A4", 
   E6.5="#2CA25F", 
   E7.5="#006D2C"
 )
-
-# Define which cells to use
-tmp <- fread(io$sample_metadata) %>% .[pass_rnaQC==T]
-if (opts$stage_lineage[1] == "all") {
-  opts$cells <- tmp[,id_rna]
-} else {
-  opts$cells <- tmp %>%
-    .[,stage_lineage:=as.factor(paste(stage,lineage10x_2,sep="_"))] %>%
-    .[stage_lineage%in%opts$stage_lineage,id_rna]
-}
 ```
 
-<!-- Load sample metadata -->
-```{r load_metadata, echo=FALSE}
-sample_metadata <- fread(io$sample_metadata) %>% 
-  .[id_rna %in% opts$cells] %>% 
-  .[,c("id_rna","stage","lineage10x","lineage10x_2")] %>%
-  .[,stage_lineage:=paste(stage,lineage10x,sep="_")]
+Update sample metadata
+```{r}
+sample_metadata <- sample_metadata %>% 
+  .[pass_rnaQC==T & stage_lineage%in%opts$stage_lineage] %>%
+  .[,c("id_rna","stage","lineage10x","lineage10x_2","stage_lineage")]
 ```
 
-<!-- Load RNA expression data --> 
+Load RNA expression data
 ```{r load_data, echo=FALSE}
-sce <- readRDS(io$rna)[,opts$cells]
-stopifnot(colnames(sce)==sample_metadata$id_rna)
+sce <- readRDS(io$rna)[,sample_metadata$id_rna]
 ```
 
-<!-- Parse RNA expression data -->
+Parse RNA expression data
 ```{r}
 sce$stage_lineage <- sample_metadata$stage_lineage
 sce$lineage <- sample_metadata$lineage10x_2
 ```
 
-<!-- Select HVG -->
+Select HVG
 ```{r}
 trend = scran::trendVar(sce, use.spikes = FALSE, loess.args = list(span = 0.05))
 decomp = scran::decomposeVar(sce, fit = trend)
@@ -100,7 +72,7 @@ genes <- rownames(decomp)[decomp$p.value < 0.05]
 sce_filt <- sce[genes,]
 ```
 
-<!-- Regress out covariates -->
+Regress out covariates
 ```{r}
 data <- scale(t(logcounts(sce_filt)), center = T, scale = F)
 # data_regressed <- apply(data, 2, function(x) {
@@ -109,31 +81,39 @@ data <- scale(t(logcounts(sce_filt)), center = T, scale = F)
 # })
 ```
 
-<!-- Run PCA -->
+Run PCA
 ```{r}
-sce_filt@reducedDims$PCA <- irlba::prcomp_irlba(data, n = 10)$x
+reducedDim(sce_filt, "PCA") <- irlba::prcomp_irlba(data, n = 10)$x
 ```
 
-<!-- Remove first PC as it usually corresponds to the number of expressed genes -->
+Plot PCA
 ```{r}
-sce_filt@reducedDims$PCA <- sce_filt@reducedDims$PCA[,2:ncol(sce_filt@reducedDims$PCA)]
-# sce_filt@reducedDims$PCA <- sce_filt@reducedDims$PCA
+plotPCA(sce_filt, colour_by="lineage", ncomponents = c(3,4)) +
+  scale_fill_manual(values=opts$celltype.colors)
 ```
 
-<!-- Run UMAP -->
+Remove first PC as it usually corresponds to the number of expressed genes
+```{r}
+# sce_filt@reducedDims$PCA <- sce_filt@reducedDims$PCA[,2:ncol(sce_filt@reducedDims$PCA)]
+```
+
+Run UMAP
 ```{r}
 set.seed(42)
-sce_filt <- runUMAP(sce_filt, use_dimred="PCA", n_neighbors=20, min_dist=0.7)
+sce_filt <- runUMAP(sce_filt, dimred="PCA", n_neighbors = 35, min_dist = 0.45)
+reducedDim(sce, "UMAP") <- reducedDim(sce_filt, "UMAP") 
 ```
 
-<!-- Plot UMAP -->
+Plot UMAP
 ```{r}
-to.plot <- sce_filt@reducedDims$UMAP %>% as.data.table %>% .[,id_rna:=colnames(sce_filt)] %>%
-    merge(sample_metadata[,c("id_rna","stage")],by="id_rna")
+to.plot <- reducedDim(sce_filt,"UMAP") %>% as.data.table %>% 
+  .[,id_rna:=colnames(sce_filt)] %>%
+    merge(sample_metadata, by="id_rna")
 
-p <- ggplot(to.plot, aes(x=V1,y=V2)) +
-  geom_point(aes(color=stage), alpha=0.9, size=1.0) +
-  scale_color_manual(values=opts$colors) +
+p <- ggplot(to.plot, aes(x=V1, y=V2, fill=lineage10x_2)) +
+  geom_point(size=2, shape=21) +
+  # scale_color_manual(values=opts$stage.colors) +
+  scale_fill_manual(values=opts$celltype.colors) +
   theme_classic() +
   theme(
     axis.title = element_blank(),

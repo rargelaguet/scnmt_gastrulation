@@ -60,19 +60,20 @@ opts <- list()
 #   "E7.5_Mesoderm"
 # )
 
-opts$colors_lineages <- c(
+opts$celltype.colors <- c(
   "Epiblast"="grey70",
   "Mesoderm"="#CD3278",
   "Primitive_Streak"="sandybrown",
   "Endoderm"="#43CD80",
   "Ectoderm"="steelblue",
-  "Epiblast/Ectoderm"="steelblue"
+  "Epiblast/Ectoderm"="steelblue",
+  "Visceral_endoderm"="darkgreen"
 )
 
-opts$colors_stages <- c(
-  "E6.5"="grey70",
-  "E7.5"="#CD3278"
-)
+# opts$colors_stages <- c(
+#   "E6.5"="grey70",
+#   "E7.5"="#CD3278"
+# )
 
 ##########################
 ## Load sample metadata ##
