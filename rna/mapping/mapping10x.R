@@ -26,16 +26,16 @@ if (grepl("ricard",Sys.info()['nodename'])) {
 
 opts <- list()
 opts$atlas_stages <- c(
-  "E6.5"
-  # "E6.75",
-  # "E7.0",
-  # "E7.25",
-  # "E7.5",
-  # "E7.75",
-  # "E8.0",
-  # "E8.25",
-  # "E8.5",
-  # "mixed_gastrulation"
+  "E6.5",
+  "E6.75",
+  "E7.0",
+  "E7.25",
+  "E7.5",
+  "E7.75",
+  "E8.0",
+  "E8.25",
+  "E8.5",
+  "mixed_gastrulation"
 )
 
 

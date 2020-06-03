@@ -6,17 +6,12 @@ scale <- function(value, min.data, max.data, min.scaled, max.scaled) {
   return ((max.scaled - min.scaled) * (value - min.data) / (max.data - min.data)) + min.scaled
 }
 
-load_data <- function(io, rna.id, met.id, met.anno, acc.id, acc.anno, min.cpg=1, min.gpc=1) {
+load_data <- function(io, rna.id, met.id, met.anno, min.cpg=1) {
   
   # Load DNA methylation data
   met_dt <- fread(sprintf("%s/%s.tsv.gz",io$met_data_parsed,met.anno)) %>%
     setnames(c("id_met","id","anno","Nmet","N","value")) %>%
     .[id%in%met.id] %>% .[N>=min.cpg]
-  
-  # Load DNA accessibility data
-  acc_dt <- fread(sprintf("%s/%s.tsv.gz",io$acc_data_parsed,acc.anno)) %>%
-    setnames(c("id_acc","id","anno","Nmet","N","value")) %>%
-    .[id%in%acc.id] %>% .[N>=min.gpc]
   
   # Load RNA data
   sce <- readRDS(io$rna)
@@ -24,9 +19,7 @@ load_data <- function(io, rna.id, met.id, met.anno, acc.id, acc.anno, min.cpg=1,
   rna_dt <- logcounts(sce) %>% t %>% as.data.table(keep.rownames = "id_rna") %>% 
     melt(id.vars = "id_rna", value.name = "value", variable.name = "id")
   rna_dt$id <- rna.id
-    # melt(id.vars = "id_rna", value.name = "value", variable.name = "ens_id") %>%
-    # merge(rowData(sce) %>% as.data.frame(row.names = rownames(sce)) %>% tibble::rownames_to_column("ens_id") %>% .[,c("symbol","ens_id")] %>% setnames("symbol","id"))
   
   
-  return(list("met"=met_dt, "acc"=acc_dt, "rna"=rna_dt))
+  return(list("met"=met_dt, "rna"=rna_dt))
 }

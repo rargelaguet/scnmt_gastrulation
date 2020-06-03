@@ -1,0 +1,97 @@
+---
+title: "Gastrulation scNMT-seq: correlation per gene (across cells) between RNA expression and DNA methylation"
+---
+
+Load libraries
+```{r echo=FALSE, include=FALSE}
+suppressPackageStartupMessages(library(SingleCellExperiment))
+```
+
+Define I/O
+```{r echo=FALSE, include=FALSE}
+source("/Users/ricard/scnmt_gastrulation/settings.R")
+io$outdir <- paste0(io$basedir,"/metrna/cor")
+```
+
+Define options
+```{r echo=TRUE, include=FALSE}
+
+# Filtering parameters
+opts$min.CpGs <- 1      # Minimum number of CpGs per feature
+opts$min.cells <- 50    # Minimum number of observed cells per feature with at least opts$min.CpGs
+opts$max.genes <- 5000  # Top N most variable genes and features
+
+# Multiple testing correction options
+opts$threshold_fdr  <- 0.1
+
+# Define genomic contexts
+opts$annos <- c(
+  "prom_2000_2000"="Promoters"
+)
+
+# Define stage and lineages
+opts$stage_lineage <- c(
+  "E4.5_Epiblast",
+  "E5.5_Epiblast",
+  "E6.5_Epiblast",
+  "E6.5_Primitive_Streak",
+  "E7.5_Ectoderm",
+  "E7.5_Primitive_Streak",
+  "E7.5_Endoderm",
+  "E7.5_Mesoderm"
+)
+```
+
+Update sample metadata
+```{r}
+sample_metadata <- sample_metadata %>% 
+  .[pass_metQC==T & pass_rnaQC==T & stage_lineage%in%opts$stage_lineage] %>%
+  .[,c("sample","id_rna","id_met","stage_lineage")] 
+```
+
+Load RNA data
+```{r load_rna, echo=FALSE, include=FALSE}
+
+# Load SingleCellExperiment object
+sce <- readRDS(io$rna)[,sample_metadata$id_rna]
+
+# Create data.table
+rna_dt <- exprs(sce) %>% t %>% as.data.table(keep.rownames="id_rna") %>% 
+  melt(id.vars="id_rna", value.name="expr", variable.name="id") %>%
+  merge(sample_metadata[,c("sample","id_rna")])
+```
+
+Load methylation data
+```{r load_met, echo=FALSE, include=FALSE}
+met_dt <- lapply(names(opts$annos), function(n) {
+  fread(sprintf("%s/%s.tsv.gz",io$met_data_parsed,n)) %>% .[V1%in%sample_metadata$id_met]
+}) %>% rbindlist %>% setnames(c("sample","id","anno","Nmet","N","rate"))
+
+# Filter by mininum number of CpGs per feature
+met_dt <- met_dt[N>=opts$min.CpGs]
+
+# Filter by coverage
+met_dt <- met_dt %>% .[,N:=.N, by=c("id","anno")] %>% .[N>=opts$min.cells] %>% .[,N:=NULL]
+```
+
+Merge DNA methylation and RNA expression data
+```{r}
+metrna_dt <- merge(met_dt, rna_dt, by=c("sample","id"))
+```
+
+Compute correlations and do multiple testing correction
+```{r}
+cor <- metrna_dt[, .(V1 = unlist(cor.test(rate, expr)[c("estimate", "statistic", "p.value")])), by = c("id","anno")] %>%
+  .[, para := rep(c("r","t","p"), .N/3)] %>% data.table::dcast(id+anno ~ para, value.var = "V1") %>%
+  .[, c("padj_fdr", "padj_bonf") := list(p.adjust(p, method="fdr"), p.adjust(p, method="bonferroni")), by="anno"] %>%
+  .[, c("log_padj_fdr","log_padj_bonf") := list(-log10(padj_fdr), -log10(padj_bonf))] %>%
+  .[, sig := padj_fdr <= opts$threshold_fdr] %>%  setorder(padj_fdr)
+
+cor[,sum(sig,na.rm=T),by="anno"]
+```
+
+Save results
+```{r}
+fwrite(cor, paste0(io$outdir,"/metrna_cor_promoters_v2.txt.gz"), quote=F, sep="\t")
+```
+

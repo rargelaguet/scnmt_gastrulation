@@ -1,0 +1,131 @@
+---
+title: "Parameter distribution"
+---
+
+```{r}
+suppressPackageStartupMessages(library(ggpubr))
+```
+
+```{r}
+if (grepl("ricard",Sys.info()['nodename'])) {
+  source("/Users/ricard/scnmt_gastrulation/settings.R")
+  io$indir <- paste0(io$scmet,"/betabinomial/bayes/txt")
+  io$outdir <- paste0(io$scmet,"/betabinomial/bayes/pdf")
+} else {
+  stop("Computer not recognised")
+}
+
+## Options ##
+
+# Define genomic contexts
+opts$anno <- c(
+  # "H3K27ac_distal_E7.5_union_intersect12_500",
+  # "H3K27ac_distal_E7.5_union_intersect12",
+  "prom_2000_2000",
+  # "H3K4me3_E7.5_union"
+  # "H3K27ac_distal_E7.5_Mes_intersect12_500",
+  "H3K27ac_distal_E7.5_Mes_intersect12",
+  # "H3K27ac_distal_E7.5_End_intersect12_500",
+  "H3K27ac_distal_E7.5_End_intersect12",
+  # "H3K27ac_distal_E7.5_Ect_intersect12_500",
+  "H3K27ac_distal_E7.5_Ect_intersect12"
+)
+```
+
+Load pre-computed results
+```{r}
+dt <- opts$anno %>%
+  map(~ fread(sprintf("%s/allcells_%s_vb.txt.gz",io$indir,.))) %>%
+  rbindlist %>%
+  na.omit()
+```
+
+
+Plot mean-dispersion trend
+```{r}
+# Gamma vs mu
+ggscatter(dt, x = "mu_median", y = "gamma_median", size=0.25, facet="anno")
+# add="loess", add.params = list(color="blue", fill="lightgray"), conf.int=TRUE)
+
+# Epsilon vs mu
+ggscatter(dt, x = "mu_median", y = "epsilon_median", size=0.25, facet="anno",
+          add = "reg.line", add.params = list(color="blue", fill="lightgray"), conf.int=TRUE)
+
+# Epsilon vs gamma
+ggscatter(dt, x = "gamma_median", y="epsilon_median", size=0.25, facet="anno",
+          add="reg.line", add.params = list(color="blue", fill="lightgray"), conf.int=TRUE)
+```
+
+Plot distributions
+```{r}
+ggdensity(dt, x="mu_median", y="..density..", fill="anno") +
+  labs(x="Mu", y="Density") +
+  theme(legend.position = "right")
+
+ggdensity(dt, x="gamma_median", y="..density..", fill="anno") +
+  labs(x="Gamma", y="Density") +
+  theme(legend.position = "right")
+
+ggdensity(dt, x="epsilon_median", y="..density..", fill="anno") +
+  labs(x="Epsilon", y="Density") +
+  theme(legend.position = "right")
+```
+
+
+Promoters gastrulation vs ecker
+
+```{r}
+ecker.prom <- fread("/Users/ricard/data/Ecker_2017/mouse/variability/betabinomial/bayes/txt/prom_2000_2000_vb.txt.gz") %>%
+  .[,c("mu_median","gamma_median","gauss_var","anno")] %>%
+  .[,dataset:="Mouse frontal cortex"]
+
+gastrulation.prom <- dt[anno=="prom_2000_2000"] %>%
+  .[,c("mu_median","gamma_median","gauss_var","anno")] %>%
+  .[,dataset:="Mouse embryonic development"]
+
+to.plot <- rbind(ecker.prom, gastrulation.prom) %>%
+  .[,binomial_var:=mu_median*(1-mu_median)] %>%
+  setnames(c("gamma_median","gauss_var","binomial_var"),c("scMET","Gaussian","Binomial")) %>%
+  .[,mu_median:=NULL] %>%
+  melt(id.vars=c("anno","dataset"), variable.name="model")
+```
+
+```{r}
+# to.plot[model=="Gaussian" & dataset=="Mouse embryonic development",value:=value-0.005]
+```
+
+```{r}
+p <- gghistogram(to.plot, x="value", y="..density..", fill="dataset", palette="Dark2", bins=50) +
+  facet_wrap(~model, scales="free") +
+  labs(x="DNA methylation heterogeneity", y="Density") +
+  # coord_cartesian(xlim=c(0,0.22)) +
+  theme(
+    legend.position = "top",
+    legend.title = element_blank(),
+    axis.title = element_text(colour="black", size=rel(0.8)),
+    axis.text = element_text(colour="black", size=rel(0.8)),
+    legend.background = element_blank()
+  )
+
+# pdf(paste0(io$outdir,"/ecker_vs_gastrulation_overdispersion.pdf"), width=8, height=5, useDingbats = F)
+print(p)
+# dev.off()
+```
+
+```{r}
+p <- gghistogram(to.plot, x="gamma_median", y="..density..", fill="dataset", palette="Dark2", bins=50) +
+  labs(x="DNA methylation overdispersion", y="Density") +
+  coord_cartesian(xlim=c(0,0.61)) +
+  theme(
+    legend.position = "top",
+    legend.title = element_blank(),
+    axis.title = element_text(colour="black", size=rel(1)),
+    axis.text = element_text(colour="black", size=rel(0.9))
+  )
+
+# pdf(paste0(io$outdir,"/ecker_vs_gastrulation_overdispersion.pdf"), width=8, height=5, useDingbats = F)
+print(p)
+# dev.off()
+```
+
+

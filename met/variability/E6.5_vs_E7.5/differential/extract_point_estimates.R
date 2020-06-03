@@ -28,7 +28,7 @@ if (!dir.exists(io$pdf.dir)) { dir.create(io$pdf.dir, showWarnings = FALSE) }
 opts$anno <- c(
   # "H3K27ac_distal_E7.5_union_intersect12_500",
   # "H3K27ac_distal_E7.5_union_intersect12",
-  # "prom_2000_2000",
+  # "prom_2000_2000"
   # "H3K4me3_E7.5_union"
   "H3K27ac_distal_E7.5_Mes_intersect12_500",
   "H3K27ac_distal_E7.5_Mes_intersect12",
@@ -39,12 +39,14 @@ opts$anno <- c(
 )
 
 # Define groups
-opts$groups <- c("E6.5", "E7.5")
+opts$groups <- c("E6.5_Epiblast", "E7.5_Mesoderm")
 
 
 #######################################################
 ## Load fitted objects and run differential analysis ##
 #######################################################
+
+io$dir.bayes <- "/Users/ricard/data/betabinomial/argelaguet2019/met/variability/betabinomial/bayes"
 
 dt_bayes <- diff_analysis <- list()
 for (i in opts$anno) {
@@ -77,7 +79,8 @@ for (i in opts$anno) {
     .[, efnr := diff_analysis[[i]]$diff_mean_thresh$efnr] %>%
     .[,anno := i]  %>%
     setorder(-mean_diff_tail_prob)
-  fwrite(diff_mu, sprintf("%s/%s_mu.txt.gz",io$out.dir,i), sep="\t")
+  # fwrite(diff_mu, sprintf("%s/%s_mu.txt.gz",io$out.dir,i), sep="\t")
+  fwrite(diff_mu, sprintf("%s/%s_%s_%s_mu.txt.gz",io$out.dir,i,opts$groups[1],opts$groups[2]), sep="\t")
   
   # Save differential dispersion (gamma)
   diff_gamma <- diff_analysis[[i]]$disp_summary %>% as.data.table %>% 
@@ -87,7 +90,8 @@ for (i in opts$anno) {
     .[, efnr := diff_analysis[[i]]$diff_disp_thresh$efnr] %>%
     .[,anno := i] %>%
     setorder(-disp_diff_tail_prob)
-  fwrite(diff_gamma, sprintf("%s/%s_gamma.txt.gz",io$out.dir,i), sep="\t")
+  # fwrite(diff_gamma, sprintf("%s/%s_gamma.txt.gz",io$out.dir,i), sep="\t")
+  fwrite(diff_gamma, sprintf("%s/%s_%s_%s_gamma.txt.gz",io$out.dir,i,opts$groups[1],opts$groups[2]), sep="\t")
   
   # Save differential residual dispersion (epsilon)
   diff_epsilon <- diff_analysis[[i]]$res_disp_summary %>% as.data.table %>% 
@@ -97,18 +101,6 @@ for (i in opts$anno) {
     .[, efnr := diff_analysis[[i]]$diff_res_disp_thresh$efnr] %>%
     .[,anno := i] %>%
     setorder(-res_disp_diff_tail_prob)
-  fwrite(diff_epsilon, sprintf("%s/%s_epsilon.txt.gz",io$out.dir,i), sep="\t")
-  
-  # Save differential estimates using a simple gaussian model 
-  # TO DO: CHECK THAT EXCITATORY IS GROUP A
-  # diff_gaussian <- names(dt_bayes[[i]]) %>% 
-  #   map(function(j) dt_bayes[[i]][[j]][["Y"]] %>% 
-  #       .[,rate:=met_reads/total_reads] %>% 
-  #       .[,.(mean=sum(met_reads)/sum(total_reads), var=var(rate)), by="Feature"] %>%
-  #       .[,c("anno","group"):=list(i,j)]
-  # ) %>% rbindlist %>% setnames("Feature","id") %>%
-  #   .[group=="Excitatory",group:="A"] %>% .[group=="Inhibitory",group:="B"] %>%
-  #   data.table::dcast(id+anno~group, value.var=c("mean","var"))
-  #         
-  # fwrite(diff_gaussian, sprintf("%s/%s_gaussian.txt.gz",io$out.dir,i))
+  # fwrite(diff_epsilon, sprintf("%s/%s_epsilon.txt.gz",io$out.dir,i), sep="\t")
+  fwrite(diff_epsilon, sprintf("%s/%s_%s_%s_epsilon.txt.gz",io$out.dir,i,opts$groups[1],opts$groups[2]), sep="\t")
 }

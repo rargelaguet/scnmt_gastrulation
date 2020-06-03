@@ -1,0 +1,119 @@
+---
+title: ""
+---
+
+```{r}
+suppressPackageStartupMessages(library(ggpubr))
+```
+
+# Define settings
+
+I/O
+```{r}
+if (grepl("ricard",Sys.info()['nodename'])) {
+  source("/Users/ricard/scnmt_gastrulation/settings.R")
+  io$dir.lib <- "/Users/ricard/bbreg/lib/"
+} else {
+  stop("Computer not recognised")
+}
+
+R.utils::sourceDirectory(io$dir.lib, modifiedOnly = FALSE)
+
+io$dir.bayes <- paste0(io$scmet,"/betabinomial/bayes/stan")
+io$out.dir <- paste0(io$scmet,"/betabinomial/bayes/pdf")
+```
+
+
+Options
+```{r}
+opts$anno <- c(
+  # "H3K27ac_distal_E7.5_union_intersect12_500",
+  # "H3K27ac_distal_E7.5_union_intersect12",
+  "prom_2000_2000"
+  # "H3K27ac_distal_E7.5_Mes_intersect12_500",
+  # "H3K27ac_distal_E7.5_Mes_intersect12",
+  # "H3K27ac_distal_E7.5_End_intersect12_500",
+  # "H3K27ac_distal_E7.5_End_intersect12",
+  # "H3K27ac_distal_E7.5_Ect_intersect12_500",
+  # "H3K27ac_distal_E7.5_Ect_intersect12"
+)
+
+opts$mode <- "resid"
+```
+
+# Load data
+
+<!-- Load pre-computed results -->
+<!-- ```{r} -->
+<!-- dt <- opts$anno %>% -->
+<!--   map(~ fread(sprintf("%s/allcells_%s_vb.txt.gz",io$indir,.))) %>% -->
+<!--   rbindlist  -->
+<!-- ``` -->
+
+# HVF analysis
+```{r, message=FALSE}
+hvf_res <- list()
+for (i in 1:length(opts$anno)) {
+  stan <- readRDS(sprintf("%s/allcells_%s_vb.rds", io$dir.bayes, opts$anno[i]))
+  if (opts$mode == "resid") {
+    hvf_res[[opts$anno[i]]] <- detect_hvf(stan, delta_e = 0.9, delta_g = NULL, efdr = 0.1)
+  } else {
+    hvf_res[[opts$anno[i]]] <- detect_hvf(stan, delta_e = NULL, delta_g = 0.5, efdr = 0.1)
+  }
+}
+rm(stan)
+```
+
+# Plot 
+
+## Mean methylation rate vs overdispersion
+
+```{r, fig.width=7, fig.height=2.1}
+p <- opts$anno %>% 
+  map(~ hvf_lvf_mu_disp_plot(task = "HVF", summary = hvf_res[[.]]$summary, var_id = "gamma", main = .) + 
+        theme( legend.position = "none" )) %>% 
+  cowplot::plot_grid(plotlist = .)
+
+# pdf(paste0(io$pdf.dir, "mu_vs_gamma_", opts$mode, ".pdf"), width = 12, height = 4, useDingbats = FALSE)
+print(p)
+# dev.off()
+```
+
+
+
+## Mean methylation rate vs residual overdisperion
+```{r, fig.width=7, fig.height=2.1}
+p <- opts$anno %>% 
+  map(~ hvf_lvf_mu_disp_plot(task = "HVF", summary = hvf_res[[.]]$summary, var_id = "epsilon", main = .) + 
+        theme( legend.position = "none" )) %>% 
+  cowplot::plot_grid(plotlist = .)
+
+# pdf(paste0(io$pdf.dir, "mu_vs_epsilon_", opts$mode, ".pdf"), width = 12, height = 4, useDingbats = FALSE)
+print(p)
+# dev.off()
+```
+
+```{r}
+gene_metadata <- fread(io$gene.metadata) %>% 
+  .[,c("ens_id","symbol")]
+```
+
+```{r}
+foo <- hvf_res$prom_2000_2000$summary %>% as.data.table %>%
+  setnames("feature_name","ens_id") %>%
+  merge(gene_metadata, by="ens_id") %>%
+  setorder(-prob,-epsilon)
+
+hits <- c(
+  "ENSMUSG00000024406",
+  "ENSMUSG00000039329",
+  "ENSMUSG00000072419",
+  "ENSMUSG00000058550",
+  "ENSMUSG00000022652",
+  "ENSMUSG00000056300",
+  "ENSMUSG00000060461"
+)
+
+foo[ens_id%in%hits]
+```
+

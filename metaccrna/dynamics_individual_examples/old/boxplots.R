@@ -1,23 +1,11 @@
-library(ggplot2)
-library(RColorBrewer)
-library(data.table)
-library(purrr)
-
-source("/Users/ricard/gastrulation/metaccrna/dynamics_individual_examples/load_data.R")
-
-scale <- function(value, min.data, max.data, min.scaled, max.scaled) {
-  stopifnot(is.numeric(value))
-  stopifnot(value<=max.data & value>=min.data)
-  return ((max.scaled - min.scaled) * (value - min.data) / (max.data - min.data)) + min.scaled
-}
+source("/Users/ricard/scnmt_gastrulation/settings.R")
+source("/Users/ricard/scnmt_gastrulation/metaccrna/dynamics_individual_examples/load_data.R")
 
 ################
 ## Define I/O ##
 ################
 
-io <- list()
-io$outdir <- "/Users/ricard/data/gastrulation/metaccrna/plot_dynamics_individual_examples"
-io$sample.metadata <- "/Users/ricard/data/gastrulation/sample_metadata.txt"
+io$outdir <- paste0(io$basedir,"/metaccrna/plot_dynamics_individual_examples")
 
 ####################
 ## Define options ##
@@ -35,19 +23,11 @@ acc.anno <- "prom_2000_2000"
 
 # Define stages to plot
 opts$stage_lineage <- c(
-  
-  # # # E4.5
-  # "E4.5_Epiblast",
-  # 
-  # # E5.5
-  # "E5.5_Epiblast",
-  # 
-  # # E6.5
-  # "E6.5_Epiblast",
-  # "E6.5_Primitive_Streak",
-  # "E6.5_Mesoderm",
-  
-  # E7.5
+  "E4.5_Epiblast",
+  "E5.5_Epiblast",
+  "E6.5_Epiblast",
+  "E6.5_Primitive_Streak",
+  "E6.5_Mesoderm",
   "E7.5_Epiblast",
   "E7.5_Ectoderm",
   "E7.5_Endoderm",
@@ -63,31 +43,25 @@ opts$color <- c(
 )
 
 # Define minimum coverage
-opts$min.cpg <- 1
-opts$min.gpc <- 5
+opts$min.cpg <- 3
+opts$min.gpc <- 10
 
 # Define cells to use
-tmp <- fread(io$sample.metadata) %>% 
-  .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")]
-opts$met_cells <- tmp %>% .[pass_metQC==T & stage_lineage%in%opts$stage_lineage,id_met]
-opts$rna_cells <- tmp %>% .[pass_rnaQC==T & stage_lineage%in%opts$stage_lineage,id_rna]
-opts$acc_cells <- tmp %>% .[pass_accQC==T & stage_lineage%in%opts$stage_lineage,id_acc]
+opts$met_cells <- sample_metadata %>% .[pass_metQC==T & stage_lineage%in%opts$stage_lineage,id_met]
+opts$rna_cells <- sample_metadata %>% .[pass_rnaQC==T & stage_lineage%in%opts$stage_lineage,id_rna]
+opts$acc_cells <- sample_metadata %>% .[pass_accQC==T & stage_lineage%in%opts$stage_lineage,id_acc]
 
 ###############
 ## Load data ##
 ###############
 
-# Load sample metadata
-sample_metadata <- fread(io$sample.metadata) %>%
-  .[,c("sample","id_met","id_rna","id_acc","stage","lineage10x","lineage10x_2")] %>%
-  .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")] %>%
+# Update sample metadata
+sample_metadata <- sample_metadata %>%
+  .[,c("sample","id_met","id_rna","id_acc","stage","stage_lineage","lineage10x_2")] %>%
   .[id_met%in%opts$met_cells | id_rna %in% opts$rna_cells | id_acc %in% opts$acc_cells ]
 
-sample_metadata %>%
-  .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")]
-
 # Load the three omics
-dt <- load_data(rna.id, met.id, met.anno, acc.id, acc.anno, opts$min.cpg, opts$min.gpc)
+dt <- load_data(io, rna.id, met.id, met.anno, acc.id, acc.anno, opts$min.cpg, opts$min.gpc)
 
 # Merge data with sample metadata
 dt$acc <- merge(dt$acc, sample_metadata, by="id_acc")
@@ -99,17 +73,14 @@ dt_all <- do.call("rbind",list(
   dt$rna[,c("sample","id","stage","stage_lineage","lineage10x_2","value")] %>% .[,assay:="RNA expression"],
   dt$met[,c("sample","id","stage","stage_lineage","lineage10x_2","value")] %>% .[,assay:="DNA methylation"],
   dt$acc[,c("sample","id","stage","stage_lineage","lineage10x_2","value")] %>% .[,assay:="Chromatin accessibility"]
-))
-
-dt_all[,stage_lineage:=gsub("_"," ",stage_lineage)]
-
-dt_all[,assay:=factor(assay,levels=c("RNA expression","DNA methylation","Chromatin accessibility"))]
+)) %>% .[,stage_lineage:=gsub("_"," ",stage_lineage)] %>% 
+  .[,assay:=factor(assay,levels=c("RNA expression","DNA methylation","Chromatin accessibility"))]
   
 #######################
 ## Generate Boxplots ##
 #######################
 
-p <- ggplot(dt_all, aes(x=lineage10x_2, y=value)) +
+p <- ggplot(dt_all, aes(x=stage, y=value)) +
   facet_wrap(~assay, ncol=1, scales="free_y") +
   geom_jitter(aes(color=assay), size=0.5) +
   geom_violin(aes(fill=assay), alpha=0.5, size=0.25) +
@@ -117,27 +88,18 @@ p <- ggplot(dt_all, aes(x=lineage10x_2, y=value)) +
   scale_fill_manual(values=opts$color) +
   scale_color_manual(values=opts$color) +
   labs(x="", y="", title="") +
+  theme_classic() +
   theme(
     plot.title = element_blank(),
     axis.title.y = element_text(colour="black", size=rel(1.1), vjust=1.5),
-    # axis.text.x = element_text(size=rel(1.2), angle=30, hjust=1, vjust=1, color="black"),
     axis.text.x = element_text(size=rel(1.2), color="black"),
-    # axis.text.x = element_blank(),
-    axis.text.y = element_text(colour="black",size=rel(1.3)),
+    axis.text.y = element_text(colour="black",size=rel(1.0)),
     axis.line = element_line(colour="black", size=rel(0.7)),
     axis.ticks.y = element_line(colour="black"),
     axis.ticks.x = element_blank(),
     strip.background = element_blank(),
-    # strip.text = element_text(size=rel(1.3), color="black"),
     strip.text = element_blank(),
-    panel.background = element_blank(),
-    panel.grid = element_blank(),
-    panel.spacing = unit(0.5, "lines"),
-    legend.position="none",
-    legend.text=element_text(size=15),
-    legend.title=element_blank(),
-    legend.background=element_blank(),
-    panel.border = element_blank()
+    legend.position="none"
   )
 print(p)
 

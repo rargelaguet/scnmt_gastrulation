@@ -195,27 +195,26 @@ mapWrap <- function(atlas_sce, atlas_meta, query_sce, query_meta, k = 30, npcs =
   for (i in seq(from = 1, to = k)) {
     out$closest.cells[[i]]     <- sapply(mapping, function(x) x$cells.mapped[i])
     out$celltypes.mapped[[i]]  <- sapply(mapping, function(x) x$celltypes.mapped[i])
-    # out$cellstages.mapped[[i]] <- sapply(mapping, function(x) x$stages.mapped[i])
+    out$cellstages.mapped[[i]] <- sapply(mapping, function(x) x$stages.mapped[i])
   }  
   multinomial.prob <- getMappingScore(out)
   
   out$correct_atlas <- correct_atlas
   out$correct_map <- correct_map
   ct <- sapply(mapping, function(x) x$celltype.mapped); is.na(ct) <- lengths(ct) == 0
-  # st <- sapply(mapping, function(x) x$stage.mapped); is.na(st) <- lengths(st) == 0
+  st <- sapply(mapping, function(x) x$stage.mapped); is.na(st) <- lengths(st) == 0
   cm <- sapply(mapping, function(x) x$cells.mapped[1]); is.na(cm) <- lengths(cm) == 0
   
   message("Writing output...") 
   out$mapping.dt <- data.table(
       id_rna          = names(mapping), 
       celltype.mapped = unlist(ct),
-      # stage.mapped    = unlist(st),
+      stage.mapped    = unlist(st),
       closest.cell    = unlist(cm),
-      # stage.score = multinomial.prob$cellstage.score,
+      stage.score = multinomial.prob$cellstage.score,
       celltype.score = multinomial.prob$celltype.score
     )
   
-  # out$mapping <- cbind(out$mapping,multinomial.prob)
   out$pca <- big_pca
   
   return(out)

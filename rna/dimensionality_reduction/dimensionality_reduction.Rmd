@@ -43,11 +43,35 @@ opts$stage.colors <- c(
 )
 ```
 
+
 Update sample metadata
+
 ```{r}
+foo <- fread("/Users/ricard/data/gastrulation/rna/results/mapping/mapping.txt.gz") %>%
+  .[,c("id_rna","celltype.mapped","celltype.score")]
+sample_metadata <- sample_metadata %>% 
+  merge(foo,by="id_rna") %>%
+  .[,stage_lineage:=paste(stage,celltype.mapped,sep="_")]
+```
+
+```{r}
+opts$stage_lineage <- c(
+  "E7.5_Rostral_neurectoderm",
+  # "E6.5_Epiblast",
+  "E7.5_Epiblast"
+)
+
 sample_metadata <- sample_metadata %>% 
   .[pass_rnaQC==T & stage_lineage%in%opts$stage_lineage] %>%
-  .[,c("id_rna","stage","lineage10x","lineage10x_2","stage_lineage")]
+  .[,c("id_rna","stage","lineage10x","celltype.mapped","stage_lineage")]
+table(sample_metadata$lineage10x)
+table(sample_metadata$celltype.mapped)
+```
+
+```{r}
+# sample_metadata <- sample_metadata %>% 
+#   .[pass_rnaQC==T & stage_lineage%in%opts$stage_lineage] %>%
+#   .[,c("id_rna","stage","lineage10x","lineage10x_2","stage_lineage")]
 ```
 
 Load RNA expression data
@@ -59,17 +83,19 @@ Parse RNA expression data
 ```{r}
 sce$stage_lineage <- sample_metadata$stage_lineage
 sce$lineage <- sample_metadata$lineage10x_2
+
+sce$celltype.1 <- sample_metadata$lineage10x
+sce$celltype.2 <- sample_metadata$celltype.mapped
 ```
 
 Select HVG
 ```{r}
-trend = scran::trendVar(sce, use.spikes = FALSE, loess.args = list(span = 0.05))
-decomp = scran::decomposeVar(sce, fit = trend)
-decomp = decomp[decomp$mean > 1,]
-decomp$FDR = p.adjust(decomp$p.value, method = "fdr")
-genes <- rownames(decomp)[decomp$p.value < 0.05]
+decomp <- modelGeneVar(sce)
+decomp <- decomp[decomp$mean > 0.01,]
+hvgs <- rownames(decomp)[decomp$p.value <= 0.01]
 
-sce_filt <- sce[genes,]
+# Subset SingleCellExperiment
+sce_filt <- sce[hvgs,]
 ```
 
 Regress out covariates
@@ -83,18 +109,20 @@ data <- scale(t(logcounts(sce_filt)), center = T, scale = F)
 
 Run PCA
 ```{r}
-reducedDim(sce_filt, "PCA") <- irlba::prcomp_irlba(data, n = 10)$x
+npcs <- 15
+reducedDim(sce_filt, "PCA") <- irlba::prcomp_irlba(data, n=npcs)$x[,2:npcs]
 ```
+
+```{r}
+cor(colMeans(counts(sce_filt)>0), reducedDim(sce_filt,"PCA"))
+```
+
 
 Plot PCA
 ```{r}
-plotPCA(sce_filt, colour_by="lineage", ncomponents = c(3,4)) +
-  scale_fill_manual(values=opts$celltype.colors)
-```
-
-Remove first PC as it usually corresponds to the number of expressed genes
-```{r}
-# sce_filt@reducedDims$PCA <- sce_filt@reducedDims$PCA[,2:ncol(sce_filt@reducedDims$PCA)]
+plotPCA(sce_filt, colour_by="celltype.1", ncomponents = c(3,4))# +
+plotPCA(sce_filt, colour_by="celltype.2", ncomponents = c(3,4))# +
+  # scale_fill_manual(values=opts$celltype.colors)
 ```
 
 Run UMAP
@@ -110,10 +138,10 @@ to.plot <- reducedDim(sce_filt,"UMAP") %>% as.data.table %>%
   .[,id_rna:=colnames(sce_filt)] %>%
     merge(sample_metadata, by="id_rna")
 
-p <- ggplot(to.plot, aes(x=V1, y=V2, fill=lineage10x_2)) +
+p <- ggplot(to.plot, aes(x=V1, y=V2, fill=stage_lineage)) +
   geom_point(size=2, shape=21) +
   # scale_color_manual(values=opts$stage.colors) +
-  scale_fill_manual(values=opts$celltype.colors) +
+  # scale_fill_manual(values=opts$celltype.colors) +
   theme_classic() +
   theme(
     axis.title = element_blank(),
