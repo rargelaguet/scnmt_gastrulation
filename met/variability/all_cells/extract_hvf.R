@@ -17,8 +17,8 @@ io$outfile <- paste0(io$scmet,"/betabinomial/bayes/txt/hvf.txt.gz")
 
 
 opts$anno <- c(
-  "H3K27ac_distal_E7.5_union_intersect12_500",
-  "H3K27ac_distal_E7.5_union_intersect12",
+  # "H3K27ac_distal_E7.5_union_intersect12_500",
+  # "H3K27ac_distal_E7.5_union_intersect12",
   "prom_2000_2000"
   # "H3K27ac_distal_E7.5_Mes_intersect12_500",
   # "H3K27ac_distal_E7.5_Mes_intersect12",
@@ -34,6 +34,7 @@ opts$anno <- c(
 
 dt <- opts$anno %>% map(function(i) {
   stan <- readRDS(sprintf("%s/allcells_%s_vb.rds", io$dir.bayes, i))
+  # stan <- readRDS(sprintf("%s/allcells_%s_vb.rds", io$dir.bayes, i))
   hvf <- detect_hvf(stan, delta_e = NULL, delta_g = 0.25, efdr = 0.1)$summary %>% 
     as.data.table %>% .[,anno:=i]
   return(hvf)

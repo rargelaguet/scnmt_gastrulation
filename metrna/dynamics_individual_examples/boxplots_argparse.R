@@ -31,8 +31,10 @@ args <- p$parse_args(commandArgs(TRUE))
 
 # Define colors for the omics
 opts$color <- c(
-  "RNA expression"="#3CB54E",
-  "DNA methylation"="#F37A71"
+  # "RNA expression"="#3CB54E",
+  # "DNA methylation"="#F37A71"
+  "RNA expression"="gray50",
+  "DNA methylation"="gray50"
 )
 
 # Define minimum coverage
@@ -72,11 +74,11 @@ to.plot <- do.call("rbind",list(
 
 p <- ggplot(to.plot, aes(x=stage, y=value)) +
   facet_wrap(~assay, ncol=1, scales="free_y") +
-  geom_jitter(aes(fill=assay), size=1, stroke=0.2, shape=21, color="black", width=0.1) +
-  geom_violin(aes(fill=assay), alpha=0.5, size=0.25) +
-  geom_boxplot(aes(fill=assay), alpha=0.5, outlier.shape=NA, width=0.15, size=0.25) +
+  geom_jitter(aes(fill=assay), size=0.5, stroke=0.2, shape=21, color="black", width=0.1) +
+  geom_violin(aes(fill=assay), alpha=0.6, size=0.25) +
+  geom_boxplot(aes(fill=assay), alpha=0.6, outlier.shape=NA, width=0.3, size=0.25) +
   scale_fill_manual(values=opts$color) +
-  # scale_color_manual(values=opts$color) +
+  scale_x_discrete(expand = c(0,-1)) +
   labs(x="", y="", title="") +
   theme_classic() +
   theme(
@@ -96,6 +98,6 @@ p <- ggplot(to.plot, aes(x=stage, y=value)) +
 
 outfile <- sprintf("%s/boxplot_rna_%s_met_%s.pdf",args$outdir,args$gene,args$met.id)
 
-pdf(outfile, useDingbats=F, width=5.5, height=3.5)
+pdf(outfile, useDingbats=F, width=2, height=3.5)
 print(p)
 dev.off()
