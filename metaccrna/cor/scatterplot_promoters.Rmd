@@ -17,13 +17,13 @@ suppressPackageStartupMessages(library(data.table))
 
 ## I/O ##
 io   <- list()
-io$base_dir   <- "/Users/ricard/data/gastrulation"
+io$base_dir   <- "/Users/ricard/data/scnmt_gastrulation"
 io$in.sample_metadata <- paste0(io$base_dir,"/sample_metadata.txt")
 io$annos_dir  <- paste0(io$base_dir, "/features/filt")
 io$rna_file   <- paste0(io$base_dir, "/rna/parsed/SingleCellExperiment.rds")
 io$met_dir   <- paste0(io$base_dir, "/met/parsed")
-io$metrna.cor   <- paste0(io$base_dir, "/metrna/cor/metrna_cor_promoters.txt")
-io$accrna.cor   <- paste0(io$base_dir, "/accrna/cor/accrna_cor_promoters.txt")
+io$metrna.cor   <- paste0(io$base_dir, "/metrna/cor/metrna_cor_promoters.txt.gz")
+io$accrna.cor   <- paste0(io$base_dir, "/accrna/cor/accrna_cor_promoters.txt.gz")
 io$diff.rna   <- paste0(io$base_dir, "/rna/results/differential")
 
 ## Options ##
@@ -32,10 +32,6 @@ opts <- list()
 # Multiple testing correction options
 opts$threshold_fdr  <- 0.10
 
-# Define annotations
-opts$met.annos <- "prom_2000_2000"
-opts$acc.annos <- "prom_2000_2000"
-
 # Top genes to label
 opts$top_genes <- 50
 ```
@@ -43,13 +39,13 @@ opts$top_genes <- 50
 <!-- Load results of Met/RNA coupling across cells -->
 ```{r}
 metrna <- fread(io$metrna.cor)
-metrna_filt <- metrna %>% .[anno%in%names(opts$met.annos)]
+metrna_filt <- metrna %>% .[anno=="prom_2000_2000"]
 ```
 
 <!-- Load results of Acc/RNA coupling across cells -->
 ```{r}
 accrna <- fread(io$accrna.cor)
-accrna_filt <- accrna %>% .[anno%in%names(opts$acc.annos)]
+accrna_filt <- accrna %>% .[anno=="prom_2000_2000"]
 ```
 
 <!-- Load differential expression results -->
