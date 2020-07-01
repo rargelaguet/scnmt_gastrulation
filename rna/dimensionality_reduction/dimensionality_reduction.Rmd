@@ -1,9 +1,5 @@
 ---
 title: "Gastrulation scNMT-seq: dimensionality reduction on RNA data"
-output: 
-  BiocStyle::html_document: 
-  fig_width: 10
-  fig_height: 8
 ---
   
 ```{r load_modules, message=FALSE}
@@ -24,25 +20,25 @@ Define options
 ```{r}
 # Define which cells to use
 opts$stage_lineage <- c(
-  # "E4.5_Epiblast",
-  # "E5.5_Epiblast",
-  # "E6.5_Epiblast",
-  # "E6.5_Primitive_Streak",
-  # "E6.5_Mesoderm",
-  # "E7.5_Epiblast",
-  # "E7.5_Primitive_Streak",
+  "E4.5_Epiblast",
+  "E5.5_Epiblast",
+  "E6.5_Epiblast",
+  "E6.5_Primitive_Streak",
+  "E6.5_Mesoderm",
+  "E7.5_Epiblast",
+  "E7.5_Primitive_Streak",
   "E7.5_Ectoderm",
   "E7.5_Endoderm",
   "E7.5_Mesoderm"
 )
 
 # Stage-specific colors for RNA
-# opts$stage.colors <- c(
-#   E4.5="#B2E2E2", 
-#   E5.5="#66C2A4", 
-#   E6.5="#2CA25F", 
-#   E7.5="#006D2C"
-# )
+opts$stage.colors <- c(
+  E4.5="#B2E2E2",
+  E5.5="#66C2A4",
+  E6.5="#2CA25F",
+  E7.5="#006D2C"
+)
 ```
 
 ```{r echo=FALSE}
@@ -128,16 +124,16 @@ reducedDim(sce_filt, "PCA") <- irlba::prcomp_irlba(data, n=npcs)$x[,1:npcs]
 ```
 
 
-<!-- Plot PCA -->
+Plot PCA
 ```{r echo=FALSE}
-# plotPCA(sce_filt, colour_by="celltype.2", ncomponents = c(3,4))# +
-  # scale_fill_manual(values=opts$celltype.colors)
+# plotPCA(sce_filt, colour_by="stage", ncomponents = c(1,2))# +
+# scale_fill_manual(values=opts$celltype.colors)
 ```
 
 Run UMAP
 ```{r}
 set.seed(42)
-sce_filt <- runUMAP(sce_filt, dimred="PCA", n_neighbors = 35, min_dist = 0.45)
+sce_filt <- runUMAP(sce_filt, dimred="PCA", n_neighbors = 15, min_dist = 0.55)
 reducedDim(sce, "UMAP") <- reducedDim(sce_filt, "UMAP") 
 ```
 
@@ -147,10 +143,10 @@ to.plot <- reducedDim(sce_filt,"UMAP") %>% as.data.table %>%
   .[,id_rna:=colnames(sce_filt)] %>%
     merge(sample_metadata, by="id_rna")
 
-p <- ggplot(to.plot, aes(x=V1, y=V2, fill=lineage10x_2)) +
+p <- ggplot(to.plot, aes(x=V1, y=V2, fill=stage)) +
   geom_point(size=2, shape=21) +
-  # scale_color_manual(values=opts$stage.colors) +
-  scale_fill_manual(values=opts$celltype2.colors) +
+  scale_color_manual(values=opts$stage.colors) +
+  # scale_fill_manual(values=opts$celltype2.colors) +
   theme_classic() +
   theme(
     axis.title = element_blank(),
@@ -170,4 +166,5 @@ print(p)
 ```{r}
 sessionInfo()
 ```
+
 

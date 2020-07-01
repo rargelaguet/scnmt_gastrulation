@@ -62,6 +62,7 @@ dt[epsilon<0.25& bio.disp>4,color:="blue"]
 p <- ggplot(dt, aes(x=epsilon, y=bio.disp, alpha=color, fill=color, size=color)) +
   labs(x="Met. overdispersion", y="RNA overdispersion") +
   geom_point(shape=21, stroke=0.15, color="black") +
+  ggrastr::geom_point_rast(shape=21, stroke=0.15, color="black") +
   # geom_point() +
   scale_fill_manual(values=c("black"="gray80", "red"="#4E934D", "blue"="#C400AD")) +
   scale_size_manual(values=c("black"=0.5, "red"=2, "blue"=2)) +
@@ -75,7 +76,7 @@ p <- ggplot(dt, aes(x=epsilon, y=bio.disp, alpha=color, fill=color, size=color))
     axis.text = element_text(color="black", size=rel(0.8))
   )
 
-pdf(paste0(io$outdir,"/met_vs_rna_overdispersion_scatterplot.pdf"), width=6, height=4, useDingbats = F)
+pdf(paste0(io$outdir,"/met_vs_rna_overdispersion_scatterplot.pdf"), width=11, height=4, useDingbats = F)
 print(p)
 dev.off()
 
