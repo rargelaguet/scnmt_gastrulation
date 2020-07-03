@@ -52,8 +52,8 @@ opts$stage_lineage <- c(
   "E6.5_Epiblast",#"E6.5_Primitive_Streak", "E6.5_Visceral_endoderm","E6.5_Nascent_mesoderm"
   "E7.5_Epiblast",
   "E7.5_Ectoderm",
-  "E7.5_Mesoderm"
-  # "E7.5_Endoderm"
+  "E7.5_Mesoderm",
+  "E7.5_Endoderm"
 )
 
 # Define which cells to use
@@ -85,12 +85,12 @@ rna <- merge(rna, sample_metadata[,c("id_rna","stage_lineage","stage")], by="id_
 
 <!-- Boxplots of mean differences from manual hits -->
 ```{r}
-gene_id <- "Dnmt3l"
+gene_id <- "Dock11"
 
 to.plot <- rna[symbol==gene_id] %>% 
   .[,stage_lineage:=factor(stage_lineage, levels=opts$stage_lineage)]
 
-p <- ggplot(to.plot, aes(x=stage_lineage, y=expr)) +
+p <- ggplot(to.plot, aes(x=stage, y=expr)) +
   geom_jitter(size=0.8, color="#3CB54E") +
   # geom_point(aes(color=stage), size=1.0) +
   geom_violin(fill="#3CB54E", alpha=0.6) +
