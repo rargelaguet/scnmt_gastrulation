@@ -1,0 +1,221 @@
+---
+title: "Create MultiAssayExperiment"
+---
+
+```{r, eval=TRUE}
+suppressMessages(library(SingleCellExperiment))
+suppressMessages(library(MultiAssayExperiment))
+suppressMessages(library(parallel))
+```
+
+# Define settings
+
+I/O
+```{r, eval=TRUE}
+source("/Users/ricard/scnmt_gastrulation/settings.R")
+io$outdir <- paste0(io$basedir,"/metaccrna/MultiAssayExperiment")
+```
+
+```{r, eval=TRUE}
+# ## files/directories from data-alias that we'll need
+# io$data$base   <- file.path(io$home, "data/gastrulation") ## data dir
+# io$data$sample.metadata <- file.path(io$data$base,"sample_metadata.txt")
+# # io$annos.dir  <- file.path(io$base_dir, "features/filt")
+# io$data$rna.file   <- file.path(io$data$base, "rna/parsed/SingleCellExperiment.rds")
+# io$data$met.dir   <- file.path(io$data$base, "met/parsed")
+# io$data$acc.dir   <- file.path(io$data$base, "acc/parsed")
+```
+
+Options
+```{r, eval=TRUE}
+# Define annotations for methylation
+opts$met.annos <- c(
+  Promoters = "prom_2000_2000",
+  Genebody = "genebody",
+  CGI = "CGI",
+  # p300 = "ESC_p300",
+  # CTCF = "ESC_CTCF",
+  DHS = "ESC_DHS"
+)
+
+# Define annotations for accessibility
+opts$acc.annos <- opts$met.annos
+```
+
+## utils
+
+```{r, eval=TRUE}
+## ----------- source utils ----------- 
+## list all R files in utils folder recursively
+# utls <- list.files(file.path(io$home, "src/utils"), pattern = ".R", full.names = TRUE, recursive = TRUE)
+## source all
+# invisible(sapply(utls, source))
+```
+
+Update sample metadata
+```{r, eval=TRUE}
+sample_metadata <- sample_metadata %>% 
+  .[pass_metQC==TRUE | pass_rnaQC==TRUE | pass_accQC==TRUE ] %>% 
+  .[,c("sample","id_met","id_acc","id_rna","pass_metQC","pass_accQC","pass_rnaQC","embryo","stage","lineage10x_2")] %>%
+  setnames("lineage10x_2","lineage") %>%
+  .[,stage_lineage:=as.factor(paste(stage,lineage,sep="_"))]
+
+dim(sample_metadata)
+```
+
+# Load data
+
+## Load RNA expression
+
+```{r}
+opts$rna.cells <- sample_metadata[pass_rnaQC==T,id_rna]
+```
+
+Load RNA expression as a SingleCellExperiment object
+```{r, eval=TRUE}
+sce <- readRDS(io$rna)[,opts$rna.cells]
+dim(sce)
+```
+
+Rename samples
+```{r, eval=TRUE}
+id_map <- sample_metadata[,c("sample", "id_rna")] %>% data.frame(row.names = 2)
+colnames(sce) <- id_map[colnames(sce),]
+```
+
+Save
+```{r}
+# saveRDS(sce, file = "easy-data/data/rna/parsed/SingleCellExperiment_matching-cells.rds")
+```
+
+## Load methylation
+
+```{r, eval=TRUE}
+# io$out$met_dt_list <- file.path(io$outdir, "met_dt_list.rds")
+```
+
+```{r}
+opts$met.cells <- sample_metadata[pass_metQC==T,id_met]
+```
+
+```{r, eval=on_hpc}
+io$data$mets <- lapply(opts$met.annos, function(x) sprintf("%s/%s.tsv.gz", io$met_data_parsed, x))
+
+met_dt_list <- mclapply(io$data$mets, function(tsv_name) {
+  
+  calc_site_stats(filePath = tsv_name,
+                  keep_samples = opts$met.cells, ## pass QC samples
+                  min_N = 1, ## min number of calls at site
+                  min_cov = round(length(opts$met.cells)/3), ## min number of cells
+                  alpha = 0.1) ## for lower bound of CI
+}, mc.cores = 2)
+```
+
+```{r}
+# saveRDS(met_dt_list, file = io$out$met_dt_list)
+```
+
+## Load accessibility
+
+```{r, eval=TRUE}
+# io$out$acc_dt_list <- file.path(io$outdir, "acc_dt_list.rds")
+```
+
+```{r}
+opts$acc.cells <- sample_metadata[pass_accQC==T,id_acc]
+```
+
+##### calculate site stats
+
+```{r, eval=on_hpc}
+io$data$accs <- lapply(opts$acc.annos, function(x) sprintf("%s/%s.tsv.gz", io$acc_data_parsed, x))
+
+acc_dt_list <- mclapply(io$data$accs, function(tsv_name) {
+  
+  calc_site_stats(filePath = tsv_name,
+                  keep_samples = sample_metadata$id_acc, ## pass QC samples
+                  min_N = 3, ## min number of calls at site
+                  min_cov = round(length(opts$acc.cells)/3), ## min number of cells
+                  alpha = 0.1) ## for lower bound of CI
+}, mc.cores = 2)
+```
+
+```{r}
+# saveRDS(acc_dt_list, file = io$out$acc_dt_list)
+```
+
+
+## Create wide matrices for MultiAssayExperiment
+
+### Methylation
+
+```{r}
+dcast_met <- dcast_dt_list(met_dt_list, row = "id", col = "id_met", value.var = "rate")
+lapply(dcast_met, dim)
+```
+
+```{r}
+## quick check datasets to ensure features are properly ranked
+mapply(x=dcast_met, y=met_dt_list, FUN = function(x,y) {
+  ## is the first rowname in matrices the same as the max lci in data.table?
+  identical(x %>% rownames() %>% .[1],
+            y %>% .[which.max(.$lci)] %>% .$id)
+})
+```
+
+### Accessibility
+
+```{r}
+dcast_acc <- dcast_dt_list(acc_dt_list, row = "id", col = "sample", value.var = "rate")
+lapply(dcast_acc, dim)
+```
+
+```{r}
+## quick check datasets to ensure features are properly ranked
+mapply(x=dcast_acc, y=acc_dt_list, FUN = function(x,y) {
+  identical(x %>% rownames() %>% .[1],
+            y %>% .[which.max(.$lci)] %>% .$id)
+})
+```
+
+
+# MultiAssayExperiment
+
+Define ExperimentList
+```{r}
+exper.list <- ExperimentList(
+  # rna = logcounts(sce),
+  rna = sce,
+  met_genebody = dcast_met$Genebody,
+  met_promoter = dcast_met$Promoters,
+  met_cgi = dcast_met$CGI,
+  # met_p300 = dcast_met$p300,
+  # met_CTCF = dcast_met$CTCF,
+  met_DHS = dcast_met$DHS,
+  acc_genebody = dcast_acc$Genebody,
+  acc_promoter = dcast_acc$Promoters,
+  acc_cgi = dcast_acc$CGI,
+  # acc_p300 = dcast_acc$p300,
+  # acc_CTCF = dcast_acc$CTCF,
+  acc_DHS = dcast_acc$DHS
+)
+```
+
+Define colData
+```{r}
+coldata <- sample_metadata %>%
+  .[,c("sample","pass_metQC","pass_accQC","pass_rnaQC","embryo","stage","lineage")] %>% 
+  data.frame(row.names = TRUE) %>% 
+  DataFrame
+head(coldata)
+```
+
+Create MultiAssayExperiment
+```{r}
+mae <- MultiAssayExperiment(experiments = exper.list, colData = coldata)
+```
+
+Save
+```{r}
+saveRDS(mae, file.path(io$outdir, "scnmtseq_gastrulation_mae.rds"))
+```

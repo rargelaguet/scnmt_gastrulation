@@ -19,8 +19,8 @@ opts$atlas_stages <- c(
   "E7.0",
   "E7.25",
   "E7.5",
-  "E7.75",
-  "E8.0"
+  "E7.75"
+  # "E8.0"
   # "E8.25",
   # "E8.5"
   # "mixed_gastrulation"
@@ -38,15 +38,15 @@ opts$test <- FALSE
 if (grepl("ricard",Sys.info()['nodename'])) {
   lsf <- ""
 } else {
-  lsf <- sprintf("bsub -M 30000 -n 1 -q research-rh74 -o %s/mapping_mnn.txt", io$tmpdir)
+  lsf <- sprintf("bsub -M 50000 -n 1 -q research-rh74 -o %s/mapping_mnn.txt", io$tmpdir)
 }
 
 # Run standard MNN
-cmd <- sprintf("%s Rscript %s --atlas_stages %s", lsf, io$standard.mnn.script, paste(opts$atlas_stages, collapse=" "))
-if (isTRUE(opts$test)) cmd <- paste0(cmd, " --test")
-system(cmd)
+# cmd <- sprintf("%s Rscript %s --atlas_stages %s", lsf, io$standard.mnn.script, paste(opts$atlas_stages, collapse=" "))
+# if (isTRUE(opts$test)) cmd <- paste0(cmd, " --test")
+# system(cmd)
 
 # Run tree-guided MNN
-cmd <- sprintf("%s Rscript %s --atlas_stages %s", lsf, io$iterative.mnn.script, i, paste(opts$atlas_stages, collapse=" "))
+cmd <- sprintf("%s Rscript %s --atlas_stages %s", lsf, io$iterative.mnn.script, paste(opts$atlas_stages, collapse=" "))
 if (isTRUE(opts$test)) cmd <- paste0(cmd, " --test")
 system(cmd)

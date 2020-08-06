@@ -1,0 +1,84 @@
+---
+title: "Sex determination based on simultaneous analysis of RNA expression and DNA methylation"
+---
+
+```{r load_modules, echo=FALSE, include=FALSE}
+library(ggpubr)
+```
+
+Define settings
+```{r define_opts, echo=FALSE}
+if (grepl("ricard",Sys.info()['nodename'])) {
+  source("/Users/ricard/scnmt_gastrulation/settings.R")
+} else {
+  stop("Computer not recognised")
+}
+io$outdir <- paste0(io$basedir,"/metrna/sex")
+
+io$rna.sex <- paste0(io$basedir,"/rna/results/sex/sex_assignment_rna.txt.gz")
+io$met.sex <- paste0(io$basedir,"/met/results/sex/sex_assignment_met.txt.gz")
+```
+
+# Load data
+
+Load pre-computed sex statistics
+```{r}
+rna.dt <- fread(io$rna.sex)
+met.dt <- fread(io$met.sex)
+```
+
+Merge
+```{r}
+metrna.dt <- rbind(
+  rna.dt[,c("embryo","stage","ratio","sex")] %>% .[,modality:="RNA"],
+  met.dt[,c("embryo","stage","ratio","sex")] %>% .[,modality:="Methylation"]
+)
+```
+
+# Plot
+
+```{r}
+to.plot <- metrna.dt %>% 
+  dcast(embryo+stage~modality, value.var=c("ratio","sex")) %>%
+  .[complete.cases(.)]
+```
+
+```{r}
+p <- ggscatter(to.plot, x="ratio_Methylation", y="ratio_RNA",
+          color="sex_Methylation", palette="Dark2") +
+  labs(x="chrY/chr1 ratio (Methylation)", y="chrY/chr1 ratio (RNA)") +
+  theme(
+    axis.text = element_text(size=rel(0.75)),
+    legend.position = "right",
+  )
+
+# pdf(paste0(io$outdir,"/sex_assignment_metrna.pdf"), width=7, height=5, useDingbats = F)
+print(p)
+# dev.off()
+```
+
+
+Save sex assignments
+```{r}
+to.save <- metrna.dt %>% 
+  dcast(embryo+stage~modality, value.var="sex") %>%
+  .[,sex:=RNA] %>%
+  .[Methylation!=RNA,sex:=Methylation] %>%
+  .[,c("embryo","stage","sex")]
+
+fwrite(to.save, paste0(io$outdir,"/sex_assignment_metrna.txt.gz"), sep="\t")
+```
+
+Add to sample metadata
+```{r}
+sample_metadata <- fread(io$metadata) %>% 
+  merge(to.save, by=c("embryo","stage"), all.x=T) %>%
+  setorder(-stage)
+
+table(sample_metadata$sex)
+```
+
+```{r}
+# fwrite(sample_metadata, io$metadata, sep="\t", na="NA", quote=F)
+```
+

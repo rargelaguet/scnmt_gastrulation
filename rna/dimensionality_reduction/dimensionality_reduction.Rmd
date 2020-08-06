@@ -21,6 +21,7 @@ Define options
 # Define which cells to use
 opts$stage_lineage <- c(
   "E4.5_Epiblast",
+  "E4.5_Primitive_endoderm",
   "E5.5_Epiblast",
   "E6.5_Epiblast",
   "E6.5_Primitive_Streak",

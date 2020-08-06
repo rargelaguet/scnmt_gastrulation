@@ -1,0 +1,110 @@
+---
+title: "Sex determination based on CG coverage in the chromosome Y"
+---
+
+```{r load_modules, echo=FALSE, include=FALSE}
+library(ggpubr)
+```
+
+Define settings
+```{r define_opts, echo=FALSE}
+if (grepl("ricard",Sys.info()['nodename'])) {
+  source("/Users/ricard/scnmt_gastrulation/settings.R")
+} else {
+  stop("Computer not recognised")
+}
+io$outdir <- paste0(io$basedir,"/met/results/sex")
+
+# Define which chromosomes to look at
+opts$chr <- c("X","Y","1") %>% paste0("chr",.)
+```
+
+Update sample metadata
+```{r}
+sample_metadata <- sample_metadata %>% 
+  .[!is.na(embryo) & !is.na(id_met)]
+```
+
+# Load data
+
+Load DNA methylation statistics per chromosome
+```{r}
+stats <- fread(io$met.stats_per_chr) %>%
+  .[chr%in%opts$chr] %>%
+  merge(sample_metadata, by="id_met") %>%
+  .[,.(coverage=sum(coverage)), by=c("embryo","stage","chr")]
+# stats <- stats[complete.cases(stats)]
+```
+
+Load pre-computed sex estimates
+
+```{r}
+# sex.dt <- fread("/Users/ricard/data/gastrulation/sample_metadata_sex.txt") %>%
+#   .[!is.na(sex)] %>%
+#   .[,c("embryo","sex")] %>% unique %>%
+#   merge(sample_metadata[,c("sample","id_met")], by="sample")
+```
+
+
+# Plot
+
+```{r}
+to.plot <- stats %>% 
+  dcast(embryo+stage~chr, value.var="coverage") %>%
+  .[,ratio:=chrY/chr1]# %>%
+  # merge(sex.dt,by="embryo")
+```
+
+Define sex
+```{r}
+opts$female <- 0.01      # Less than this is female
+opts$male <- 0.0101     # More than this is male
+# to.plot[ratio>op]
+
+to.plot$sex <- cut(to.plot$ratio, 
+  breaks = c(-0.01,opts$female, opts$male,Inf),
+  labels = c("Female","Unassigned","Male")
+)
+```
+
+
+Plot ratio of coverage between chrY and chr1
+```{r}
+p <- ggbarplot(to.plot, x="embryo", y="ratio", fill="sex", sort.val="asc") +
+  facet_grid(~stage, scales="free_x", space = "free_x") +
+  labs(x="Embryo", y="ratio chrY/chr1 coverage") +
+  # geom_hline(yintercept=opts$female, linetype="dashed") +
+  theme(
+    legend.title = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.text.x = element_blank()
+  )
+
+pdf(paste0(io$outdir,"/sex_assignment_met.pdf"), width=9, height=5, useDingbats = F)
+print(p)
+dev.off()
+```
+
+Save results
+```{r}
+fwrite(to.plot, paste0(io$outdir,"/sex_assignment_met.txt.gz"))
+```
+
+Add to sample metadata
+```{r}
+to.save <- to.plot[,c("embryo","stage","sex")]
+
+sample_metadata <- fread(io$metadata) %>% 
+  merge(to.save, by=c("embryo","stage"), all.x=T)
+
+table(sample_metadata$sex)
+table(sample_metadata[is.na(sex),stage])
+
+# View(sample_metadata[is.na(sex)])
+# sample_metadata[embryo=="693-D6 ICM Embryo 5"]
+```
+
+```{r}
+# fwrite(sample_metadata, io$metadata, sep="\t", na="NA", quote=F)
+```
+

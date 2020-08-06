@@ -41,7 +41,7 @@ if (grepl("ricard",Sys.info()['nodename'])) {
   # io$atlas.marker_genes <- "/Users/ricard/data/gastrulation10x/results/marker_genes/E8.5/marker_genes.txt.gz"
   io$script_load_data <- "/Users/ricard/scnmt_gastrulation/rna/iterative_mapping/load_data.R"
 } else {
-  source("/homes/ricard/scnmt_gastrulation/rna/settings.R")
+  source("/homes/ricard/scnmt_gastrulation/settings.R")
   source("/homes/ricard/scnmt_gastrulation/rna/iterative_mapping/utils.R")
   # io$atlas.marker_genes <- "/hps/nobackup2/research/stegle/users/ricard/gastrulation10x/results/marker_genes/E8.5/marker_genes.txt.gz"
   io$script_load_data <- "/homes/ricard/scnmt_gastrulation/rna/iterative_mapping/load_data.R"

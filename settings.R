@@ -11,10 +11,12 @@ if (grepl("ricard",Sys.info()['nodename'])) {
   io$basedir <- "/Users/ricard/data/gastrulation"
   io$atlas.basedir <- "/Users/ricard/data/gastrulation10x"
   io$gene.metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
+  io$mm10.genome <- "/Users/ricard/data/mm10_sequence/mm10.genome"
 } else if (grepl("ebi",Sys.info()['nodename'])) {
   io$basedir <- "/hps/nobackup2/research/stegle/users/ricard/scnmt_gastrulation"
   io$atlas.basedir <- "/hps/nobackup2/research/stegle/users/ricard/gastrulation10x"
   io$gene.metadata <- "/hps/nobackup2/research/stegle/users/ricard/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
+  io$mm10.genome <- "/hps/nobackup2/research/stegle/users/ricard/mm10_sequence/mm10.genome"
 } else {
   stop("Computer not recognised")
 }
@@ -23,13 +25,16 @@ io$metadata <- paste0(io$basedir,"/sample_metadata.txt")
 
 io$met_data_raw <- paste0(io$basedir,"/met/cpg_level")
 io$met_data_parsed <- paste0(io$basedir,"/met/feature_level")
-io$met.stats <- paste0(io$basedir,"/met/stats/sample_stats.txt")
+io$met.stats <- paste0(io$basedir,"/met/results/stats/sample_stats.txt")
+io$met.stats_per_chr <- paste0(io$basedir,"/met/results/stats/sample_stats_per_chr.txt.gz")
 
 io$acc_data_raw <- paste0(io$basedir,"/acc/gpc_level")
 io$acc_data_parsed <- paste0(io$basedir,"/acc/feature_level")
-io$acc.stats <- paste0(io$basedir,"/acc/stats/sample_stats.txt")
+io$acc.stats <- paste0(io$basedir,"/acc/results/stats/sample_stats.txt")
+io$acc.stats_per_chr <- paste0(io$basedir,"/acc/results/stats/sample_stats_per_chr.txt.gz")
 
 io$rna <- paste0(io$basedir,"/rna/SingleCellExperiment.rds")
+io$rna.stats <- paste0(io$basedir,"/rna/results/stats/rna_stats.txt")
 
 io$features.dir <- paste0(io$basedir,"/features/genomic_contexts")
 # io$cpg.density <- paste0(io$basedir,"/met/stats/features/cpg_density_perfeature.txt.gz")
@@ -80,6 +85,46 @@ opts$celltype2.colors <- c(
   "Visceral_endoderm"="darkgreen"
 )
 
+opts$celltypes = c(
+  "Epiblast",
+  "Primitive_Streak",
+  "Caudal_epiblast",
+  "PGC",
+  "Anterior_Primitive_Streak",
+  "Notochord",
+  "Def._endoderm",
+  "Gut",
+  "Nascent_mesoderm",
+  "Mixed_mesoderm",
+  "Intermediate_mesoderm",
+  "Caudal_Mesoderm",
+  "Paraxial_mesoderm",
+  "Somitic_mesoderm",
+  "Pharyngeal_mesoderm",
+  "Cardiomyocytes",
+  "Allantois",
+  "ExE_mesoderm",
+  "Mesenchyme",
+  "Haematoendothelial_progenitors",
+  "Endothelium",
+  "Blood_progenitors_1",
+  "Blood_progenitors_2",
+  "Erythroid1",
+  "Erythroid2",
+  "Erythroid3",
+  "NMP",
+  "Rostral_neurectoderm",
+  "Caudal_neurectoderm",
+  "Neural_crest",
+  "Forebrain_Midbrain_Hindbrain",
+  "Spinal_cord",
+  "Surface_ectoderm",
+  "Visceral_endoderm",
+  "ExE_endoderm",
+  "ExE_ectoderm",
+  "Parietal_endoderm"
+)
+
 opts$celltype.colors = c(
   "Epiblast" = "#635547",
   "Primitive_Streak" = "#DABE99",
@@ -120,10 +165,7 @@ opts$celltype.colors = c(
   "Parietal_endoderm" = "#1A1A1A"
 )
 
-# opts$colors_stages <- c(
-#   "E6.5"="grey70",
-#   "E7.5"="#CD3278"
-# )
+opts$chr <- paste0("chr",c(1:19,"X","Y"))
 
 ##########################
 ## Load sample metadata ##

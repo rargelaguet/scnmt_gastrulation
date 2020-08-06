@@ -1,0 +1,138 @@
+---
+title: "Sex determination using RNA expression counts of genes on the Y chromosome."
+---
+
+```{r echo=FALSE, include=FALSE}
+library(SingleCellExperiment)
+library(ggpubr)
+```
+
+Define settings
+```{r define_opts, echo=FALSE, include=FALSE}
+if (grepl("ricard",Sys.info()['nodename'])) {
+  source("/Users/ricard/scnmt_gastrulation/settings.R")
+} else {
+  stop("Computer not recognised")
+}
+io$outdir <- paste0(io$basedir,"/rna/results/sex")
+```
+
+Update sample metadata
+```{r}
+sample_metadata <- sample_metadata %>% 
+  .[pass_rnaQC==T]
+```
+
+```{r}
+unique(sample_metadata$embryo)
+```
+
+Load RNA stats
+```{r}
+sample_metadata <- sample_metadata %>%
+  merge(fread(io$rna.stats), by="id_rna")
+```
+
+# Load data
+
+Load expression data
+```{r load_expr, echo=FALSE, include=FALSE}
+sce <- readRDS(io$rna)[,sample_metadata$id_rna]
+dim(sce)
+```
+
+Load gene metadata
+```{r}
+gene_metadata <- fread(io$gene.metadata) %>% .[ens_id%in%rownames(sce)]
+
+genes.chrY <- gene_metadata[chr=="chrY",ens_id]
+# genes.chrX <- gene_metadata[chr=="chrX",ens_id]
+genes.chr1 <- gene_metadata[chr=="chr1",ens_id]
+```
+
+Create data.table for the RNA expression counts
+```{r}
+rna.dt <- counts(sce[c(genes.chrY,genes.chr1)]) %>% t %>%
+  as.data.table(keep.rownames="id_rna") %>% melt(id.vars="id_rna", value.name="counts", variable.name="ens_id") %>%
+  # Add metadata
+  merge(sample_metadata[,c("id_rna","stage","embryo")], by="id_rna")  %>%
+  merge(gene_metadata[,c("chr","ens_id","symbol")], by="ens_id")
+```
+
+Aggregate counts per embryo
+```{r}
+to.plot <- rna.dt %>% 
+  .[,.(counts=sum(counts)),by=c("stage","embryo","chr")] %>%
+  dcast(stage+embryo~chr, value.var="counts") %>%
+  .[,ratio:=chrY/chr1]
+```
+
+# Plot Xist expression
+
+TO-DO: THERE IS NO EXIST BECAUSE I ANNOTATED ONLY PROTEIN-CODING GENES...
+```{r}
+
+```
+
+# Plot ratio of chrY/chr1 counts per embryo, coloured by sex assignment 
+
+Define sex
+```{r}
+opts$male <- 0.001      # Less than this is male
+opts$female <- 0.0025   # More than this is female
+# to.plot[ratio>op]
+
+to.plot$sex <- cut(to.plot$ratio, 
+  breaks = c(-0.01,opts$male, opts$female,Inf),
+  labels = c("Female","Unassigned","Male")
+)
+```
+
+
+
+```{r}
+p <- ggbarplot(to.plot, x="embryo", y="ratio", fill="sex", color="sex", sort.val = "asc", palette="Dark2") +
+  facet_grid(~stage, scales="free", space = "free_x") +
+  labs(x="Embryo", y="chrY/chr1 counts") +
+  theme(
+    legend.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+
+pdf(sprintf("%s/sex_assignment_rna.pdf",io$outdir), width=10, height=6, useDingbats = F)
+print(p)
+dev.off()
+```
+
+Save results
+```{r}
+fwrite(to.plot, paste0(io$outdir,"/sex_assignment_rna.txt.gz"))
+```
+
+Plot expression of y-chr genes in different embyros (per gene)
+
+```{r}
+to.plot <- rna.dt %>% 
+  .[ens_id%in%genes.chrY] %>%
+  merge(sex.assignments,by="embryo") %>%
+  .[sex!="Unassigned"] %>%
+  .[,.(counts=sum(counts)),by=c("stage","sex","symbol")]
+```
+
+```{r}
+p <- ggplot(to.plot, aes(x=sex, y=counts, fill=sex)) +
+  geom_boxplot() +
+  facet_wrap(~symbol, scales="free_y") +
+  labs(x="", y="Counts") +
+  theme_classic() +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+
+pdf(sprintf("%s/chrY_genes_expr.pdf",io$outdir), width=9, height=8, useDingbats = F)
+print(p)
+dev.off()
+```
+

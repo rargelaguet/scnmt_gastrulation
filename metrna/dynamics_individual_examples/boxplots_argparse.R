@@ -51,6 +51,7 @@ opts$rna_cells <- sample_metadata %>% .[pass_rnaQC==T & stage_lineage%in%args$st
 # Update sample metadata
 sample_metadata <- sample_metadata %>%
   .[,c("sample","id_met","id_rna","stage","stage_lineage","lineage10x_2")] %>%
+  .[!is.na(id_met) & !is.na(id_rna)] %>%  # optional
   .[id_met%in%opts$met_cells | id_rna %in% opts$rna_cells]
 
 # Load the three omics

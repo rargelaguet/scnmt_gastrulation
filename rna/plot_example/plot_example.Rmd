@@ -85,7 +85,7 @@ rna <- merge(rna, sample_metadata[,c("id_rna","stage_lineage","stage")], by="id_
 
 <!-- Boxplots of mean differences from manual hits -->
 ```{r}
-gene_id <- "Dock11"
+gene_id <- "Dnmt3l"
 
 to.plot <- rna[symbol==gene_id] %>% 
   .[,stage_lineage:=factor(stage_lineage, levels=opts$stage_lineage)]

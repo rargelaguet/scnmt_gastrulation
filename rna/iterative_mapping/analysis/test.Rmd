@@ -1,0 +1,187 @@
+---
+title: "Gastrulation scNMT-seq: dimensionality reduction on RNA data"
+---
+  
+```{r load_modules, message=FALSE}
+library(SingleCellExperiment)
+library(scran)
+library(scater)
+```
+
+# Define settings 
+
+Define I/O
+```{r define_io}
+source("/Users/ricard/scnmt_gastrulation/settings.R")
+io$outdir <- paste0(io$basedir,"/rna/dimensionality_reduction")
+```
+
+Define options
+```{r}
+opts$celltypes = c(
+	"Epiblast",
+	# "Primitive_Streak"
+	# "Caudal_epiblast",
+	# "PGC",
+	"Anterior_Primitive_Streak",
+	"Notochord",
+	"Def._endoderm",
+	"Gut"
+	# "Nascent_mesoderm",
+	# "Mixed_mesoderm",
+	# "Intermediate_mesoderm",
+	# "Caudal_Mesoderm",
+	# "Paraxial_mesoderm",
+	# "Somitic_mesoderm",
+	# "Pharyngeal_mesoderm",
+	# "Cardiomyocytes",
+	# "Allantois",
+	# "ExE_mesoderm",
+	# "Mesenchyme",
+	# "Haematoendothelial_progenitors",
+	# "Endothelium",
+	# "Blood_progenitors_1",
+	# "Blood_progenitors_2",
+	# "Erythroid1",
+	# "Erythroid2",
+	# "Erythroid3",
+	# "NMP",
+	# "Rostral_neurectoderm"
+	# "Caudal_neurectoderm",
+	# "Neural_crest",
+	# "Forebrain_Midbrain_Hindbrain",
+	# "Spinal_cord",
+	# "Surface_ectoderm",
+	# "Visceral_endoderm",
+	# "ExE_endoderm",
+	# "ExE_ectoderm",
+	# "Parietal_endoderm"
+)
+```
+
+```{r}
+foo <- fread("/Users/ricard/data/gastrulation/rna/results/iterative_mapping/standard_mnn.txt.gz") %>%
+  .[,c("cell","celltype_mapped","celltype_score")] %>%
+  setnames(c("id_rna","celltype_v2","score_v2")) %>%
+   .[,celltype_v2:=stringr::str_replace_all(celltype_v2," ", "_")]
+```
+
+```{r echo=FALSE}
+sample_metadata <- sample_metadata %>% 
+  .[stage%in%c("E6.5","E7.5") & pass_rnaQC==T] %>%
+  merge(foo,by="id_rna")
+  # .[celltype_v2%in%opts$celltypes]
+# table(sample_metadata$lineage10x)
+# table(sample_metadata$celltype_v2)
+```
+
+# Load RNA expression data
+
+```{r load_data}
+sce <- readRDS(io$rna)[,sample_metadata$id_rna]
+sce
+```
+
+Parse RNA expression data
+```{r}
+sce$celltype.1 <- sample_metadata$lineage10x
+sce$celltype.2 <- sample_metadata$celltype_v2
+```
+
+Select HVG
+```{r}
+decomp <- modelGeneVar(sce)
+hvgs <- rownames(decomp)[decomp$p.value<0.01 & decomp$mean > 0.01]
+```
+
+```{r}
+hvgs <- fread("/Users/ricard/data/gastrulation10x/results/differential/celltypes/all_stages/Def._endoderm_vs_Notochord.txt.gz") %>%
+  .[sig==T & ens_id%in%rownames(sce),ens_id]
+```
+
+Plot HVG
+```{r}
+# to.plot <- data.table(
+#   mean = apply(logcounts(sce),1,mean),
+#   var = apply(logcounts(sce),1,var),
+#   hvg = decomp$p.value < 0.01
+# ) %>% .[is.na(hvg),hvg:=F]
+# 
+# ggplot(to.plot, aes(x=mean, y=var)) +
+#   geom_point(aes(fill=hvg, size=hvg), shape=21, stroke=0.1) +
+#   stat_smooth() +
+#   scale_fill_manual(values=c("black","red")) +
+#   scale_size_manual(values=c(0.8,1.6)) +
+#   guides(fill = guide_legend(override.aes = list(size=2.5))) +
+#   xlab('Mean') + ylab('Variance') +
+#   theme_classic()
+```
+
+Subset SingleCellExperiment
+```{r}
+sce_filt <- sce[hvgs,]
+sce_filt
+```
+
+(Optional) Regress out covariates
+```{r}
+data <- scale(t(logcounts(sce_filt)), center = T, scale = F)
+# data_regressed <- apply(data, 2, function(x) {
+#   lm.out <- lm(formula=expr~covariate, data=data.frame(expr=x, covariate=factor(sce_filt$stage)));
+#   residuals <- lm.out[["residuals"]]+lm.out[["coefficients"]][1]
+# })
+```
+
+# Dimensionality reduction
+
+Run PCA
+```{r}
+npcs <- 15
+reducedDim(sce_filt, "PCA") <- irlba::prcomp_irlba(data, n=npcs)$x[,1:npcs]
+```
+
+```{r}
+# cor(colMeans(counts(sce_filt)>0), reducedDim(sce_filt,"PCA"))
+```
+
+
+Plot PCA
+```{r echo=FALSE}
+# plotPCA(sce_filt, colour_by="celltype.1", ncomponents = c(1,2)) +
+#   scale_fill_manual(values=opts$celltype.colors)
+```
+
+Run UMAP
+```{r}
+set.seed(42)
+sce_filt <- runUMAP(sce_filt, dimred="PCA", n_neighbors = 5, min_dist = 0.35)
+reducedDim(sce, "UMAP") <- reducedDim(sce_filt, "UMAP") 
+```
+
+Plot UMAP
+```{r}
+to.plot <- reducedDim(sce_filt,"UMAP") %>% as.data.table %>%
+# to.plot <- reducedDim(sce_filt,"PCA")[,c(1,2)] %>% as.data.table %>% setnames(c("V1","V2")) %>%
+  .[,id_rna:=colnames(sce_filt)] %>%
+    merge(sample_metadata, by="id_rna")
+
+p <- ggplot(to.plot, aes(x=V1, y=V2, fill=celltype_v2)) +
+# p <- ggplot(to.plot, aes(x=V1, y=V2, fill=lineage10x)) +
+  geom_point(size=2, shape=21) +
+  # scale_color_manual(values=opts$stage.colors) +
+  scale_fill_manual(values=opts$celltype.colors) +
+  theme_classic() +
+  theme(
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    legend.position="right",
+    legend.title=element_blank()
+  )
+
+# pdf(paste0(io$outdir,"/rna_umap.pdf"), width=5, height=3, useDingbats = F)
+print(p)
+# dev.off()
+```
+
+
