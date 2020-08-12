@@ -55,7 +55,7 @@ gg_volcano_plot <- function(cor_samples, title = "", label=0){
     if (label>0) { 
       foo <- cor_samples[sig == TRUE] %>% setkey(padj_fdr) %>% head(n=label)      
       # p <- p + ggrepel::geom_text_repel(data=foo, aes(x=r, y=-log10(p), label=gene), size=6, color="red")
-      p <- p + ggrepel::geom_text_repel(data=foo, aes(x=r, y=log_padj_fdr, label=gene), size=6, color="red")
+      p <- p + ggrepel::geom_text_repel(data=foo, aes(x=r, y=log_padj_fdr, label=gene), size=4, color="red")
     }
   
   return(p)

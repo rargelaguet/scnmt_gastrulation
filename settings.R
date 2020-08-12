@@ -55,25 +55,20 @@ io$atlas.sce <- paste0(io$atlas.basedir,"/processed/SingleCellExperiment.rds")
 
 opts <- list()
 
-# opts$stage_lineage <- c(
-
-#   # E4.5
-#   "E4.5_Epiblast",
-
-#   # E5.5
-#   "E5.5_Epiblast",
-  
-#   # E6.5
-#   "E6.5_Epiblast",
-#   "E6.5_Primitive_Streak",
-  
-#   # E7.5
-#   "E7.5_Epiblast",
-#   "E7.5_Ectoderm",
-#   "E7.5_Primitive_Streak",
-#   "E7.5_Endoderm",
-#   "E7.5_Mesoderm"
-# )
+opts$stage_lineage <- c(
+  "E4.5_Epiblast",
+  "E4.5_Primitive_endoderm",
+  "E5.5_Epiblast",
+  "E5.5_Visceral_endoderm",
+  "E6.5_Epiblast",
+  "E6.5_Primitive_Streak",
+  "E6.5_Visceral_endoderm",
+  "E7.5_Epiblast",
+  "E7.5_Ectoderm",
+  "E7.5_Primitive_Streak",
+  "E7.5_Endoderm",
+  "E7.5_Mesoderm"
+)
 
 opts$celltype2.colors <- c(
   "Epiblast"="grey70",
