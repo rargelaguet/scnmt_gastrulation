@@ -1,0 +1,200 @@
+---
+title: "Local correlation between DNA methylation and RNA expression"
+output: 
+  BiocStyle::html_document: 
+    fig_width: 12
+    fig_height: 8
+---
+
+<!-- Load libraries -->
+
+```{r echo=FALSE, include=FALSE}
+suppressPackageStartupMessages(library(scater))
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(purrr))
+suppressPackageStartupMessages(library(ggplot2))
+```
+
+<!-- Define functions -->
+
+```{r definefuncs, echo=FALSE}
+mean_sd <- function(x) data.frame(y=mean(x), ymin=mean(x)-sd(x)/2, ymax=mean(x)+sd(x)/2) 
+```
+
+<!-- Define settings -->
+
+```{r define_settings, echo=FALSE, include=FALSE}
+if (grepl("ricard",Sys.info()['nodename'])) {
+  source("/Users/ricard/human_embryo_multiomics/settings.R")
+  io$tss <- "/Users/ricard/data/hg38_regulation/promoters/TSS_mRNA.bed"
+} else if(grepl("ebi",Sys.info()['nodename'])){
+  source("/homes/ricard/human_embryo_multiomics/settings.R")
+} else {
+  stop("Computer not recognised")
+}
+io$outdir <- paste0(io$basedir,"/metrna/coupling")
+
+# Define window options
+opts$up <- 5000
+opts$down <- 5000
+opts$window <- 250
+opts$slide <- 50
+
+# Define stage and lineages
+opts$stage_lineage <- c(
+  "E5_ICM",
+  "E5_TE",
+  "E6_ICM",
+  "E6_TE"
+)
+
+# Update sample metadata
+sample_metadata <- sample_metadata %>%
+  .[,c("id_acc","id_rna","lab","stage","lineage","pass_metQC","pass_rnaQC")] %>%
+  .[,stage_lineage:=paste(stage,lineage,sep="_")] %>%
+  .[!is.na(id_acc) & pass_metQC==T & pass_rnaQC==T & lab=="nichols" & stage_lineage%in%opts$stage_lineage]
+opts$met_cells <- sample_metadata %>% .[pass_metQC==T,id_acc]
+opts$rna_cells <- sample_metadata %>% .[pass_rnaQC==T,id_rna]
+```
+
+<!-- Load gene metadata -->
+
+```{r}
+tss <- fread(io$tss, 
+             colClasses=c("factor","integer","integer","factor","factor","factor")) %>%
+  setnames(c("chr","start","end","id","score","strand")) %>%
+  .[,chr:=as.factor(sub("chr","",chr))] %>%
+  .[,tss:=start] %>%
+  .[,c("start","end"):=.(start-opts$up,end+opts$down)] %>%
+  setkey(chr,start,end)
+
+tss[,score:=NULL]
+```
+
+<!-- Filter CGI or non-CGI promoters -->
+
+```{r}
+# non_cgi_promoters <- fread("/Users/ricard/data/gastrulation/features/filt/prom_2000_0_noncgi.bed",stringsAsFactors=TRUE)[,V5]
+# cgi_promoters <- fread("/Users/ricard/data/gastrulation/features/filt/prom_2000_0_cgi.bed",stringsAsFactors=TRUE)[,V5]
+# tss <- tss[,type:=ifelse(id%in%non_cgi_promoters,'non_cgi','cgi')]
+# tss <- tss[type=="non_cgi"]
+```
+
+<!-- Subset cells to reduce memory burden -->
+
+```{r}
+opts$ncells <- 3
+
+sample_metadata <- sample_metadata[,head(.SD,n=opts$ncells),by="stage_lineage"]
+
+opts$met_cells <- sample_metadata$id_acc
+opts$rna_cells <- sample_metadata$id_rna
+```
+
+<!-- Load methylation data -->
+```{r load_data, echo=FALSE, include=FALSE}
+met_dt <- opts$met_cells %>% map(function(i) {
+  fread(sprintf("%s/%s.tsv.gz",io$met_data_raw,i), 
+        showProgress = F, header = T,
+        select = c("chr"="factor", "pos"="integer", "rate"="integer")) %>%
+    .[,id_acc:=as.factor(i)] %>% 
+    .[,c("start","end"):=list(pos,pos)] %>%
+    setnames("pos","bp") %>% 
+    setkey("chr","start","end") %>%
+    
+    # Overlap with TSS annotations
+    foverlaps(.,tss, nomatch=0) %>% .[, c("chr","i.start","i.end") := NULL] %>%
+    .[,dist:=ifelse(strand %in% c("+","*"),bp-tss,tss-bp)] %>% 
+    .[, dist:=as.integer(opts$slide*round(dist/opts$slide))] %>%
+    .[,list(rate=as.integer(mean(rate)), n=.N), by=c("id_acc","id","dist")]
+}) %>% rbindlist
+```
+
+<!-- Load RNA data -->
+
+```{r load_rna, echo=FALSE, include=FALSE}
+
+# Load SingleCellExperiment object
+sce <- readRDS(io$rna)[,opts$rna_cells]
+
+# Create data.table
+rna_dt <- logcounts(sce) %>% t %>% as.data.table(keep.rownames="id_rna") %>% 
+  melt(id.vars="id_rna", value.name="expr", variable.name="id") %>%
+  merge(
+    rowData(sce) %>% 
+      as.data.frame(row.names=rownames(sce)) %>% 
+      tibble::rownames_to_column("ens_id") %>% 
+      .[,c("symbol","ens_id")] %>% as.data.table %>%
+      setnames(c("ens_id","symbol"),c("id","gene")), 
+  by=c("id"))
+
+rna_dt[,c("id_rna","id","gene"):=list(as.factor(id_rna), as.factor(id),as.factor(gene))]
+```
+
+<!-- Merge data and sample metadata -->
+
+```{r}
+met_dt <- met_dt %>% 
+  merge(sample_metadata[,c("id_acc","id_rna","stage","stage_lineage")], by="id_acc") %>% 
+  .[,id_acc:=NULL]
+
+rna_dt <- rna_dt %>% 
+  merge(sample_metadata[,c("id_rna","stage","stage_lineage")], by="id_rna")
+```
+
+<!-- Merge DNA methylation and RNA expression data -->
+
+```{r}
+metrna_dt <- merge(met_dt, rna_dt, by=c("id_rna","id","stage","stage_lineage")) %>% 
+  droplevels
+
+rm(met_dt,rna_dt)
+```
+
+<!-- Overlap data with windows -->
+
+```{r, echo=FALSE}
+tmp <- seq(from=0-opts$up, to=0+opts$down-opts$window, by=opts$slide)
+foo <- data.table(window_center=tmp+(opts$window/2), rel_start=tmp, rel_end=tmp+opts$window)
+
+bar <- foverlaps(
+  x = foo %>% setkey(rel_start,rel_end),
+  y = metrna_dt[,c("rel_start","rel_end"):=dist] %>% setkey(rel_start,rel_end)
+) %>% 
+  .[,c("i.rel_start","i.rel_end","rel_start","rel_end"):=NULL] %>%
+  .[,.(rate=mean(rate), N=.N), by=c("id_rna","id","gene","window_center","expr","stage_lineage")]
+
+rm(tmp,foo,metrna_dt)
+gc(reset=T)
+```
+
+Permute gene expression labels
+```{r}
+# bar %>% .[,expr:=sample(expr), by=c("sample")]
+```
+
+<!-- Compute local correlations -->
+
+```{r}
+cor <- bar %>% 
+  .[,.(r = cor(x=rate, y=expr, method="pearson", use="pairwise.complete.obs")),
+    by = c("id_rna","window_center","stage_lineage")]
+```
+
+<!-- Plot -->
+
+```{r}
+p <- ggplot(cor,aes(x=window_center, y=r)) +
+  stat_summary(aes(fill=stage_lineage, color=stage_lineage), fun.data=mean_sd, geom="smooth", alpha=0.2, size=1.0) +
+  geom_hline(yintercept=0, linetype="dashed", color="black", size=0.5) +
+  geom_vline(xintercept=0, linetype="dashed", color="black", size=0.5) +
+  ylab("Correlation") + xlab("Genomic distance from TSS (bp)") +
+  scale_x_continuous(limits=c(-opts$up,opts$down)) +
+  coord_cartesian(ylim=c(0.25,-0.25)) +
+  # scale_y_continuous(limits=c(-0.45,0.25), expand=c(0,0)) +
+  theme_classic()
+
+# pdf(file=paste0(io$outdir,"/metrna_local_permuted.pdf"), width=6.5, height=5)
+print(p)
+# dev.off()
+```

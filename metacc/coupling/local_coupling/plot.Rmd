@@ -1,0 +1,100 @@
+---
+title: "Plot local correlation between DNA methylation and chromatin accessibility"
+---
+
+Define settings
+```{r define_settings, echo=FALSE, include=FALSE}
+if (grepl("ricard",Sys.info()['nodename'])) {
+  source("/Users/ricard/scnmt_gastrulation/settings.R")
+} else {
+  stop("Computer not recognised")
+}
+io$outdir <- paste0(io$basedir,"/metacc/coupling")
+
+# Define lineages
+opts$stage_lineage <- c(
+  "E3.5_ICM",
+  "E4.5_Epiblast",
+  "E4.5_Primitive_endoderm",
+  "E5.5_Epiblast",
+  "E5.5_Visceral_endoderm",
+  "E6.5_Epiblast",
+  "E6.5_Primitive_Streak",
+  "E6.5_Visceral_endoderm",
+  "E7.5_Epiblast",
+  "E7.5_Ectoderm",
+  "E7.5_Primitive_Streak",
+  "E7.5_Endoderm",
+  "E7.5_Mesoderm"
+)
+```
+
+Update sample metadata
+```{r}
+sample_metadata <- sample_metadata %>%
+  .[pass_metQC==TRUE & pass_accQC==TRUE & stage%in%c("E3.5","E4.5","E5.5") & !is.na(lineage10x_2)]
+```
+
+
+Load precomputed data
+```{r}
+to.plot <- fread(paste0(io$outdir,"/data.txt.gz")) %>%
+  merge(sample_metadata[,c("id_rna","stage_lineage")],by="id_rna") %>%
+  # setnames("lineage10x_2","lineage") %>%
+  .[stage_lineage%in%opts$stage_lineage]
+unique(to.plot$stage_lineage)
+```
+
+Plot per cell
+```{r}
+for (i in unique(to.plot$id_rna)) {
+  
+  p <- ggplot(to.plot[id_rna==i], aes(x=window_center, y=r)) +
+    stat_summary(fun.data=mean_sd, geom="smooth", alpha=0.2, size=1.0, color="black", fill="black") +
+    geom_hline(yintercept=0, linetype="dashed", color="black", size=0.5) +
+    geom_vline(xintercept=0, linetype="dashed", color="black", size=0.5) +
+    ylab("Correlation") + xlab("Genomic distance from TSS (bp)") +
+    # scale_x_continuous(limits=c(-opts$up,opts$down)) +
+    # coord_cartesian(ylim=c(0.25,0)) +
+    # scale_y_continuous(limits=c(-0.45,0.25), expand=c(0,0)) +
+    theme_classic()
+  
+  pdf(sprintf("%s/per_cell/%s_metacc_local_coupling.pdf",io$outdir,i), width=6.5, height=5)
+  print(p)
+  dev.off()
+}
+```
+
+Plot per lineage
+```{r}
+p <- ggplot(to.plot, aes(x=window_center, y=r)) +
+  stat_summary(aes(fill=stage_lineage, color=stage_lineage), fun.data=mean_sd, geom="smooth", alpha=0.2, size=1.0) +
+  geom_hline(yintercept=0, linetype="dashed", color="black", size=0.5) +
+  geom_vline(xintercept=0, linetype="dashed", color="black", size=0.5) +
+  ylab("Correlation") + xlab("Genomic distance from TSS (bp)") +
+  # scale_x_continuous(limits=c(-opts$up,opts$down)) +
+  # coord_cartesian(ylim=c(-0.4,0.10)) +
+  # scale_y_continuous(limits=c(-0.45,0.25), expand=c(0,0)) +
+  theme_classic()
+
+# pdf(paste0(io$outdir,"/metacc_local_coupling.pdf"), width=6.5, height=5)
+print(p)
+# dev.off()
+```
+
+Plot per stage
+```{r}
+p <- ggplot(to.plot, aes(x=window_center, y=r)) +
+  stat_summary(aes(fill=stage, color=stage), fun.data=mean_sd, geom="smooth", alpha=0.2, size=1.0) +
+  geom_hline(yintercept=0, linetype="dashed", color="black", size=0.5) +
+  geom_vline(xintercept=0, linetype="dashed", color="black", size=0.5) +
+  ylab("Correlation") + xlab("Genomic distance from TSS (bp)") +
+  # scale_x_continuous(limits=c(-opts$up,opts$down)) +
+  # coord_cartesian(ylim=c(0.25,0)) +
+  # scale_y_continuous(limits=c(-0.45,0.25), expand=c(0,0)) +
+  theme_classic()
+
+# pdf(paste0(io$outdir,"/metacc_local_coupling.pdf"), width=6.5, height=5)
+print(p)
+# dev.off()
+```

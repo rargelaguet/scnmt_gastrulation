@@ -1,6 +1,7 @@
 suppressPackageStartupMessages(library(data.table))
 suppressPackageStartupMessages(library(purrr))
 suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(SingleCellExperiment))
 
 #########
 ## I/O ##
@@ -23,30 +24,34 @@ if (grepl("ricard",Sys.info()['nodename'])) {
 
 io$metadata <- paste0(io$basedir,"/sample_metadata.txt")
 
+# Methylation
 io$met_data_raw <- paste0(io$basedir,"/met/cpg_level")
 io$met_data_parsed <- paste0(io$basedir,"/met/feature_level")
 io$met.stats <- paste0(io$basedir,"/met/results/stats/sample_stats.txt")
 io$met.stats_per_chr <- paste0(io$basedir,"/met/results/stats/sample_stats_per_chr.txt.gz")
 
+# Accessibility
 io$acc_data_raw <- paste0(io$basedir,"/acc/gpc_level")
 io$acc_data_parsed <- paste0(io$basedir,"/acc/feature_level")
 io$acc.stats <- paste0(io$basedir,"/acc/results/stats/sample_stats.txt")
 io$acc.stats_per_chr <- paste0(io$basedir,"/acc/results/stats/sample_stats_per_chr.txt.gz")
 
-io$rna <- paste0(io$basedir,"/rna/SingleCellExperiment.rds")
+# RNA
+io$rna.sce <- paste0(io$basedir,"/rna/SingleCellExperiment.rds")
 io$rna.stats <- paste0(io$basedir,"/rna/results/stats/rna_stats.txt")
 
+# Other
 io$features.dir <- paste0(io$basedir,"/features/genomic_contexts")
 # io$cpg.density <- paste0(io$basedir,"/met/stats/features/cpg_density_perfeature.txt.gz")
-
 io$scmet <- paste0(io$basedir,"/met/results/variability")
+io$mae <- paste0(io$basedir,"/metaccrna/MultiAssayExperiment/scnmtseq_gastrulation_mae.rds")
 
+# RNA atlas (PijuanSala2019)
 io$atlas.metadata <- paste0(io$atlas.basedir,"/sample_metadata.txt.gz")
 io$atlas.marker_genes <- paste0(io$atlas.basedir,"/results/marker_genes/marker_genes.txt.gz")
 io$atlas.differential <- paste0(io$atlas.basedir,"/results/differential")
 io$atlas.average_expression_per_celltype <- paste0(io$atlas.basedir,"/results/marker_genes/avg_expr_per_celltype_and_gene.txt.gz")
 io$atlas.sce <- paste0(io$atlas.basedir,"/processed/SingleCellExperiment.rds")
-
 
 
 #############
@@ -171,3 +176,22 @@ opts$chr <- paste0("chr",c(1:19,"X","Y"))
 sample_metadata <- fread(io$metadata) %>% 
   .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")]
   # %>% .[,(factor.cols):=lapply(.SD, as.factor),.SDcols=(factor.cols)] %>% droplevels
+
+###############
+## Functions ##
+###############
+
+load_SingleCellExperiment <- function(file, normalise = FALSE, features = NULL, cells = NULL, remove_non_expressed_genes = FALSE) {
+  sce <- readRDS(file)
+  if (!is.null(cells)) sce <- sce[,cells]
+  if (!is.null(features)) sce <- sce[features,]
+  if (normalise) sce <- logNormCounts(sce)
+  if (remove_non_expressed_genes) sce <- sce[which(Matrix::rowMeans(counts(sce))>1e-4),]
+  return(sce)
+}
+
+matrix.please<-function(x) {
+  m<-as.matrix(x[,-1])
+  rownames(m)<-x[[1]]
+  m
+}

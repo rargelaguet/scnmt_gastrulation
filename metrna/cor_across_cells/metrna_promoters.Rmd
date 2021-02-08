@@ -1,0 +1,247 @@
+---
+title: "Gastrulation scNMT-seq: correlation across cells (per gene) between RNA expression and DNA methylation"
+---
+
+```{r echo=FALSE, include=FALSE}
+suppressPackageStartupMessages(library(weights))
+suppressPackageStartupMessages(library(grid))
+suppressPackageStartupMessages(library(gridExtra))
+suppressPackageStartupMessages(library(cowplot))
+```
+
+# Define settings
+
+```{r}
+source("/Users/ricard/scnmt_gastrulation/settings.R")
+```
+
+```{r echo=FALSE, include=FALSE}
+source("/Users/ricard/scnmt_gastrulation/metrna/cor_across_cells/utils.R")
+```
+
+Define I/O
+```{r echo=TRUE, include=FALSE}
+io$outdir <- paste0(io$basedir,"/metrna/cor/scmet_revision")
+```
+
+Define options
+```{r}
+# Filtering parameters
+opts$min.CpGs <- 1      # Minimum number of CpGs per feature
+opts$min.cells <- 50    # Minimum number of observed cells per feature with at least opts$min.CpGs
+opts$highly.variable.genes <- 5000  # Top N most variable genes and features
+
+# Multiple testing correction options
+opts$threshold_fdr  <- 0.1
+
+# Correlation type options
+opts$method <- "pearson"      # correlation type (see ?cor)
+opts$weight <- FALSE          # weighted correlation (see ?wtd.cor) 
+
+# Permutation test options
+opts$permutation <- TRUE   # do permutation test?
+opts$n_perms <- 10          # Number of random permutations
+
+# Define genomic contexts
+opts$annos <- c(
+  "prom_2000_2000"="Promoters"
+)
+
+# Define lineages
+opts$stage_lineage <- c(
+  "E4.5_Epiblast",
+  "E5.5_Epiblast",
+  "E6.5_Epiblast",
+  "E6.5_Primitive_Streak",
+  "E7.5_Epiblast",
+  "E7.5_Ectoderm",
+  "E7.5_Primitive_Streak",
+  "E7.5_Endoderm",
+  "E7.5_Mesoderm"
+)
+```
+
+Update sample metadata
+```{r}
+sample_metadata.filt <- sample_metadata %>% 
+  .[pass_metQC==T & pass_rnaQC==T & stage_lineage%in%opts$stage_lineage] %>%
+  .[,c("sample","id_rna","id_met","stage","lineage10x_2")]
+```
+
+```{r}
+opts$rna.cells <- sample_metadata.filt$id_rna
+opts$met.cells <- sample_metadata.filt$id_met
+```
+
+# Load data
+
+## Load gene metadata
+```{r load_genomiccontexts}
+gene_metadata <- fread(io$gene.metadata) %>% 
+  setnames(c("ens_id","symbol"),c("id","gene")) %>% 
+  .[,chr:=gsub("chr","",chr)]
+head(gene_metadata,n=3)
+```
+
+## Load RNA data
+
+Load SingleCellExperiment
+```{r}
+sce <- load_SingleCellExperiment(io$rna.sce, normalise = TRUE, cells = opts$rna.cells)
+dim(sce)
+```
+
+Filter RNA data
+```{r}
+# Remove genes with little variability
+sce <- sce[apply(counts(sce),2,var)>0.5,]
+dim(sce)
+```
+
+Create data.table
+```{r}
+rna_dt <- logcounts(sce) %>% t %>% as.data.table(keep.rownames="id_rna") %>% 
+  melt(id.vars="id_rna", value.name="expr", variable.name="id")
+colnames(rna_dt)
+```
+
+Add gene and cell metadata
+```{r}
+rna_dt <- rna_dt %>% 
+  merge(sample_metadata[,c("sample","id_rna")], by="id_rna") %>%
+  merge(gene_metadata[,c("gene","id")], by="id")
+colnames(rna_dt)
+```
+
+## Load methylation data
+
+Load
+```{r}
+met_dt <- lapply(names(opts$annos), function(n) {
+  fread(sprintf("%s/%s.tsv.gz",io$met_data_parsed,n)) %>% .[V1%in%opts$met.cells]
+}) %>% rbindlist %>% setnames(c("sample","id","anno","Nmet","N","rate"))
+colnames(met_dt)
+```
+
+Filter methylation data
+```{r}
+# Filter by mininum number of CpGs per feature
+met_dt <- met_dt[N>=opts$min.CpGs]
+
+# Filter by coverage
+met_dt <- met_dt %>% .[,N:=.N, by=c("id","anno")] %>% .[N>=opts$min.cells] %>% .[,N:=NULL]
+
+# Filter by variability
+met_dt <- met_dt[,var:=var(rate), by=c("id","anno")] %>% .[var>0] %>% .[,var:=NULL]
+
+# Add gene metadata
+met_dt <- met_dt %>% merge(gene_metadata[,c("id","gene")], by="id")
+```
+
+# Merge DNA methylation and RNA expression data
+
+```{r}
+metrna_dt <- merge(
+  met_dt, 
+  rna_dt[,c("sample","gene","expr")], 
+  by = c("sample","gene")
+)
+colnames(metrna_dt)
+```
+
+Feature selection: Extract most variable genes
+```{r}
+keep_hv_genes <- metrna_dt %>% split(.$anno) %>% 
+  map(~ .[,.(var=var(expr)), by=c("gene","id")] %>% setorder(-var) %>% head(n=opts$highly.variable.genes) %>% .[,gene_id:=paste(gene,id,sep="_")] %>% .$gene_id %>% as.character())
+
+metrna_dt <- metrna_dt %>% .[,gene_id:=paste(gene,id,sep="_")] %>% split(.$anno) %>%
+  map2(.,names(.), function(x,y) x[gene_id %in% keep_hv_genes[[y]]]) %>% rbindlist %>% .[,gene_id:=NULL]
+```
+
+# Compute correlations
+
+```{r}
+if (opts$weight) {
+  cor <- metrna_dt %>%
+    .[, wtd.cor(rate, expr, N)[,c("correlation","t.value","p.value")], by = c("id","gene","anno")]
+} else {
+  cor <- metrna_dt %>%
+    .[, .(V1 = unlist(cor.test(rate, expr, method = opts$method)[c("estimate", "p.value")])), by = c("id","gene","anno")]
+}
+```
+
+Compute adjusted p-values
+```{r}
+cor <- cor %>% 
+  .[, para := rep(c("r","p"), .N/2)] %>% 
+  data.table::dcast(id+gene+anno ~ para, value.var = "V1") %>%
+  .[,"padj_fdr" := list(p.adjust(p, method="fdr")), by="anno"] %>%
+  .[,"log_padj_fdr" := list(-log10(padj_fdr))] %>%
+  .[, sig := padj_fdr <= opts$threshold_fdr] %>% 
+  setorder(padj_fdr)
+
+head(cor,n=3)
+```
+
+```{r}
+cor[,sum(sig),by="anno"]
+```
+
+# Save
+
+Save results
+```{r}
+fwrite(cor, paste0(io$outdir,"/metrna_cor_promoters.txt.gz"), quote=F, sep="\t")
+cor <- fread(paste0(io$outdir,"/metrna_cor_promoters.txt.gz"))
+```
+
+# Permutation test
+
+```{r perm_cor_rate, echo=FALSE, include=FALSE}
+if (opts$permutation) {
+  pp_vals <- vector(mode = "numeric", length = length(cor$p))
+  for (k in 1:opts$n_perms){
+    print(k)
+    
+    metrna_dt_perm <- copy(metrna_dt) %>%
+    .[, expr:=sample(expr), by = c("id","gene","anno")] %>%
+    .[, rate:=sample(rate), by = c("id","gene","anno")]
+    
+    if (opts$weight) {
+      # cor_perm <- metrna_dt_perm[, .(p = wtd.cor(rate, expr, weight)[, c("p.value")]), by = c("id", "gene", "anno")]
+    } else {
+      cor_perm <- metrna_dt_perm %>%
+        .[, .(p = cor.test(rate, expr, method=opts$method)[["p.value"]]), by = c("id","gene","anno")]
+    }
+    
+    # For each annotation sort by p-value and store the permuted p-values
+    cor_perm <- cor_perm %>% split(.$anno) %>% map(~ .[,.(anno = anno, p = sort(p))]) %>% rbindlist
+    pp_vals <- pp_vals + cor_perm$p
+  }
+  # Compute the average p-values
+  pp_vals <- pp_vals / opts$n_perms
+  
+  cor_perm <- cor_perm[, p := pp_vals]
+}
+```
+
+Volcano plot of p-values against Pearson's r and QQ-plot of p-values
+```{r}
+if (opts$permutation) {
+  pp <- qq <- list()
+  for (n in unique(cor$anno)) {
+    
+    # Generate volcano plot  
+    to.plot <- cor %>% copy %>% .[log_padj_fdr>50,log_padj_fdr:=50]
+    pp[[n]] <- gg_volcano_plot(to.plot[anno == n,], top_hits=10)
+    
+    # Generate qq plot
+    qq[[n]] <- gg_qqplot(cor[anno == n, ], cor_perm[anno == n]$p, title = "")
+    
+    # Plot
+    pdf(paste0(io$outdir,"/volcano_qq_", n, ".pdf"), width = 13, height = 5.5)
+    grid.arrange(pp[[n]], qq[[n]], ncol=2, newpage = TRUE)
+    dev.off()
+  }
+}
+```

@@ -4,9 +4,6 @@ matrix.please <- function(x) {
   m
 }
 
-suppressPackageStartupMessages(library(SingleCellExperiment))
-suppressPackageStartupMessages(library(scater))
-
 ###########################
 ## Load methylation data ##
 ###########################

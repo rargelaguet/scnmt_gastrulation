@@ -13,7 +13,7 @@ library(scater)
 Define I/O
 ```{r define_io}
 source("/Users/ricard/scnmt_gastrulation/settings.R")
-io$outdir <- paste0(io$basedir,"/rna/dimensionality_reduction")
+io$outdir <- paste0(io$basedir,"/rna/results/dimensionality_reduction")
 ```
 
 Define options
@@ -23,8 +23,10 @@ opts$stage_lineage <- c(
   "E4.5_Epiblast",
   "E4.5_Primitive_endoderm",
   "E5.5_Epiblast",
+  "E5.5_Visceral_endoderm",
   "E6.5_Epiblast",
   "E6.5_Primitive_Streak",
+  "E6.5_Visceral_endoderm",
   "E6.5_Mesoderm",
   "E7.5_Epiblast",
   "E7.5_Primitive_Streak",
@@ -55,6 +57,7 @@ Update sample metadata
 sample_metadata <- sample_metadata %>% 
   .[pass_rnaQC==T & stage_lineage%in%opts$stage_lineage] %>%
   .[,c("id_rna","stage","lineage10x_2","stage_lineage")]
+table(sample_metadata$stage_lineage)
 ```
 
 # Load RNA expression data
@@ -133,39 +136,97 @@ Plot PCA
 
 Run UMAP
 ```{r}
-set.seed(42)
+set.seed(41)
 sce_filt <- runUMAP(sce_filt, dimred="PCA", n_neighbors = 15, min_dist = 0.55)
 reducedDim(sce, "UMAP") <- reducedDim(sce_filt, "UMAP") 
 ```
 
 Plot UMAP
+
 ```{r}
 to.plot <- reducedDim(sce_filt,"UMAP") %>% as.data.table %>% 
   .[,id_rna:=colnames(sce_filt)] %>%
     merge(sample_metadata, by="id_rna")
+```
 
-p <- ggplot(to.plot, aes(x=V1, y=V2, fill=stage)) +
-  geom_point(size=2, shape=21) +
-  scale_color_manual(values=opts$stage.colors) +
-  # scale_fill_manual(values=opts$celltype2.colors) +
+```{r}
+# to.plot2 <- to.plot[500:1000]
+
+p <- ggplot(to.plot, aes(x=V1, y=V2, fill=lineage10x_2)) +
+  geom_point(size=4, shape=21) +
+  # scale_color_manual(values=opts$stage.colors) +
+  scale_fill_manual(values=opts$celltype2.colors) +
   theme_classic() +
   theme(
     axis.title = element_blank(),
     axis.text = element_blank(),
     axis.ticks = element_blank(),
-    legend.position="right",
+    axis.line = element_blank(),
+    legend.position="none",
     legend.title=element_blank()
   )
 
-# pdf(paste0(io$outdir,"/rna_umap.pdf"), width=5, height=3, useDingbats = F)
+pdf(paste0(io$outdir,"/rna_umap_v2.pdf"), width=6, height=5, useDingbats = F)
 print(p)
-# dev.off()
+dev.off()
 ```
-
-# sessionInfo
 
 ```{r}
-sessionInfo()
+colors <- c(
+  "E4.5_Epiblast" = "steelblue 1",
+  "E4.5_Primitive_endoderm" = "#7CCD7C",
+  "E5.5_Epiblast" = "steelblue 1",
+  "E5.5_Visceral_endoderm" = "#7CCD7C",
+  "E6.5_Epiblast" = "steelblue 1",
+  "E6.5_Primitive_Streak" = "sandybrown",
+  "E6.5_Visceral_endoderm" = "#7CCD7C",
+  "E6.5_Mesoderm" = "#CD3278",
+  "E7.5_Epiblast" = "steelblue 1",
+  "E7.5_Primitive_Streak" = "sandybrown",
+  "E7.5_Ectoderm" = "steelblue 1",
+  "E7.5_Endoderm" = "#43CD80",
+  "E7.5_Mesoderm" = "#CD3278"
+)
+alpha <- rep(1.0, length(colors))
+names(alpha) <- names(colors)
+ 
+for (i in names(opts$stage.colors)) {
+  
+  alpha_i <- alpha
+  alpha_i[grep(i,opts$stage_lineage, invert = T)] <- 0.25
+  
+  colors_i <- colors
+  colors_i[grep(i,opts$stage_lineage, invert = T)] <- "grey"
+  
+  p <- ggplot(to.plot, aes(x=V1, y=V2, fill=stage_lineage, alpha=stage_lineage)) +
+    geom_point(size=2, shape=21) +
+    # scale_size_manual(values = c("TRUE"=0.55, "FALSE"=0.15)) +
+    scale_fill_manual(values=colors_i) +
+    scale_alpha_manual(values=alpha_i) +
+    # scale_fill_manual(values=opts$celltype2.colors) +
+    theme_classic() +
+    theme(
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.line = element_blank(),
+      legend.position="none"
+    )
+  
+  pdf(sprintf("%s/rna_umap_%s.pdf",io$outdir,i), width=3, height=3, useDingbats = F)
+  print(p)
+  dev.off()
+}
 ```
 
 
+index <- match(plot_df$cell, as.character(mapping$closest.cell) )
+plot_df$mapped <- as.factor(!is.na(index))
+  
+p <- ggplot(data=plot_df, mapping=aes(x=V1, y=V2, colour=mapped)) +
+  ggrastr::geom_point_rast(aes(size=mapped), alpha=opts$dot_alpha) +
+  # geom_point(aes(size=mapped), alpha=opts$dot_alpha) +
+
+```{r}
+
+```

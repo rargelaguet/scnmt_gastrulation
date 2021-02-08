@@ -1,0 +1,267 @@
+---
+title: "Coupling between RNA expression and DNA methylation"
+---
+
+```{r echo=FALSE, include=FALSE}
+suppressPackageStartupMessages(library(ggpubr))
+```
+
+# Define settings
+
+Load default settings
+```{r echo=TRUE, include=FALSE}
+if (grepl("ricard",Sys.info()['nodename'])) {
+  source("/Users/ricard/scnmt_gastrulation/settings.R")
+  source("/Users/ricard/scnmt_gastrulation/metrna/coupling/utils.R")
+} else if(grepl("ebi",Sys.info()['nodename'])){
+  source("/homes/ricard/scnmt_gastrulation/settings.R")
+} else {
+  stop("Computer not recognised")
+}
+```
+
+I/O
+```{r}
+io$outdir <- paste0(io$basedir,"/metrna/coupling")
+```
+
+Options
+```{r}
+# Filtering parameters
+opts$min.CpGs <- 3       # Minimum number of CpGs per feature
+opts$gene_window <- 1e4  # window length for the overlap between genes and features
+
+# Multiple testing options
+opts$threshold_fdr  <- 0.01   # pvalue threshold for significance in FDR
+
+# Permutation test options
+opts$permutation <- TRUE   # do permutation test?
+opts$n_perms <- 10         # Number of permutations
+
+# Define genomic contexts
+opts$annos <- c(
+  # "genebody",
+  # "prom_2000_2000_cgi",
+  # "prom_2000_2000_noncgi",
+  "prom_2000_2000"
+  # "CGI",
+  # "H3K27ac_distal_E7.5_union_500",
+  # "H3K27ac_promoter_E7.5_union_500",
+  # "H3K4me3_E7.5_union",
+  # "LINE"="LINE",
+  # "LTR"="LTR"
+)
+
+# Define lineages
+opts$stage_lineage <- c(
+  "E4.5_Epiblast",
+  "E5.5_Epiblast",
+  "E6.5_Epiblast",
+  "E6.5_Primitive_Streak",
+  "E7.5_Epiblast",
+  "E7.5_Ectoderm",
+  "E7.5_Primitive_Streak",
+  "E7.5_Endoderm",
+  "E7.5_Mesoderm"
+)
+```
+
+Update sample metadata
+```{r}
+sample_metadata <- sample_metadata %>% 
+  .[stage_lineage%in%opts$stage_lineage] %>%
+  .[pass_metQC==TRUE & pass_rnaQC==TRUE] %>%
+  droplevels
+table(sample_metadata$stage_lineage)
+```
+
+# Load data
+
+## Load feature metadata
+
+Load gene metadata
+```{r load_genomiccontexts}
+gene_metadata <- fread(io$gene.metadata) %>% 
+  setnames(c("ens_id","symbol"),c("id","gene")) %>% 
+  .[,chr:=gsub("chr","",chr)]
+
+# Define windows for the overlap between genes and features
+gene_metadata_filt <- gene_metadata %>% 
+  .[,c("chr","start","end","gene")] %>%
+  .[,c("start", "end") := list(start-opts$gene_window, end+opts$gene_window)] %>% 
+  setkey(chr,start,end)
+```
+
+Load genomic context metadata
+```{r load_genomiccontexts}
+feature_metadata <- lapply(opts$annos, function(i) 
+  fread(
+    file = sprintf("%s/%s.bed.gz",io$features.dir,i), 
+    select = c("V1"="character", "V2"="integer", "V3"="integer","V5"="character","V6"="factor"))
+) %>% rbindlist %>% setnames(c("chr","start","end","id","anno"))
+
+# feature_metadata_filt <- feature_metadata %>% split(.$anno) %>% 
+#   map2(.,names(.), function(x,y) x[id %in% met_dt[anno==y,id]] ) %>%
+#   rbindlist
+```
+
+## Load RNA data
+
+Load SingleCellExperiment
+```{r}
+sce <- load_SingleCellExperiment(io$rna.sce, normalise = TRUE, cells = opts$rna.cells)
+dim(sce)
+```
+
+Create data.table
+```{r}
+rna_dt <- logcounts(sce) %>% t %>% as.data.table(keep.rownames="id_rna") %>% 
+  melt(id.vars="id_rna", value.name="expr", variable.name="id")
+colnames(rna_dt)
+```
+
+Add gene and cell metadata
+```{r}
+rna_dt <- rna_dt %>% 
+  merge(sample_metadata[,c("id_met","id_rna")], by="id_rna") %>%
+  merge(gene_metadata[,c("gene","id")], by="id")
+colnames(rna_dt)
+```
+
+## Load methylation data
+
+TO-DO: LOAD ONLY RELEVANT COLUMNS
+```{r load_met, echo=FALSE, include=FALSE}
+met_dt <- lapply(opts$annos, function(n) {
+  fread(sprintf("%s/%s.tsv.gz",io$met_data_parsed,n), showProgress=F) %>%
+  .[V1%in%sample_metadata$id_met]
+}) %>% rbindlist %>% setnames(c("id_met","id","anno","Nmet","Ntotal","rate"))
+
+# Filter by mininum number of CpGs per feature
+met_dt <- met_dt[Ntotal>=opts$min.CpGs]
+```
+
+# Associate the non-genic contexts with overlapping genes
+
+TO-DO: UPDATE TO MINIMUM DISTANCE
+```{r associate, echo=FALSE}
+met_list <- list()
+for (i in unique(met_dt$anno)){
+  
+  # Subset corresponding anno
+  met_tmp <- met_dt[anno == i, ]
+  
+  # Non gene-associated feature
+  if (all(grepl("ENSG", unique(met_tmp$id)) == FALSE)) {
+    
+    # Extract coordiantes for methylation sites and for genes
+    feature_metadata_tmp <- feature_metadata[anno==i, c("chr","start","end","id")] %>% setkey(chr,start,end)
+    
+    # Do the overlap
+    ov <- foverlaps(feature_metadata_tmp, gene_metadata_filt, mult="all", nomatch=0) %>% 
+      setnames(c("start","end"), c("gene_start","gene_end")) %>%
+      setnames(c("i.start","i.end"), c("feature_start","feature_end")) %>%
+      .[,dist:=round(abs(mean(abs(gene_start-gene_end))-mean(abs(feature_start-feature_end))))] %>%
+      .[,c("gene", "id","dist")]
+  
+    # Merge with methylation data
+    met_list[[i]] <- merge(met_tmp, ov, by="id", allow.cartesian=T) 
+  }
+  # Gene-associated feature
+  else if (all(grepl("ENSG", unique(met_tmp$id)) == TRUE)) {
+    met_list[[i]] <- merge(met_tmp, gene_metadata[,c("id","gene")], by="id") %>%
+      .[,dist:=0]
+  }
+}
+
+met_dt <- rbindlist(met_list); rm(met_list)
+```
+
+# Merge DNA methylation and RNA expression data
+
+```{r}
+metrna_dt <- merge(
+  met_dt, 
+  rna_dt[,c("id_met","gene","expr")], 
+  by = c("id_met","gene")
+)
+```
+
+
+# Compute coupling
+
+```{r cor_rate, echo=FALSE, include=FALSE}
+cor <- metrna_dt %>%
+  .[, .(V1 = unlist(cor.test(rate, expr)[c("estimate", "p.value")])), by = c("id_met","anno")] %>% 
+  .[, para := rep(c("r","p"), .N/2)] %>% 
+  data.table::dcast(id_met+anno~para, value.var="V1") %>% 
+  .[, padj_fdr := p.adjust(p, method = "fdr"), by = "anno"] %>%
+  .[, log_padj_fdr := -log10(padj_fdr)] %>%
+  .[, sig := padj_fdr <= opts$threshold_fdr] %>%
+  setorder(padj_fdr)
+
+head(cor,n=3)
+```
+
+# Save 
+
+```{r}
+# fwrite(cor, paste0(io$outdir,"/metrna_coupling.txt"), sep="\t")
+# cor <- fread(paste0(io$outdir,"/metrna_coupling.txt"))
+```
+
+## Boxplots
+
+```{r}
+to.plot <- cor %>% merge(sample_metadata,by="id_met")
+colnames(to.plot)
+```
+
+```{r}
+ggboxplot(to.plot, x="stage", y="r") +
+  # facet_wrap(~anno) +
+  labs(x="", y="Pearson correlation") +
+  coord_cartesian(ylim=c(-0.4,0.2)) +
+  geom_hline(yintercept=0, colour="black", linetype="dashed") +
+  # guides(x = guide_axis(angle = 90)) +
+  theme(
+    axis.text.y = element_text(size=rel(0.8)),
+    # axis.title.y = element_text(size=rel(0.75)),
+    # axis.ticks.x = element_blank(),
+    legend.title = element_blank()
+  )
+```
+
+## Run permutation test
+
+```{r}
+if (opts$permutation) {
+  pp_vals <- vector(mode = "numeric", length = length(cor$p))
+  for (k in 1:opts$n_perms){
+    cor_perm <- copy(metrna_dt) %>%
+      .[,expr := list(sample(expr)), by = c("id_met","anno")] %>%
+      .[, .(p = cor.test(rate, expr, method=opts$method)[["p.value"]]), by = c("id_met","anno")] %>% 
+      split(.$anno) %>% map(~ .[,.(anno = anno, p = sort(p))]) %>% rbindlist
+    pp_vals <- pp_vals + cor_perm %>% .[, p]
+  }
+  # Compute the average p-values across all permutations
+  pp_vals <- pp_vals / opts$n_perms
+  cor_perm <- cor_perm[, p := pp_vals]
+}
+```
+
+qq-plot of true vs permuted signal
+```{r, echo=FALSE}
+if (opts$permutation) {
+  pp <- qq <- list()
+  for (n in unique(cor$anno)) {
+    
+    # Generate permutation plot
+    p <- gg_qqplot(cor[anno == n, ], cor_perm[anno == n]$p, title = "")
+    
+    # pdf(paste0(io$outdir,"/permutation_", n, ".pdf"), height=4, width=6, useDingbats = FALSE)
+    print(p)
+    # dev.off()
+  }
+}
+```

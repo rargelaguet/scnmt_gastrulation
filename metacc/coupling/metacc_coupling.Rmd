@@ -1,0 +1,241 @@
+---
+title: "Coupling between chromatin accessibility and DNA methylation"
+---
+
+```{r echo=FALSE, include=FALSE}
+suppressPackageStartupMessages(library(weights))
+```
+
+# Define settings
+
+```{r echo=TRUE, include=FALSE}
+if (grepl("ricard",Sys.info()['nodename'])) {
+  source("/Users/ricard/human_embryo_multiomics/settings.R")
+} else if (grepl("ebi",Sys.info()['nodename'])) {
+  source("/homes/ricard/human_embryo_multiomics/settings.R")
+} else {
+  stop("Computer not recognised")
+}
+io$outdir <- paste0(io$basedir,"/metacc/coupling")
+
+# Filtering parameters
+opts$min.CpGs <- 1       # Minimum number of CpGs per feature
+opts$min.GpCs <- 5       # Minimum number of GpCs per feature
+
+# Multiple testing options
+opts$threshold_fdr  <- 0.01   # pvalue threshold for significance in FDR
+
+# Correlation options
+opts$method <- "pearson"      # correlation type
+opts$weight <- FALSE          # weighted correlation? 
+
+# Permutation test options
+opts$permutation <- TRUE   # do permutation test?
+opts$n_perms <- 10         # Number of permutations
+
+# Define genomic contexts
+opts$annos <- c(
+  "genebody",
+  # "prom_2000_2000_cgi",
+  "prom_2000_2000_noncgi",
+  # "prom_2000_2000"
+  "CGI"
+  # "H3K4me3_E7.5_union",
+  # "LINE"="LINE"
+  # "LTR"="LTR"
+)
+
+# Define lineages
+opts$lineages <- c(
+  "Prelineage",
+  # "Morula",
+  "ICM",
+  "Epiblast",
+  "PrE",
+  "TE_mural",
+  "TE_polar"
+)
+```
+
+Update sample metadata
+```{r}
+sample_metadata <- sample_metadata %>% 
+  .[lineage%in%opts$lineages] %>%
+  .[pass_metQC==TRUE & pass_accQC==TRUE] %>%
+  droplevels
+
+table(sample_metadata$lineage)
+```
+
+# Load data
+
+Load DNA methylation data
+```{r load_met, echo=FALSE, include=FALSE}
+met_dt <- lapply(opts$annos, function(n) {
+  fread(sprintf("%s/%s.tsv.gz",io$met_data_parsed,n), showProgress=F,
+        colClasses = c("factor","factor","factor","integer","integer","numeric")) %>%
+  .[V1%in%sample_metadata$id_met]
+}) %>% rbindlist %>% setnames(c("id_met","id","anno","Nmet","Ntotal","rate"))
+
+# Filter by mininum number of CpGs per feature
+met_dt <- met_dt[Ntotal>=opts$min.CpGs]
+```
+
+Load accessibility data
+```{r load_met, echo=FALSE, include=FALSE}
+acc_dt <- lapply(opts$annos, function(n) {
+  fread(sprintf("%s/%s.tsv.gz",io$acc_data_parsed,n), showProgress=F,
+        colClasses = c("factor","factor","factor","integer","integer","numeric")) %>%
+  .[V1%in%sample_metadata$id_acc]
+}) %>% rbindlist %>% setnames(c("id_acc","id","anno","Nmet","Ntotal","rate"))
+
+# Filter by mininum number of GpCs per feature
+acc_dt <- acc_dt[Ntotal>=opts$min.GpCs]
+```
+
+Merge data with metadata
+```{r}
+met_dt <- met_dt %>%
+  merge(sample_metadata[,c("id_rna","id_met","stage","lineage")], by="id_met") %>% droplevels
+
+acc_dt <- acc_dt %>% 
+  merge(sample_metadata[,c("id_rna","id_acc","stage","lineage")], by="id_acc") %>% droplevels
+```
+
+Combine the two data sets
+```{r}
+metacc_dt <- merge(
+  met_dt[,c("id_rna","id","anno","rate","Nmet","Ntotal")] %>% 
+    setnames(c("rate","Nmet","Ntotal"), c("met_rate","met_Nmet","met_Ntotal")),
+  acc_dt[,c("id_rna","id","anno","rate","Nmet","Ntotal")] %>% 
+    setnames(c("rate","Nmet","Ntotal"), c("acc_rate","acc_Nmet","acc_Ntotal")),
+  by=c("id_rna","id","anno")
+)
+
+rm(met_dt,acc_dt)#; gc(reset=T)
+```
+
+# Compute coupling
+
+```{r cor_rate, echo=FALSE, include=FALSE}
+# Weighted correlation
+if (opts$weight == TRUE){
+  if (opts$method != "pearson") print("Weighted correlation only supported for pearson"); stop()
+  cor <- metacc_dt[, wtd.cor(met_rate, acc_rate, met_weight)[, c("correlation", "t.value", "p.value")], by = c("id_rna", "anno")]
+  
+# Non-weighted correlation
+} else {
+  cor <- metacc_dt[, .(V1 = unlist(cor.test(met_rate, acc_rate, method = opts$method)[c("estimate", "statistic", "p.value")])), by = c("id_rna", "anno")]
+}
+
+# Compute adjusted p-values (both FDR and Bonferroni)
+cor <- cor %>% .[, para := rep(c("r","t","p"), .N/3)] %>% 
+  data.table::dcast(id_rna+anno~para, value.var="V1") %>% 
+  .[,padj_fdr:=p.adjust(p, method="fdr"), by="anno"] %>%
+  .[,log_padj_fdr:=-log10(padj_fdr)] %>%
+  .[,sig:=padj_fdr<= opts$threshold_fdr] %>% setorder(padj_fdr)
+```
+
+# Save results
+
+```{r}
+# fwrite(cor, paste0(io$outdir,"/metacc_coupling.txt"), sep="\t")
+# cor <- fread(paste0(io$outdir,"/metacc_coupling.txt"))
+```
+
+# Plot
+
+```{r}
+to.plot <- cor %>%
+  # merge(sample_metadata[,c("id_rna","stage","lineage")], by="id_rna")
+  merge(sample_metadata, by="id_rna")
+```
+
+```{r}
+# to.plot[r>0.85] %>% .[,c("r","id_rna","id_met","id_acc")]
+```
+
+Boxplots
+```{r}
+p <- ggplot(to.plot, aes(x=anno, y=r, fill=lineage)) +
+  geom_boxplot(alpha=0.8, outlier.shape=NA) +
+  geom_hline(yintercept=0, colour="black", linetype="dashed") +
+  # scale_fill_manual(values=opts$colors) +
+  # coord_cartesian(ylim=c(-0.15,0.15)) +
+  labs(title="", x="", y="Met/Acc correlation") +
+  theme_classic()
+  # scale_fill_brewer(palette = "Accent") +
+  # theme(
+  #   legend.position=c(0.3,1.05),
+  #   axis.text.x = element_text(color="black", size=11)
+  # )
+
+# pdf(paste0(io$outdir,"/metacc_coupling.pdf"), width=6, height=5)
+print(p)
+# dev.off()
+```
+
+# Run permutation test
+
+```{r}
+if (opts$permutation) {
+  pp_vals <- vector(mode = "numeric", length = length(cor$p))
+  for (k in 1:opts$n_perms){
+    metacc_dt_perm <- copy(metacc_dt)
+    
+    # Permute gene expression levels and methylation rates
+    metacc_dt_perm[, c("met_rate","acc_rate") := list(sample(met_rate),sample(acc_rate)), by = c("id_rna","anno")]
+    
+    # Compute coupling
+    cor_perm <- metacc_dt_perm[, .(p = cor.test(met_rate, acc_rate, method=opts$method)[["p.value"]]), by = c("id_rna","anno")]
+    
+    # For each annotation sort by p-value and store them
+    cor_perm <- cor_perm %>% split(.$anno) %>% map(~ .[,.(anno = anno, p = sort(p))]) %>% rbindlist
+    pp_vals <- pp_vals + cor_perm %>% .[, p]
+  }
+  # Compute the average p-values across all permutations
+  pp_vals <- pp_vals / opts$n_perms
+  cor_perm <- cor_perm[, p := pp_vals]
+}
+```
+
+QQplots of true vs permuted signal
+```{r, echo=FALSE}
+if (opts$permutation) {
+  pp <- qq <- list()
+  for (n in unique(cor$anno)) {
+    
+    # Generate permutation plot
+    qq[[n]] <- gg_qqplot(cor[anno == n, ], cor_perm[anno == n]$p, title="")
+    
+    # Combine and save
+    # pdf(file=paste0(io$outdir,"/permutation_",n,".pdf"), height=4, width=6, useDingbats=FALSE)
+    print(qq[[n]])
+    # dev.off()
+  }
+}
+```
+
+# Test
+
+```{r}
+foo <- metacc_dt[id_rna=="PlateD_A04_S25_merged" & anno=="prom_2000_2000_noncgi"] %>%
+  .[,c("id_rna","acc_rate","met_rate")]
+
+plot(foo$acc_rate,foo$met_rate)
+```
+
+
+```{r}
+# to.plot <- fread("/Users/ricard/data/human_embryo_multiomics/rna/results/pseudotime/pseudotime.tsv.gz") %>%
+#   # merge(cor) %>% 
+#   merge(sample_metadata[,c("id_rna","lineage")])
+# table(to.plot$lineage)
+```
+
+```{r}
+# ggscatter(to.plot, x="rank_x", y="r", facet="anno",
+#           add="reg.line", add.params = list(color="blue", fill="lightgray"), conf.int=TRUE) +
+#   stat_cor(method = "pearson")
+```
+

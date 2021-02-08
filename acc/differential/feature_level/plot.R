@@ -42,15 +42,15 @@ gg_barplot <- function(tmp, title = "", ylim=NULL) {
 
 ## I/O ##
 io <- list()
-io$input.dir <- "/Users/ricard/data/gastrulation/acc/results/differential/test"
+io$input.dir <- "/Users/ricard/data/gastrulation/acc/results/differential"
 io$outdir <- "/Users/ricard/data/gastrulation/acc/results/differential/pdf"
 
 ## Options ##
 opts <- list()
 opts$comparisons <- c(
-  "E7.5Ectoderm_vs_E7.5MesodermEndoderm",
-  "E7.5Ectoderm_vs_E7.5Mesoderm",
-  "E7.5Ectoderm_vs_E7.5Endoderm"
+  "E7.5Ectoderm_vs_E7.5MesodermEndoderm"
+  # "E7.5Ectoderm_vs_E7.5Mesoderm",
+  # "E7.5Ectoderm_vs_E7.5Endoderm"
   # "E7.5EctodermEpiblast_vs_E7.5MesodermEndoderm",
   # "E7.5EctodermEpiblast_vs_E7.5Mesoderm",
   # "E7.5EctodermEpiblast_vs_E7.5Endoderm"

@@ -1,0 +1,92 @@
+---
+title: "Plot local correlation between DNA methylation and RNA expression"
+---
+
+Define settings
+```{r define_settings, echo=FALSE, include=FALSE}
+if (grepl("ricard",Sys.info()['nodename'])) {
+  source("/Users/ricard/human_embryo_multiomics/settings.R")
+} else {
+  stop("Computer not recognised")
+}
+io$outdir <- paste0(io$basedir,"/metrna/coupling")
+
+# Define lineages
+opts$lineages <- c(
+  "Prelineage",
+  "Morula",
+  "ICM",
+  "Epiblast",
+  "PrE",
+  "TE_mural",
+  "TE_polar"
+)
+```
+
+Update sample metadata
+```{r}
+sample_metadata <- sample_metadata %>%
+  .[pass_metQC==TRUE & pass_rnaQC==TRUE]
+```
+
+
+Load precomputed data
+```{r}
+to.plot <- fread(paste0(io$outdir,"/data.txt.gz")) %>%
+  merge(sample_metadata[,c("id_rna","stage","lineage")],by="id_rna") %>%
+  .[lineage%in%opts$lineage]
+```
+
+Plot per cell
+```{r}
+for (i in unique(to.plot$id_rna)) {
+  
+  p <- ggplot(to.plot[id_rna==i], aes(x=window_center, y=r)) +
+    stat_summary(fun.data=mean_sd, geom="smooth", alpha=0.2, size=1.0, color="black", fill="black") +
+    geom_hline(yintercept=0, linetype="dashed", color="black", size=0.5) +
+    geom_vline(xintercept=0, linetype="dashed", color="black", size=0.5) +
+    ylab("Correlation") + xlab("Genomic distance from TSS (bp)") +
+    # scale_x_continuous(limits=c(-opts$up,opts$down)) +
+    # coord_cartesian(ylim=c(0.25,0)) +
+    # scale_y_continuous(limits=c(-0.45,0.25), expand=c(0,0)) +
+    theme_classic()
+  
+  pdf(sprintf("%s/per_cell/%s_%s_metrna_local_coupling.pdf",io$outdir,sample_metadata[id_rna==i,lineage],i), width=6.5, height=5)
+  print(p)
+  dev.off()
+}
+```
+
+Plot per lineage
+```{r}
+p <- ggplot(to.plot, aes(x=window_center, y=r)) +
+  stat_summary(aes(fill=lineage, color=lineage), fun.data=mean_sd, geom="smooth", alpha=0.2, size=1.0) +
+  geom_hline(yintercept=0, linetype="dashed", color="black", size=0.5) +
+  geom_vline(xintercept=0, linetype="dashed", color="black", size=0.5) +
+  ylab("Correlation") + xlab("Genomic distance from TSS (bp)") +
+  # scale_x_continuous(limits=c(-opts$up,opts$down)) +
+  # coord_cartesian(ylim=c(0.25,0)) +
+  # scale_y_continuous(limits=c(-0.45,0.25), expand=c(0,0)) +
+  theme_classic()
+
+pdf(paste0(io$outdir,"/metrna_local_coupling.pdf"), width=6.5, height=5)
+print(p)
+dev.off()
+```
+
+Plot per stage
+```{r}
+p <- ggplot(to.plot, aes(x=window_center, y=r)) +
+  stat_summary(aes(fill=stage, color=stage), fun.data=mean_sd, geom="smooth", alpha=0.2, size=1.0) +
+  geom_hline(yintercept=0, linetype="dashed", color="black", size=0.5) +
+  geom_vline(xintercept=0, linetype="dashed", color="black", size=0.5) +
+  ylab("Correlation") + xlab("Genomic distance from TSS (bp)") +
+  # scale_x_continuous(limits=c(-opts$up,opts$down)) +
+  # coord_cartesian(ylim=c(0.25,0)) +
+  # scale_y_continuous(limits=c(-0.45,0.25), expand=c(0,0)) +
+  theme_classic()
+
+# pdf(paste0(io$outdir,"/metrna_local_coupling.pdf"), width=6.5, height=5)
+print(p)
+# dev.off()
+```
