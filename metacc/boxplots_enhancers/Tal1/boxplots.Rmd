@@ -1,0 +1,205 @@
+---
+title: "Gastrulation scNMT-seq: box plots of DNA methylation and chromatin accessibiliy levels"
+---
+
+# Define settings
+
+Load default settings
+```{r echo=TRUE, include=FALSE}
+if (grepl("ricard",Sys.info()['nodename'])) {
+  source("/Users/ricard/scnmt_gastrulation/settings.R")
+} else if(grepl("ebi",Sys.info()['nodename'])){
+  source("/homes/ricard/scnmt_gastrulation/settings.R")
+} else {
+  stop("Computer not recognised")
+}
+```
+
+I/O
+```{r}
+# io$outdir <- paste0(io$basedir,"/metrna/coupling")
+```
+
+Options
+```{r }
+opts$stage_lineage <- c(
+  # "E4.5_Epiblast",
+  # "E5.5_Epiblast",
+  "E6.5_Epiblast",
+  "E6.5_Primitive_Streak",
+  "E7.5_Epiblast",
+  "E7.5_Ectoderm",
+  "E7.5_Mesoderm",
+  "E7.5_Primitive_Streak",
+  "E7.5_Endoderm"
+)
+
+# Define genomic contexts for methylation
+opts$met.annos <- c(
+  "BG207_BG295_Tal1_Mesoderm_intersected_with_atac"="BG207_BG295_Tal1",
+  "BG251_SLX7049_Tal1_intersected_with_atac"="BG251_SLX7049_Tal1",
+  "D340004_Scl_intersected_with_atac"="D340004_Tal1"
+)
+
+# Define genomic contexts for accessibility
+opts$acc.annos <- c(
+  "BG207_BG295_Tal1_Mesoderm_intersected_with_atac"="BG207_BG295_Tal1",
+  "BG251_SLX7049_Tal1_intersected_with_atac"="BG251_SLX7049_Tal1",
+  "D340004_Scl_intersected_with_atac"="D340004_Tal1"
+)
+```
+
+Update sample metadata
+```{r}
+sample_metadata <- sample_metadata %>% 
+  .[stage_lineage%in%opts$stage_lineage] %>%
+  # .[pass_metQC==TRUE | pass_accQC==TRUE] %>%
+  droplevels
+table(sample_metadata$stage_lineage)
+```
+
+Define cells
+```{r}
+opts$rna.cells <- sample_metadata[pass_rnaQC==TRUE,id_rna]
+opts$met.cells <- sample_metadata[pass_metQC==TRUE,id_met]
+opts$acc.cells <- sample_metadata[pass_accQC==TRUE,id_acc]
+```
+
+# Load data 
+
+## Load RNA data
+
+Load SingleCellExperiment
+```{r}
+sce <- load_SingleCellExperiment(io$rna.sce, normalise = TRUE, cells = opts$rna.cells)
+dim(sce)
+```
+
+Create data.table
+```{r}
+# rna_dt <- logcounts(sce) %>% t %>% as.data.table(keep.rownames="id_rna") %>% 
+#   melt(id.vars="id_rna", value.name="expr", variable.name="id")
+# colnames(rna_dt)
+```
+
+Add gene and cell metadata
+```{r}
+# rna_dt <- rna_dt %>% 
+#   merge(sample_metadata[,c("id_met","id_rna")], by="id_rna") %>%
+#   merge(gene_metadata[,c("gene","id")], by="id")
+# colnames(rna_dt)
+```
+
+## Load methylation data
+
+```{r load_data, echo=FALSE, include=FALSE}
+met_dt <- lapply(names(opts$met.annos), function(n) {
+  fread(sprintf("%s/%s.tsv.gz",io$met.dir,n)) %>% .[V1%in%opts$met_cells]
+}) %>% rbindlist %>% setnames(c("id_met","id","anno","Nmet","Ntotal","rate"))
+```
+
+## Load accessibility data
+
+```{r load_data, echo=FALSE, include=FALSE}
+acc_dt <- lapply(names(opts$acc.annos), function(n) {
+  fread(sprintf("%s/%s.tsv.gz",io$acc.dir,n)) %>% .[V1%in%opts$acc_cells]
+}) %>% rbindlist %>% setnames(c("id_acc","id","anno","Nmet","Ntotal","rate"))
+```
+
+# Parse data
+
+Merge data with metadata
+```{r merge}
+acc_dt <- merge(acc_dt, sample_metadata, by="id_acc")
+met_dt <- merge(met_dt, sample_metadata, by="id_met")
+```
+
+Rename annotations
+```{r}
+met_dt <- met_dt %>% .[,anno:=stringr::str_replace_all(anno,opts$met.annos)]
+acc_dt <- acc_dt %>% .[,anno:=stringr::str_replace_all(anno,opts$acc.annos)]
+```
+
+<!-- Filter by minimum number of measurements per cell -->
+```{r}
+opts$min.acc.observations <- 50
+acc_dt <- acc_dt[,N:=.N, by=c("sample","stage_lineage","anno")] %>% .[N>=opts$min.acc.observations] %>% .[,N:=NULL]
+
+opts$min.met.observations <- 10
+met_dt <- met_dt[,N:=.N, by=c("sample","stage_lineage","anno")] %>% .[N>=opts$min.met.observations] %>% .[,N:=NULL]
+```
+
+# Plot
+
+Boxplots with accessibility rate per genomic context and stage_lineage
+```{r}
+foo.acc <- acc_dt %>%
+  .[,.(rate=100*(sum(Nmet)/sum(Ntotal)), Nmet=sum(Nmet), N=sum(Ntotal)),by=c("sample","stage_lineage","anno")] %>%
+  # .[,.(rate=mean(new_rate)),by=c("id_acc","stage_lineage","anno")] %>%
+  .[,stage_lineage:=factor(stage_lineage, levels=names(colors))]
+
+p <- ggplot(foo.acc, aes(x=stage_lineage, y=rate)) +
+  geom_boxplot(aes(fill=stage_lineage), outlier.shape=NA, coef=1) +
+  scale_fill_manual(values=colors) +
+  labs(x="", y="Accessibility (%)") +
+  facet_wrap(~anno, nrow=1, scales="fixed") +
+  coord_cartesian(ylim=c(21,55)) +
+  theme_bw() +
+  guides(color=F, fill=F) +
+  theme_pb() +
+  theme(strip.background = element_rect(fill="#00BFC4"))
+print(p)
+
+# pdf(paste0(io$outdir,"/boxplots_acc2.pdf"), useDingbats = F, onefile = F, width=14, height=6)
+# print(p)
+# dev.off()
+```
+
+Boxplots with methylation rate per genomic context and stage_lineage
+```{r}
+foo.met <- met_dt %>%
+  .[,.(rate=100*(sum(Nmet)/sum(Ntotal)), Nmet=sum(Nmet), N=sum(Ntotal)),by=c("sample","stage_lineage","anno")] %>%
+  # .[,.(rate=mean(rate)),by=c("id_acc","stage_lineage","anno")] %>%
+  .[,stage_lineage:=factor(stage_lineage, levels=names(colors))]
+
+p <- ggplot(foo.met, aes(x=stage_lineage, y=rate)) +
+  geom_boxplot(aes(fill=stage_lineage), outlier.shape=NA, coef=1) +
+  scale_fill_manual(values=colors) +
+  labs(x="", y="Methylation (%)") +
+  facet_wrap(~anno, nrow=1, scales="fixed") +
+  coord_cartesian(ylim=c(8,93)) +
+  theme_bw() +
+  guides(color=F, fill=F) +
+  theme_pb() +
+  theme(strip.background = element_rect(fill="#F37A71"))
+print(p)
+
+# pdf(paste0(io$outdir,"/boxplots_met2.pdf"), useDingbats = F, onefile = F, width=14, height=6)
+# print(p)
+# dev.off()
+```
+
+Plot correlation between epigenetic and RNA signature
+```{r }
+to.plot <- merge(
+  rna.dt[,c("archR_cell","expr")],
+  acc.dt[,c("archR_cell", "Tal1_ChIP_D340004_SclRatio")],
+  by="archR_cell"
+) %>% merge(sample_metadata[,c("archR_cell","stage","celltype.mapped")])
+
+to.plot[Tal1_ChIP_D340004_SclRatio>0.01,Tal1_ChIP_D340004_SclRatio:=0.01]
+
+p <- ggscatter(to.plot, x="Tal1_ChIP_D340004_SclRatio", y="expr", size=0.5,
+          add="reg.line", add.params = list(color="blue", fill="lightgray"), conf.int=TRUE) +
+  facet_wrap(~celltype.mapped, scales="fixed") +
+  labs(x="Tal1 accessibility signal", y="Tal1 RNA expression") +
+  theme(
+    axis.text.y = element_text(size=rel(0.75)),
+    axis.text.x = element_blank()
+  )
+
+io$outdir <- "/Users/ricard/data/mm10_regulation/blood/Tal1_Chipseq/pdf"
+pdf(sprintf("%s/Tal1_acc_vs_expr_per_cell.pdf",io$outdir), width=9, height=8)
+print(p)
+dev.off()
+```

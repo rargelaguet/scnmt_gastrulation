@@ -1,0 +1,52 @@
+if (grepl("ricard",Sys.info()['nodename'])) {
+  source("/Users/ricard/scnmt_gastrulation/settings.R")
+} else if (grepl("ebi",Sys.info()['nodename'])) {
+  source("/homes/ricard/scnmt_gastrulation/settings.R")
+} else {
+  stop("Computer not recognised")
+}
+
+#########
+## I/O ##
+#########
+
+io$tmpdir <- "/Users/ricard/scnmt_gastrulation/metacc/quantify_feature_level"
+
+#############
+## Options ##
+#############
+
+opts <- list()
+
+# CpG or GpC
+opts$contexts <- c(
+  # "CG",
+  "GC"
+)
+
+# Define genomic contexts
+# opts$annos <- list.files(io$features.dir, pattern = "\\.bed.gz$") %>% gsub(".bed.gz","",.)
+opts$annos <- c(
+  "BG207_BG295_Tal1_Mesoderm_intersected_with_atac",
+  "BG251_SLX7049_Tal1_intersected_with_atac",
+  "D340004_Scl_intersected_with_atac"
+)
+
+#########
+## Run ##
+#########
+
+for (i in opts$contexts) {
+  for (j in opts$annos) {
+
+    # Define LSF command
+    if (grepl("ricard",Sys.info()['nodename'])) {
+      lsf <- ""
+    } else if (grepl("ebi",Sys.info()['nodename'])) {
+      lsf <- sprintf("bsub -M 10000 -n 1 -q research-rh74 -o %s/%s_%s.txt", io$tmpdir,i,j)
+    }
+
+    cmd <- sprintf("%s Rscript quantify_feature_level.R --context %s --anno %s", lsf,i,j)
+    system(cmd)
+  }
+}

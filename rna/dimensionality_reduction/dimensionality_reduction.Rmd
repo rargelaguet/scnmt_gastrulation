@@ -44,14 +44,6 @@ opts$stage.colors <- c(
 )
 ```
 
-```{r echo=FALSE}
-# foo <- fread("/Users/ricard/data/gastrulation/rna/results/mapping/mapping.txt.gz") %>%
-#   .[,c("id_rna","celltype.mapped","celltype.score")]
-# sample_metadata <- sample_metadata %>% 
-#   merge(foo,by="id_rna") %>%
-#   .[,stage_lineage:=paste(stage,celltype.mapped,sep="_")]
-```
-
 Update sample metadata
 ```{r}
 sample_metadata <- sample_metadata %>% 

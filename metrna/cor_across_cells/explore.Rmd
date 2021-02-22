@@ -44,8 +44,7 @@ opts$n_perms <- 10          # Number of random permutations
 
 # Define genomic contexts
 opts$annos <- c(
-  "prom_2000_2000" = "Promoters",
-  "first_exon" = "First exon"
+  "prom_2000_2000"="Promoters"
 )
 
 # Define lineages
@@ -192,8 +191,8 @@ cor[,sum(sig),by="anno"]
 
 Save results
 ```{r}
-# fwrite(cor, paste0(io$outdir,"/metrna_cor_promoters.txt.gz"), quote=F, sep="\t")
-# cor <- fread(paste0(io$outdir,"/metrna_cor_promoters.txt.gz"))
+fwrite(cor, paste0(io$outdir,"/metrna_cor_promoters.txt.gz"), quote=F, sep="\t")
+cor <- fread(paste0(io$outdir,"/metrna_cor_promoters.txt.gz"))
 ```
 
 # Permutation test
@@ -233,16 +232,17 @@ if (opts$permutation) {
   for (n in unique(cor$anno)) {
     
     # Generate volcano plot  
-    to.plot <- cor %>% copy# %>% .[log_padj_fdr>50,log_padj_fdr:=50]
+    to.plot <- cor %>% copy %>% .[log_padj_fdr>50,log_padj_fdr:=50]
     pp[[n]] <- gg_volcano_plot(to.plot[anno == n,], top_hits=10)
     
     # Generate qq plot
     qq[[n]] <- gg_qqplot(cor[anno == n, ], cor_perm[anno == n]$p, title = "")
     
     # Plot
-    pdf(paste0(io$outdir,"/test_volcano_qq_", n, ".pdf"), width = 13, height = 5.5)
+    pdf(paste0(io$outdir,"/volcano_qq_", n, ".pdf"), width = 13, height = 5.5)
     grid.arrange(pp[[n]], qq[[n]], ncol=2, newpage = TRUE)
     dev.off()
   }
 }
 ```
+

@@ -166,6 +166,7 @@ opts$celltype.colors = c(
 )
 
 opts$chr <- paste0("chr",c(1:19,"X","Y"))
+opts$stages <- c("E4.5", "E5.5", "E6.5", "E7.5")
 
 ##########################
 ## Load sample metadata ##
@@ -185,7 +186,7 @@ load_SingleCellExperiment <- function(file, normalise = FALSE, features = NULL, 
   sce <- readRDS(file)
   if (!is.null(cells)) sce <- sce[,cells]
   if (!is.null(features)) sce <- sce[features,]
-  if (normalise) sce <- logNormCounts(sce)
+  if (normalise) sce <- scater::logNormCounts(sce)
   if (remove_non_expressed_genes) sce <- sce[which(Matrix::rowMeans(counts(sce))>1e-4),]
   return(sce)
 }

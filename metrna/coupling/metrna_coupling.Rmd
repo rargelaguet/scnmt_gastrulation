@@ -43,7 +43,8 @@ opts$annos <- c(
   # "genebody",
   # "prom_2000_2000_cgi",
   # "prom_2000_2000_noncgi",
-  "prom_2000_2000"
+  "prom_2000_2000",
+  "first_exon"
   # "CGI",
   # "H3K27ac_distal_E7.5_union_500",
   # "H3K27ac_promoter_E7.5_union_500",
@@ -213,12 +214,14 @@ head(cor,n=3)
 ## Boxplots
 
 ```{r}
-to.plot <- cor %>% merge(sample_metadata,by="id_met")
+to.plot <- cor %>% 
+  merge(sample_metadata,by="id_met") %>%
+  .[,stage:=factor(stage,levels=opts$stages)]
 colnames(to.plot)
 ```
 
 ```{r}
-ggboxplot(to.plot, x="stage", y="r") +
+p <- ggboxplot(to.plot, x="stage", y="r", fill="anno") +
   # facet_wrap(~anno) +
   labs(x="", y="Pearson correlation") +
   coord_cartesian(ylim=c(-0.4,0.2)) +
@@ -230,6 +233,26 @@ ggboxplot(to.plot, x="stage", y="r") +
     # axis.ticks.x = element_blank(),
     legend.title = element_blank()
   )
+
+# pdf(paste0(io$outdir,"/coupling_test.pdf"), height=5, width=7)
+print(p)
+# dev.off()
+```
+
+```{r}
+p <- gghistogram(to.plot[anno=="prom_2000_2000"], x="r", fill="gray70") +
+  labs(x="Pearson correlation", y="Density") +
+  coord_cartesian(xlim=c(-0.35,0)) +
+  geom_vline(xintercept=0, linetype="dashed") +
+  theme(
+    axis.text = element_text(size=rel(0.7)),
+    axis.title = element_text(size=rel(0.75)),
+    legend.title = element_blank()
+  )
+
+pdf(paste0(io$outdir,"/coupling_histogram.pdf"), height=3, width=6)
+print(p)
+dev.off()
 ```
 
 ## Run permutation test
