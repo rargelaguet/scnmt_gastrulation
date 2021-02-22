@@ -17,7 +17,7 @@ if (grepl("ricard",Sys.info()['nodename'])) {
 
 I/O
 ```{r}
-# io$outdir <- paste0(io$basedir,"/metrna/coupling")
+io$outdir <- paste0(io$basedir,"/metaccrna/exploration/Tal1")
 ```
 
 Options
@@ -47,6 +47,18 @@ opts$acc.annos <- c(
   "BG251_SLX7049_Tal1_intersected_with_atac"="BG251_SLX7049_Tal1",
   "D340004_Scl_intersected_with_atac"="D340004_Tal1"
 )
+
+opts$colors <- c(
+  "E4.5_Epiblast"="#C1CDCD",
+  "E5.5_Epiblast"="#C1CDCD",
+  "E6.5_Epiblast"="#C1CDCD",
+  "E7.5_Epiblast"="#C1CDCD",
+  "E7.5_Ectoderm"="steelblue",
+  "E6.5_Primitive_Streak"="sandybrown",
+  "E7.5_Primitive_Streak"="sandybrown",
+  "E7.5_Endoderm"="#43CD80",
+  "E7.5_Mesoderm"="#CD3278"
+)
 ```
 
 Update sample metadata
@@ -67,6 +79,15 @@ opts$acc.cells <- sample_metadata[pass_accQC==TRUE,id_acc]
 
 # Load data 
 
+## Load gene metadata
+
+```{r}
+gene_metadata <- fread(io$gene.metadata) %>% 
+  .[,chr:=as.factor(sub("chr","",chr))] %>%
+  setnames(c("ens_id","symbol"),c("id","gene"))
+head(gene_metadata,n=3)
+```
+
 ## Load RNA data
 
 Load SingleCellExperiment
@@ -77,68 +98,85 @@ dim(sce)
 
 Create data.table
 ```{r}
-# rna_dt <- logcounts(sce) %>% t %>% as.data.table(keep.rownames="id_rna") %>% 
-#   melt(id.vars="id_rna", value.name="expr", variable.name="id")
-# colnames(rna_dt)
+rna_dt <- logcounts(sce["ENSMUSG00000028717",]) %>% t %>% as.data.table(keep.rownames="id_rna") %>%
+  melt(id.vars="id_rna", value.name="expr", variable.name="id")
+head(rna_dt,n=3)
 ```
 
 Add gene and cell metadata
 ```{r}
-# rna_dt <- rna_dt %>% 
-#   merge(sample_metadata[,c("id_met","id_rna")], by="id_rna") %>%
-#   merge(gene_metadata[,c("gene","id")], by="id")
-# colnames(rna_dt)
+rna_dt <- rna_dt %>%
+  merge(gene_metadata[,c("gene","id")], by="id")
+head(rna_dt)
 ```
 
 ## Load methylation data
 
 ```{r load_data, echo=FALSE, include=FALSE}
 met_dt <- lapply(names(opts$met.annos), function(n) {
-  fread(sprintf("%s/%s.tsv.gz",io$met.dir,n)) %>% .[V1%in%opts$met_cells]
-}) %>% rbindlist %>% setnames(c("id_met","id","anno","Nmet","Ntotal","rate"))
+  fread(sprintf("%s/%s.tsv.gz",io$met_data_parsed,n)) %>% 
+    setnames(c("id_met","id","anno","Nmet","Ntotal","rate")) %>%
+    .[id_met%in%opts$met.cells]
+}) %>% rbindlist
+```
+
+Merge with sample metadata
+```{r}
+met_dt <- merge(met_dt, sample_metadata[,c("id_met","id_rna","stage_lineage")], by="id_met") %>%
+  .[,id_met:=NULL]
+```
+
+Filter
+```{r}
+opts$min.met.observations <- 25
+met_dt <- met_dt[,N:=.N, by=c("id_rna","stage_lineage","anno")] %>% .[N>=opts$min.met.observations] %>% .[,N:=NULL]
+```
+
+Rename annotations
+```{r}
+met_dt <- met_dt %>% .[,anno:=stringr::str_replace_all(anno,opts$met.annos)]
 ```
 
 ## Load accessibility data
 
 ```{r load_data, echo=FALSE, include=FALSE}
 acc_dt <- lapply(names(opts$acc.annos), function(n) {
-  fread(sprintf("%s/%s.tsv.gz",io$acc.dir,n)) %>% .[V1%in%opts$acc_cells]
-}) %>% rbindlist %>% setnames(c("id_acc","id","anno","Nmet","Ntotal","rate"))
+  fread(sprintf("%s/%s.tsv.gz",io$acc_data_parsed,n)) %>% 
+    setnames(c("id_acc","id","Nmet","Ntotal","rate")) %>%
+    .[id_acc%in%opts$acc.cells]
+}) %>% rbindlist
+head(acc_dt)
 ```
 
-# Parse data
+Merge with sample metadata
+```{r}
+acc_dt <- merge(acc_dt, sample_metadata[,c("id_met","id_rna","stage_lineage")], by="id_acc") %>% 
+  .[,id_acc:=NULL]
+```
 
-Merge data with metadata
-```{r merge}
-acc_dt <- merge(acc_dt, sample_metadata, by="id_acc")
-met_dt <- merge(met_dt, sample_metadata, by="id_met")
+Filter
+```{r}
+opts$min.acc.observations <- 50
+acc_dt <- acc_dt[,N:=.N, by=c("id_rna","stage_lineage","anno")] %>% .[N>=opts$min.acc.observations] %>% .[,N:=NULL]
 ```
 
 Rename annotations
 ```{r}
-met_dt <- met_dt %>% .[,anno:=stringr::str_replace_all(anno,opts$met.annos)]
 acc_dt <- acc_dt %>% .[,anno:=stringr::str_replace_all(anno,opts$acc.annos)]
-```
-
-<!-- Filter by minimum number of measurements per cell -->
-```{r}
-opts$min.acc.observations <- 50
-acc_dt <- acc_dt[,N:=.N, by=c("sample","stage_lineage","anno")] %>% .[N>=opts$min.acc.observations] %>% .[,N:=NULL]
-
-opts$min.met.observations <- 10
-met_dt <- met_dt[,N:=.N, by=c("sample","stage_lineage","anno")] %>% .[N>=opts$min.met.observations] %>% .[,N:=NULL]
 ```
 
 # Plot
 
+## Boxplots of epigenetic signatures
+
 Boxplots with accessibility rate per genomic context and stage_lineage
 ```{r}
-foo.acc <- acc_dt %>%
-  .[,.(rate=100*(sum(Nmet)/sum(Ntotal)), Nmet=sum(Nmet), N=sum(Ntotal)),by=c("sample","stage_lineage","anno")] %>%
+to.plot <- acc_dt %>%
+  .[,.(rate=100*(sum(Nmet)/sum(Ntotal)), Nmet=sum(Nmet), N=sum(Ntotal)),by=c("id_rna","stage_lineage","anno")]#%>%
   # .[,.(rate=mean(new_rate)),by=c("id_acc","stage_lineage","anno")] %>%
-  .[,stage_lineage:=factor(stage_lineage, levels=names(colors))]
+  # .[,stage_lineage:=factor(stage_lineage, levels=names(opts$celltype2.colors))]
 
-p <- ggplot(foo.acc, aes(x=stage_lineage, y=rate)) +
+p <- ggplot(to.plot, aes(x=stage_lineage, y=rate)) +
   geom_boxplot(aes(fill=stage_lineage), outlier.shape=NA, coef=1) +
   scale_fill_manual(values=colors) +
   labs(x="", y="Accessibility (%)") +
@@ -157,49 +195,88 @@ print(p)
 
 Boxplots with methylation rate per genomic context and stage_lineage
 ```{r}
-foo.met <- met_dt %>%
-  .[,.(rate=100*(sum(Nmet)/sum(Ntotal)), Nmet=sum(Nmet), N=sum(Ntotal)),by=c("sample","stage_lineage","anno")] %>%
-  # .[,.(rate=mean(rate)),by=c("id_acc","stage_lineage","anno")] %>%
-  .[,stage_lineage:=factor(stage_lineage, levels=names(colors))]
+to.plot <- met_dt %>%
+  .[,.(rate=100*(sum(Nmet)/sum(Ntotal)), Nmet=sum(Nmet), N=sum(Ntotal)),by=c("id_rna","stage_lineage","anno")] %>%
+  .[,stage_lineage:=factor(stage_lineage, levels=names(opts$colors))]
+```
 
-p <- ggplot(foo.met, aes(x=stage_lineage, y=rate)) +
+```{r}
+p <- ggplot(to.plot, aes(x=stage_lineage, y=rate)) +
   geom_boxplot(aes(fill=stage_lineage), outlier.shape=NA, coef=1) +
-  scale_fill_manual(values=colors) +
+  scale_fill_manual(values=opts$colors) +
   labs(x="", y="Methylation (%)") +
   facet_wrap(~anno, nrow=1, scales="fixed") +
-  coord_cartesian(ylim=c(8,93)) +
   theme_bw() +
-  guides(color=F, fill=F) +
-  theme_pb() +
-  theme(strip.background = element_rect(fill="#F37A71"))
+  guides(x = guide_axis(angle = 90)) +
+  theme(
+    legend.position = "none",
+    axis.text = element_text(color="black")
+  )
 print(p)
 
-# pdf(paste0(io$outdir,"/boxplots_met2.pdf"), useDingbats = F, onefile = F, width=14, height=6)
+# pdf(paste0(io$outdir,"/boxplots_met2.pdf"), width=14, height=6)
 # print(p)
 # dev.off()
 ```
 
-Plot correlation between epigenetic and RNA signature
+## Plot correlation between epigenetic and RNA signature
+
+### Methylation 
+
 ```{r }
 to.plot <- merge(
-  rna.dt[,c("archR_cell","expr")],
-  acc.dt[,c("archR_cell", "Tal1_ChIP_D340004_SclRatio")],
-  by="archR_cell"
-) %>% merge(sample_metadata[,c("archR_cell","stage","celltype.mapped")])
-
-to.plot[Tal1_ChIP_D340004_SclRatio>0.01,Tal1_ChIP_D340004_SclRatio:=0.01]
-
-p <- ggscatter(to.plot, x="Tal1_ChIP_D340004_SclRatio", y="expr", size=0.5,
-          add="reg.line", add.params = list(color="blue", fill="lightgray"), conf.int=TRUE) +
-  facet_wrap(~celltype.mapped, scales="fixed") +
-  labs(x="Tal1 accessibility signal", y="Tal1 RNA expression") +
-  theme(
-    axis.text.y = element_text(size=rel(0.75)),
-    axis.text.x = element_blank()
-  )
-
-io$outdir <- "/Users/ricard/data/mm10_regulation/blood/Tal1_Chipseq/pdf"
-pdf(sprintf("%s/Tal1_acc_vs_expr_per_cell.pdf",io$outdir), width=9, height=8)
-print(p)
-dev.off()
+  met_dt %>% .[,.(rate=100*(sum(Nmet)/sum(Ntotal))), by=c("id_rna","anno")],
+  rna_dt[,c("id_rna","expr")],
+  by = "id_rna"
+) %>% merge(sample_metadata[,c("id_rna","stage","stage_lineage")])
 ```
+
+```{r}
+for (i in unique(to.plot$anno)) {
+  
+  p <- ggscatter(to.plot[anno==i], x="rate", y="expr", color="stage_lineage", size=1.5,
+            add="reg.line", add.params = list(color="blue", fill="lightgray"), conf.int=TRUE) +
+    scale_color_manual(values=opts$colors) +
+    facet_wrap(~stage, scales="fixed") +
+    labs(x="Tal1 methylation signal", y="Tal1 RNA expression") +
+    theme(
+      legend.position = "none",
+      axis.text = element_text(size=rel(0.75))
+    )
+  
+  pdf(sprintf("%s/Tal1_met_vs_expr_per_cell_%s.pdf",io$outdir,i), width=7, height=4)
+  print(p)
+  dev.off()
+}
+```
+
+### Accessibility 
+
+```{r }
+to.plot <- merge(
+  acc_dt %>% .[,.(rate=100*(sum(Nmet)/sum(Ntotal))), by=c("id_rna","anno")],
+  rna_dt[,c("id_rna","expr")],
+  by = "id_rna"
+) %>% merge(sample_metadata[,c("id_rna","stage","stage_lineage")])
+```
+
+```{r}
+for (i in unique(to.plot$anno)) {
+  
+  p <- ggscatter(to.plot[anno==i], x="rate", y="expr", color="stage_lineage", size=1.5,
+            add="reg.line", add.params = list(color="blue", fill="lightgray"), conf.int=TRUE) +
+    scale_color_manual(values=opts$colors) +
+    facet_wrap(~stage, scales="fixed") +
+    labs(x="Tal1 accessibility signal", y="Tal1 RNA expression") +
+    theme(
+      legend.position = "none",
+      axis.text = element_text(size=rel(0.75))
+    )
+  
+  pdf(sprintf("%s/Tal1_met_vs_expr_per_cell_%s.pdf",io$outdir,i), width=7, height=4)
+  print(p)
+  dev.off()
+}
+```
+
+

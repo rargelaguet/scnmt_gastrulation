@@ -37,8 +37,8 @@ args <- p$parse_args(commandArgs(TRUE))
 
 ## START TEST ##
 # args <- list()
-# args$context <- "CG"
-# args$anno <- c("prom_200_200")
+# args$context <- "GC"
+# args$annos <- c("prom_2000_2000")
 ## END TEST ##
 
 # Define what context to look at: CG (MET) or GC (ACC)
@@ -81,8 +81,8 @@ if (args$context == "GC") {
 #   "D340004_Scl_intersected_with_atac"
 # )
 
-# if (is.null(args$anno)) {
-#   args$anno <- list.files(io$features.dir, pattern=".bed.gz") %>% gsub(".bed.gz","",.)
+# if (is.null(args$annos)) {
+#   args$annos <- list.files(io$features.dir, pattern=".bed.gz") %>% gsub(".bed.gz","",.)
 # }
 
 # Define cells
@@ -108,13 +108,13 @@ cat(sprintf("- Annotating CG or GC?: %s\n",args$context))
 ######################
 
 anno_list <- list()
-for (i in 1:length(args$anno)) {
-  anno_list[[i]] <- fread(sprintf("%s/%s.bed.gz",io$features.dir,args$anno[i]), header=F, select=c(1,2,3,4,5)) %>%
+for (i in 1:length(args$annos)) {
+  anno_list[[i]] <- fread(sprintf("%s/%s.bed.gz",io$features.dir,args$annos[i]), header=F, select=c(1,2,3,4,5)) %>%
     setnames(c("chr","start","end","strand","id")) %>%
     .[,chr:=as.factor(chr)] %>%
     setkey(chr,start,end)
 }
-names(anno_list) <- args$anno
+names(anno_list) <- args$annos
 
 
 #########################################
@@ -152,11 +152,11 @@ for (i in 1:length(samples_keep)) {
         # Overlap and calculate methylation status for each region in the annotation by summarising over all sites
         ov <- foverlaps(dat_sample, anno_list[[anno]], nomatch=0) %>% 
           .[,"i.end":=NULL] %>% setnames("i.start","pos") %>%
-          .[,c("sample") := list(samples_keep[i])] %>%
+          .[,c("sample","anno") := list(samples_keep[i],anno)] %>%
           # Compute number of methylated CpGs and the corresponding methylation rates
-          .[,.(rate=round(mean(rate)*100), Nmet=sum(rate==1), N=.N), keyby=.(samples_keep[i],id,anno)] %>%
+          .[,.(rate=round(mean(rate)*100), Nmet=sum(rate==1), N=.N), keyby=c("sample","id","anno")] %>%
           # Reorder columns
-          .[,c("sample","id","Nmet","N","rate")]
+          .[,c("sample","id","anno","Nmet","N","rate")]
         
         # Store and save results
         fwrite(ov, fname.out, quote=FALSE, sep="\t", col.names=FALSE)

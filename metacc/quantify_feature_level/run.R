@@ -1,7 +1,9 @@
 if (grepl("ricard",Sys.info()['nodename'])) {
   source("/Users/ricard/scnmt_gastrulation/settings.R")
+  io$tmpdir <- "/Users/ricard/scnmt_gastrulation/metacc/quantify_feature_level"
 } else if (grepl("ebi",Sys.info()['nodename'])) {
   source("/homes/ricard/scnmt_gastrulation/settings.R")
+  io$tmpdir <- "/homes/ricard/scnmt_gastrulation/metacc/quantify_feature_level"
 } else {
   stop("Computer not recognised")
 }
@@ -10,7 +12,6 @@ if (grepl("ricard",Sys.info()['nodename'])) {
 ## I/O ##
 #########
 
-io$tmpdir <- "/Users/ricard/scnmt_gastrulation/metacc/quantify_feature_level"
 
 #############
 ## Options ##

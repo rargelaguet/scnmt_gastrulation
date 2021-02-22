@@ -1,6 +1,7 @@
 suppressPackageStartupMessages(library(data.table))
 suppressPackageStartupMessages(library(purrr))
 suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(ggpubr))
 suppressPackageStartupMessages(library(SingleCellExperiment))
 
 #########
