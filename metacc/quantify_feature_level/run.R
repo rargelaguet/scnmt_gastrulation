@@ -21,16 +21,14 @@ opts <- list()
 
 # CpG or GpC
 opts$contexts <- c(
-  # "CG",
+  "CG",
   "GC"
 )
 
 # Define genomic contexts
 # opts$annos <- list.files(io$features.dir, pattern = "\\.bed.gz$") %>% gsub(".bed.gz","",.)
 opts$annos <- c(
-  "BG207_BG295_Tal1_Mesoderm_intersected_with_atac",
-  "BG251_SLX7049_Tal1_intersected_with_atac",
-  "D340004_Scl_intersected_with_atac"
+  "multiome_peaks"
 )
 
 #########
@@ -44,7 +42,7 @@ for (i in opts$contexts) {
     if (grepl("ricard",Sys.info()['nodename'])) {
       lsf <- ""
     } else if (grepl("ebi",Sys.info()['nodename'])) {
-      lsf <- sprintf("bsub -M 10000 -n 1 -q research-rh74 -o %s/%s_%s.txt", io$tmpdir,i,j)
+      lsf <- sprintf("bsub -M 25000 -n 1 -q research-rh74 -o %s/%s_%s.txt", io$tmpdir,i,j)
     }
 
     cmd <- sprintf("%s Rscript quantify_feature_level.R --context %s --anno %s", lsf,i,j)

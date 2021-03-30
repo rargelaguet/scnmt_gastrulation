@@ -24,9 +24,9 @@ Options
 ```{r }
 opts$stage_lineage <- c(
   # "E4.5_Epiblast",
-  # "E5.5_Epiblast",
+  "E5.5_Epiblast",
   "E6.5_Epiblast",
-  "E6.5_Primitive_Streak",
+  # "E6.5_Primitive_Streak",
   "E7.5_Epiblast",
   "E7.5_Ectoderm",
   "E7.5_Mesoderm",
@@ -142,15 +142,14 @@ met_dt <- met_dt %>% .[,anno:=stringr::str_replace_all(anno,opts$met.annos)]
 ```{r load_data, echo=FALSE, include=FALSE}
 acc_dt <- lapply(names(opts$acc.annos), function(n) {
   fread(sprintf("%s/%s.tsv.gz",io$acc_data_parsed,n)) %>% 
-    setnames(c("id_acc","id","Nmet","Ntotal","rate")) %>%
+    setnames(c("id_acc","id","anno","Nmet","Ntotal","rate")) %>%
     .[id_acc%in%opts$acc.cells]
 }) %>% rbindlist
-head(acc_dt)
 ```
 
 Merge with sample metadata
 ```{r}
-acc_dt <- merge(acc_dt, sample_metadata[,c("id_met","id_rna","stage_lineage")], by="id_acc") %>% 
+acc_dt <- merge(acc_dt, sample_metadata[,c("id_acc","id_rna","stage_lineage")], by="id_acc") %>% 
   .[,id_acc:=NULL]
 ```
 
@@ -166,58 +165,6 @@ acc_dt <- acc_dt %>% .[,anno:=stringr::str_replace_all(anno,opts$acc.annos)]
 ```
 
 # Plot
-
-## Boxplots of epigenetic signatures
-
-Boxplots with accessibility rate per genomic context and stage_lineage
-```{r}
-to.plot <- acc_dt %>%
-  .[,.(rate=100*(sum(Nmet)/sum(Ntotal)), Nmet=sum(Nmet), N=sum(Ntotal)),by=c("id_rna","stage_lineage","anno")]#%>%
-  # .[,.(rate=mean(new_rate)),by=c("id_acc","stage_lineage","anno")] %>%
-  # .[,stage_lineage:=factor(stage_lineage, levels=names(opts$celltype2.colors))]
-
-p <- ggplot(to.plot, aes(x=stage_lineage, y=rate)) +
-  geom_boxplot(aes(fill=stage_lineage), outlier.shape=NA, coef=1) +
-  scale_fill_manual(values=colors) +
-  labs(x="", y="Accessibility (%)") +
-  facet_wrap(~anno, nrow=1, scales="fixed") +
-  coord_cartesian(ylim=c(21,55)) +
-  theme_bw() +
-  guides(color=F, fill=F) +
-  theme_pb() +
-  theme(strip.background = element_rect(fill="#00BFC4"))
-print(p)
-
-# pdf(paste0(io$outdir,"/boxplots_acc2.pdf"), useDingbats = F, onefile = F, width=14, height=6)
-# print(p)
-# dev.off()
-```
-
-Boxplots with methylation rate per genomic context and stage_lineage
-```{r}
-to.plot <- met_dt %>%
-  .[,.(rate=100*(sum(Nmet)/sum(Ntotal)), Nmet=sum(Nmet), N=sum(Ntotal)),by=c("id_rna","stage_lineage","anno")] %>%
-  .[,stage_lineage:=factor(stage_lineage, levels=names(opts$colors))]
-```
-
-```{r}
-p <- ggplot(to.plot, aes(x=stage_lineage, y=rate)) +
-  geom_boxplot(aes(fill=stage_lineage), outlier.shape=NA, coef=1) +
-  scale_fill_manual(values=opts$colors) +
-  labs(x="", y="Methylation (%)") +
-  facet_wrap(~anno, nrow=1, scales="fixed") +
-  theme_bw() +
-  guides(x = guide_axis(angle = 90)) +
-  theme(
-    legend.position = "none",
-    axis.text = element_text(color="black")
-  )
-print(p)
-
-# pdf(paste0(io$outdir,"/boxplots_met2.pdf"), width=14, height=6)
-# print(p)
-# dev.off()
-```
 
 ## Plot correlation between epigenetic and RNA signature
 
@@ -273,10 +220,76 @@ for (i in unique(to.plot$anno)) {
       axis.text = element_text(size=rel(0.75))
     )
   
-  pdf(sprintf("%s/Tal1_met_vs_expr_per_cell_%s.pdf",io$outdir,i), width=7, height=4)
+  pdf(sprintf("%s/Tal1_acc_vs_expr_per_cell_%s.pdf",io$outdir,i), width=7, height=4)
   print(p)
   dev.off()
 }
 ```
 
+
+## Boxplots stratifying by Tal1 expression
+
+Methylation
+
+```{r}
+to.plot <- merge(
+  met_dt %>% .[,.(rate=100*(sum(Nmet)/sum(Ntotal))), by=c("id_rna","anno")],
+  rna_dt[,c("id_rna","expr")],
+  by = "id_rna"
+) %>% merge(sample_metadata[,c("id_rna","stage","stage_lineage")])
+
+to.plot[,Tal1:=expr>1]
+```
+
+```{r}
+for (i in unique(to.plot$anno)) {
+  
+  p <- ggplot(to.plot[anno==i], aes(x=Tal1, y=rate, fill=Tal1)) +
+    geom_boxplot(outlier.shape=NA, coef=1) +
+    labs(x="", y="Methylation (%)") +
+    facet_wrap(~stage, nrow=1, scales="fixed") +
+    theme_bw() +
+    guides(x = guide_axis(angle = 90)) +
+    theme(
+      legend.position = "top",
+      axis.text = element_text(color="black")
+    )
+  
+  pdf(sprintf("%s/Tal1_boxplots_met_stratified_%s.pdf",io$outdir,i), width=6, height=4)
+  print(p)
+  dev.off()
+}
+```
+
+Accessibility
+
+```{r}
+to.plot <- merge(
+  acc_dt %>% .[,.(rate=100*(sum(Nmet)/sum(Ntotal))), by=c("id_rna","anno")],
+  rna_dt[,c("id_rna","expr")],
+  by = "id_rna"
+) %>% merge(sample_metadata[,c("id_rna","stage","stage_lineage")])
+
+to.plot[,Tal1:=expr>1]
+```
+
+```{r}
+for (i in unique(to.plot$anno)) {
+  
+  p <- ggplot(to.plot[anno==i], aes(x=Tal1, y=rate, fill=Tal1)) +
+    geom_boxplot(outlier.shape=NA, coef=1) +
+    labs(x="", y="Accessibility (%)") +
+    facet_wrap(~stage, nrow=1, scales="fixed") +
+    theme_bw() +
+    guides(x = guide_axis(angle = 90)) +
+    theme(
+      legend.position = "top",
+      axis.text = element_text(color="black")
+    )
+  
+  pdf(sprintf("%s/Tal1_boxplots_acc_stratified_%s.pdf",io$outdir,i), width=6, height=4)
+  print(p)
+  dev.off()
+}
+```
 

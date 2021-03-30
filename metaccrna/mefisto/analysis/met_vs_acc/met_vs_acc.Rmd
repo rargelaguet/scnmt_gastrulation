@@ -1,0 +1,68 @@
+```{r}
+suppressPackageStartupMessages(library(ggpubr))
+```
+
+<!-- Correlation of weights between CG and CH context -->
+
+```{r}
+views <- c("Enhancer", "Promoter")
+factors <- 1:6
+# views <- c("Promoter")
+
+p_list <- list()
+for (i in views) {
+  
+  w1 <- get_weights(model, factors = factors, views = sprintf("%s methylation",i), as.data.frame=T) %>% as.data.table
+  w2 <- get_weights(model, factors = factors, views = sprintf("%s accessibility",i), as.data.frame=T) %>% as.data.table
+  
+
+  w1[,feature:=substr(feature,5,nchar(as.character(feature)))]
+  w2[,feature:=substr(feature,5,nchar(as.character(feature)))]
+
+  w1[,value:=value/max(abs(value)),by=c("factor")]
+  w2[,value:=value/max(abs(value)),by=c("factor")]
+  
+  # w1 <- w1[abs(value)>0.01]
+  # w2 <- w2[abs(value)>0.01]
+  
+  # Merge loadings
+  w.dt <- merge(
+    w1[,c("feature","factor","value")], 
+    w2[,c("feature","factor","value")], 
+    by=c("feature","factor")
+  )
+  
+  # Scale loadings
+  # w.dt[factor=="Factor 1",value.x:=value.x/max(abs(value.x))]
+  # w.dt[factor=="Factor 1",value.y:=value.y/max(abs(value.y))]
+  # 
+  # w.dt[factor=="Factor 2",value.x:=value.x/max(abs(value.x))]
+  # w.dt[factor=="Factor 2",value.y:=value.y/max(abs(value.y))]
+  
+  p_list[[i]] <- ggscatter(w.dt, x="value.x", y="value.y", add="reg.line", 
+                           add.params = list(color="blue", fill="lightgray"), conf.int=TRUE, size=0.85) +
+    coord_cartesian(xlim=c(-1,1), ylim=c(-1,1)) +
+    scale_x_continuous(breaks=c(-1,0,1)) +
+    scale_y_continuous(breaks=c(-1,0,1)) +
+    facet_wrap(~factor, scales="free", ncol=3) +
+    stat_cor(method = "spearman", label.y=1, label.x=-0.8) +
+    labs(x=sprintf("%s methylation (loading)",i), y=sprintf("%s accessibility (loading)",i)) +
+    theme(
+      axis.title = element_text(size=rel(1.4), color="black")
+    )
+  
+  # pdf(sprintf("%s/MetvsAcc_%s.pdf",io$pdfdir,i), width=12, height=12, useDingbats = F)
+  # print(p_list[[i]])
+  # dev.off()
+  
+}
+```
+
+```{r}
+p <- cowplot::plot_grid(plotlist=p_list, nrow=2)
+
+pdf(sprintf("%s/Met_vs_Acc.pdf",io$pdfdir), width=10, height=12, useDingbats = F)
+print(p)
+dev.off()
+```
+

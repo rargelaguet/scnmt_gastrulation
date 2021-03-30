@@ -187,7 +187,7 @@ load_SingleCellExperiment <- function(file, normalise = FALSE, features = NULL, 
   sce <- readRDS(file)
   if (!is.null(cells)) sce <- sce[,cells]
   if (!is.null(features)) sce <- sce[features,]
-  if (normalise) sce <- scater::logNormCounts(sce)
+  if (normalise) sce <- scuttle::logNormCounts(sce)
   if (remove_non_expressed_genes) sce <- sce[which(Matrix::rowMeans(counts(sce))>1e-4),]
   return(sce)
 }

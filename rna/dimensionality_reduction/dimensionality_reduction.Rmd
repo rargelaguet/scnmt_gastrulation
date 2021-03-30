@@ -55,8 +55,9 @@ table(sample_metadata$stage_lineage)
 # Load RNA expression data
 
 ```{r load_data}
-sce <- readRDS(io$rna)[,sample_metadata$id_rna]
-sce
+stop()
+# sce <- readRDS(io$rna)[,sample_metadata$id_rna]
+# sce
 ```
 
 Parse RNA expression data

@@ -1,0 +1,330 @@
+---
+title: ""
+---
+
+# Define settings
+
+Load default settings
+```{r echo=TRUE, include=FALSE}
+if (grepl("ricard",Sys.info()['nodename'])) {
+  source("/Users/ricard/scnmt_gastrulation/settings.R")
+} else if(grepl("ebi",Sys.info()['nodename'])){
+  source("/homes/ricard/scnmt_gastrulation/settings.R")
+} else {
+  stop("Computer not recognised")
+}
+```
+
+I/O
+```{r}
+io$outdir <- paste0(io$basedir,"/metaccrna/exploration/Tal1")
+```
+
+Options
+```{r }
+opts$stage_lineage <- c(
+  # "E4.5_Epiblast",
+  "E5.5_Epiblast",
+  "E6.5_Epiblast",
+  "E6.5_Primitive_Streak",
+  "E6.5_ExE_ectoderm",
+  "E7.5_Epiblast",
+  "E7.5_Primitive_Streak",
+  "E7.5_Ectoderm",
+  "E7.5_Mesoderm",
+  "E7.5_Endoderm"
+)
+
+# Define genomic contexts
+opts$annos <- c(
+  "multiome_peaks"
+)
+
+opts$colors <- c(
+  "E4.5_Epiblast"="#C1CDCD",
+  "E5.5_Epiblast"="#C1CDCD",
+  "E6.5_Epiblast"="#C1CDCD",
+  "E7.5_Epiblast"="#C1CDCD",
+  "E7.5_Ectoderm"="steelblue",
+  "E6.5_Primitive_Streak"="sandybrown",
+  "E7.5_Primitive_Streak"="sandybrown",
+  "E7.5_Endoderm"="#43CD80",
+  "E7.5_Mesoderm"="#CD3278",
+  "E6.5_ExE_ectoderm"="black"
+)
+```
+
+Update sample metadata
+```{r}
+sample_metadata <- sample_metadata %>% 
+  .[stage_lineage%in%opts$stage_lineage] %>%
+  .[pass_metQC==TRUE | pass_accQC==TRUE] %>%
+  droplevels
+
+sample_metadata %>%
+  .[,c("stage","stage_lineage"):=list(factor(stage,levels=opts$stages), factor(stage_lineage,levels=opts$stage_lineage))]
+
+table(sample_metadata$lineage10x)
+```
+
+Define cells
+```{r}
+opts$met.cells <- sample_metadata[pass_metQC==TRUE,id_met]
+opts$acc.cells <- sample_metadata[pass_accQC==TRUE,id_acc]
+```
+
+# Load data 
+
+## Load differential results from the Multiome 10x data set
+
+```{r}
+io$archR.diff.dir <- "/Users/ricard/data/gastrulation_multiome_10x/results/atac/archR/differential"
+
+opts$matrix <- "PeakMatrix"
+opts$min.MeanDiff <- 0.1
+opts$min.FDR <- 1e-1
+opts$celltypes <- c("Def._endoderm","Gut")
+
+file <- sprintf("%s/%s_%s_vs_%s.txt.gz", io$archR.diff.dir,opts$matrix,opts$celltypes[1],opts$celltypes[2])
+multiome_diff.dt <- fread(file, select = c(2,6,7)) %>% 
+  setnames("idx","id") %>%
+  .[,c("celltypeA","celltypeB"):=list(as.factor(opts$celltypes[1]),as.factor(opts$celltypes[2]))] %>%
+  .[,sig:=FDR<opts$min.FDR & abs(MeanDiff)>=opts$min.MeanDiff] %>%
+  .[,sign:=sprintf("Up in %s",opts$celltypes[1])] %>% 
+  .[MeanDiff<0,sign:=sprintf("Up in %s",opts$celltypes[2])] %>%
+  .[,sign:=as.factor(sign)] %>%
+  setorder(-sig,FDR,na.last = T)
+```
+
+```{r}
+multiome_diff.dt[,sum(sig),by=c("celltypeA","celltypeB","sign")]
+```
+
+## Load feature metadata
+
+```{r}
+feature_metadata <- lapply(opts$annos, function(i) 
+  fread(
+    file = sprintf("%s/%s.bed.gz",io$features.dir,i), 
+    select = c("V1"="character", "V2"="integer", "V3"="integer","V5"="character","V6"="factor"))
+) %>% rbindlist %>% setnames(c("chr","start","end","id","anno"))
+```
+
+## Load methylation data
+
+```{r load_data, echo=FALSE, include=FALSE}
+met_dt <- lapply(opts$annos, function(n) {
+  fread(
+    sprintf("%s/%s.tsv.gz",io$met_data_parsed,n),
+    showProgress = F, header = F,
+    select = c("V1"="factor","V2"="character","V3"="factor","V4"="integer","V5"="integer","V6"="integer")
+    ) %>% .[V1%in%opts$met.cells] %>% droplevels
+}) %>% rbindlist %>% setnames(c("id_met","id","anno","Nmet","Ntotal","rate"))
+```
+
+Merge with sample metadata
+```{r}
+met_dt <- merge(met_dt, sample_metadata[,c("id_met","id_rna","stage_lineage")], by="id_met")
+```
+
+## Load accessibility data
+
+```{r load_data, echo=FALSE, include=FALSE}
+acc_dt <- lapply(opts$annos, function(n) {
+  fread(
+    sprintf("%s/%s.tsv.gz",io$acc_data_parsed,n),
+    showProgress = F, header = F,
+    select = c("V1"="factor","V2"="character","V3"="factor","V4"="integer","V5"="integer","V6"="integer")
+    ) %>% .[V1%in%opts$acc.cells] %>% droplevels
+}) %>% rbindlist %>% setnames(c("id_acc","id","anno","Nmet","Ntotal","rate"))
+```
+
+Merge with sample metadata
+```{r}
+acc_dt <- merge(acc_dt, sample_metadata[,c("id_acc","id_rna","stage_lineage")], by="id_acc")
+```
+
+# Overlap with differential 
+
+```{r}
+stopifnot(unique(met_dt$id)%in%multiome_diff.dt$id)
+stopifnot(unique(acc_dt$id)%in%multiome_diff.dt$id)
+```
+
+```{r}
+met_dt.filt <- met_dt %>% merge(multiome_diff.dt[sig==T,c("id","sign")], by="id")
+acc_dt.filt <- acc_dt %>% merge(multiome_diff.dt[sig==T,c("id","sign")], by="id")
+```
+
+# Plot
+
+## Boxplots of (absolute) methylation rates 
+
+```{r}
+to.plot <- met_dt.filt %>%
+  .[,.(rate=100*(sum(Nmet)/sum(Ntotal))),by=c("id_rna","stage_lineage","anno","sign")] %>%
+  .[,stage_lineage:=factor(stage_lineage, levels=opts$stage_lineage)]
+```
+
+```{r}
+p <- ggplot(to.plot, aes(x=stage_lineage, y=rate, fill=stage_lineage)) +
+  geom_boxplot(outlier.shape=NA, coef=1) +
+  labs(x="", y="Methylation (%)") +
+  facet_wrap(~sign, nrow=1, scales="fixed") +
+  scale_fill_manual(values=opts$colors) +
+  # coord_cartesian(ylim=c(5,60)) +
+  theme_bw() +
+  guides(x = guide_axis(angle = 90)) +
+  theme(
+    legend.position = "none",
+    axis.text = element_text(color="black")
+  )
+
+# pdf(paste0(io$outdir,"/boxplots_acc_top250.pdf"), width=opts$width, height=opts$height/1.5)
+print(p)
+# dev.off()
+```
+Test
+```{r}
+to.plot2 <- to.plot %>% merge(sample_metadata[,c("id_rna","lineage10x")])
+
+p <- ggplot(to.plot2[stage_lineage=="E7.5_Endoderm"], aes(x=lineage10x, y=rate, fill=lineage10x)) +
+  geom_boxplot(outlier.shape=NA, coef=1) +
+  labs(x="", y="Methylation (%)") +
+  facet_wrap(~sign, nrow=1, scales="fixed") +
+  # coord_cartesian(ylim=c(5,60)) +
+  scale_fill_manual(values=opts$celltype.colors) +
+  theme_bw() +
+  guides(x = guide_axis(angle = 90)) +
+  theme(
+    legend.position = "none",
+    axis.text = element_text(color="black")
+  )
+
+print(p)
+```
+
+## Boxplots of (absolute) accessibility rates 
+
+```{r}
+to.plot <- acc_dt.filt %>%
+  .[,.(rate=100*(sum(Nmet)/sum(Ntotal))),by=c("id_rna","stage_lineage","anno","sign")] %>%
+  .[,stage_lineage:=factor(stage_lineage, levels=opts$stage_lineage)]
+```
+
+```{r}
+p <- ggplot(to.plot, aes(x=stage_lineage, y=rate, fill=stage_lineage)) +
+  geom_boxplot(outlier.shape=NA, coef=1) +
+  labs(x="", y="Accessibility (%)") +
+  facet_wrap(~sign, nrow=1, scales="fixed") +
+  scale_fill_manual(values=opts$colors) +
+  coord_cartesian(ylim=c(25,75)) +
+  theme_bw() +
+  guides(x = guide_axis(angle = 90)) +
+  theme(
+    legend.position = "none",
+    axis.text = element_text(color="black")
+  )
+
+# pdf(paste0(io$outdir,"/boxplots_acc_top250.pdf"), width=opts$width, height=opts$height/1.5)
+print(p)
+# dev.off()
+```
+Test
+```{r}
+to.plot2 <- to.plot %>% merge(sample_metadata[,c("id_rna","lineage10x")])
+
+p <- ggplot(to.plot2[stage_lineage=="E7.5_Endoderm"], aes(x=lineage10x, y=rate, fill=lineage10x)) +
+  geom_boxplot(outlier.shape=NA, coef=1) +
+  labs(x="", y="Accessibility (%)") +
+  facet_wrap(~sign, nrow=1, scales="fixed") +
+  # coord_cartesian(ylim=c(5,60)) +
+  scale_fill_manual(values=opts$celltype.colors) +
+  theme_bw() +
+  guides(x = guide_axis(angle = 90)) +
+  theme(
+    legend.position = "none",
+    axis.text = element_text(color="black")
+  )
+
+print(p)
+```
+
+
+
+
+## Boxplots of normalised methylation rates
+
+Load global methylation stats per cell
+```{r}
+met.stats <- fread(io$met.stats) %>% .[,c("id_met","mean")] %>% .[,context:="CG"] 
+```
+
+Plot
+
+```{r}
+to.plot <- met_dt %>%
+  .[,.(rate=100*(sum(Nmet)/sum(Ntotal))),by=c("id_met","stage_lineage","anno")] %>%
+  .[,stage_lineage:=factor(stage_lineage, levels=names(colors))] %>%
+    merge(met.stats, by="id_met") %>%
+  .[,norm_rate:=rate/mean] 
+```
+
+```{r}
+p <- ggboxplot(to.plot, x = "stage_lineage", y = "norm_rate", fill="grey80", outlier.shape=NA) +
+  scale_fill_manual(values=colors) +
+  geom_hline(yintercept=1, linetype="dashed", alpha=0.75, size=0.75) +
+  labs(x="", y="Methylation (scaled)") +
+  facet_wrap(~anno, nrow=1, scales="fixed") +
+  stat_compare_means(comparisons = my_comparisons, aes(label = ..p.signif..), method="wilcox.test") +
+  # coord_cartesian(ylim=c(0.1,1.15)) +
+  theme(
+    strip.background = element_rect(fill="#F37A71"),
+    # axis.text.x = element_text(size=rel(0.9), color="black"),
+    axis.text.x = element_blank(),
+    axis.title.y = element_text(size=rel(1.4), color="black"),
+    strip.text = element_text(size=rel(1.3), color="black"),
+    legend.position = "none"
+  )
+
+# pdf(paste0(io$outdir,"/boxplots_met_top250_scaled.pdf"), width=opts$width, height=opts$height)
+print(p)
+# dev.off()
+```
+
+## Boxplots of normalised accessibility rates
+
+Load global accessibility stats per cell
+```{r}
+acc.stats <- fread(io$acc.stats) %>% .[,c("id_acc","mean")] %>% .[,context:="GC"]
+```
+
+Plot
+```{r}
+foo.acc <- acc_dt %>%
+  .[,.(rate=100*(sum(Nmet)/sum(Ntotal))),by=c("id_acc","stage_lineage","anno")] %>%
+  .[,stage_lineage:=factor(stage_lineage, levels=names(colors))] %>%
+    merge(acc.stats, by="id_acc") %>%
+  .[,norm_rate:=rate/mean] 
+
+p <- ggboxplot(foo.acc, x = "stage_lineage", y = "norm_rate", fill="grey80", coef=0.5, outlier.shape=NA) +
+  scale_fill_manual(values=colors) +
+  geom_hline(yintercept=1, linetype="dashed", alpha=0.75, size=0.75) +
+  labs(x="", y="Accessibility (scaled)") +
+  facet_wrap(~anno, nrow=1, scales="fixed") +
+  stat_compare_means(comparisons = my_comparisons, aes(label = ..p.signif..), method="wilcox.test") +
+  # coord_cartesian(ylim=c(0.85,1.75)) +
+  theme(
+    strip.background = element_rect(fill="#00BFC4"),
+    # axis.text.x = element_text(size=rel(0.9), color="black"),
+    axis.text.x = element_blank(),
+    axis.title.y = element_text(size=rel(1.4), color="black"),
+    strip.text = element_text(size=rel(1.3), color="black"),
+    legend.position = "none"
+  )
+
+# pdf(paste0(io$outdir,"/boxplots_acc_top250_scaled.pdf"), width=opts$width, height=opts$height)
+print(p)
+# dev.off()
+```
+

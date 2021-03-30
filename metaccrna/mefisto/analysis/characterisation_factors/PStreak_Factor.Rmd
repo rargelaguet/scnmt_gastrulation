@@ -1,0 +1,117 @@
+
+```{r}
+io$pdfdir2 <- paste0(io$pdfdir,"/characterisation_factors/PS_factor")
+
+opts$factors.width <- 4.5
+opts$factors.height <- 4
+
+factor <- 5
+```
+
+```{r}
+samples <- model@samples_metadata[model@samples_metadata$lineage10x_2!="ExE Endoderm","sample_name"]
+model.subset <- subset_samples(model, samples)
+```
+
+<!-- Plot variance explained -->
+```{r}
+p <- plot_variance_explained(model.subset, x="group", y="view", factors=factor, legend = T, max_r2 = 0.2)
+
+p <- p + theme(axis.text.x = element_text(size=rel(1.0), angle=40, hjust=1))
+
+pdf(paste0(io$pdfdir2,"/r2.pdf"), width=6.5, height=3.5)
+print(p)
+dev.off()
+```
+
+<!-- Plot factor values colored by cell type assignment -->
+```{r}
+p <- plot_factor(
+  model.subset,
+  factor = factor,
+  # color_by = "Sox11",
+  color_by = "lineage10x_2",
+  dodge=F, dot_size=1, legend = F, rasterize = F
+)
+p <- p + scale_color_manual(values=opts$colors) + scale_fill_manual(values=opts$colors)
+p <- p + theme(
+  strip.text = element_text(size=rel(1.1), color="black"),
+  strip.background = element_blank(),
+)
+
+pdf(paste0(io$pdfdir2,"/Factor_values.pdf"), width=opts$factors.width, height=opts$factors.height, useDingbats = F)
+print(p)
+dev.off()
+```
+
+<!-- Plot RNA expression values for top genes  -->
+
+```{r}
+dot_size <- 0.5
+```
+
+Top gene with negative loadings
+```{r}
+top.gene <- names(head(sort(get_weights(model, views="RNA", factor=factor)[[1]][,1]), n=1))
+
+p <- plot_factor(model.subset,
+  factor = factor,
+  color_by = top.gene,
+  legend = FALSE,
+  dot_size = dot_size
+) + scale_colour_gradientn(colours = terrain.colors(10)) +
+  theme(
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    axis.ticks.x = element_blank(),
+    strip.text = element_blank()
+  )
+
+# print(p)
+  
+pdf(paste0(io$pdfdir2,"/Factor_rna_bottom.pdf"), width=opts$factors.width/1.5, height=opts$factors.height/2, useDingbats = F)
+print(p)
+dev.off()
+```
+
+Top gene with positive loadings
+```{r}
+top.gene <- names(tail(sort(get_weights(model, views="RNA", factor=factor)[[1]][,1]), n=1))
+
+p <- plot_factor(model.subset,
+  factor = factor,
+  color_by = top.gene,
+  legend = FALSE,
+  dot_size = dot_size
+) + scale_colour_gradientn(colours = terrain.colors(10)) +
+  theme(
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    axis.ticks.x = element_blank(),
+    strip.text = element_blank()
+  )
+
+# print(p)
+  
+pdf(paste0(io$pdfdir2,"/Factor_rna_top.pdf"), width=opts$factors.width/1.5, height=opts$factors.height/2, useDingbats = F)
+print(p)
+dev.off()
+```
+
+
+<!-- Plot weights -->
+
+RNA
+```{r}
+p <- plot_weights(
+  model,
+  view = "RNA",
+  factor = factor,
+  nfeatures = 25,
+  scale = T
+)
+
+pdf(paste0(io$pdfdir2,"/loadings_RNA.pdf"), width=8, height=5, useDingbats = F)
+print(p)
+dev.off()
+```
