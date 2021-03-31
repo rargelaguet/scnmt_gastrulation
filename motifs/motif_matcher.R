@@ -8,8 +8,9 @@ p <- ArgumentParser(description='')
 p$add_argument('--anno',         type="character",                         help='Genomic annotation')
 p$add_argument('--motif_set',    type="character",   default="jaspar2020", help='Motif annotation')
 p$add_argument('--width',        type="integer",     default=7,            help='Motif width (see motifmatchr::matchMotifs)')
+p$add_argument('--extend',       type="integer",    default=50,           help='Extend window around the motif (bp)')
 p$add_argument('--cutOff',       type="double",      default=5e-05,        help='Motif matching score cutoff (see motifmatchr::matchMotifs)')
-p$add_argument('--outfile',      type="character",                         help='Output file')
+p$add_argument('--outprefix',      type="character",                         help='Output file')
 args <- p$parse_args(commandArgs(TRUE))
 
 
@@ -18,7 +19,7 @@ args <- p$parse_args(commandArgs(TRUE))
 # args$motif_set <- "jaspar2020"
 # args$width <- 7
 # args$cutOff <- 5e-05
-# args$outfile <- sprintf("%s/features/motifs/%s_%s_overlap.rds",io$basedir,opts$anno,args$motif_set)
+# args$outprefix <- sprintf("%s/features/motifs/%s_%s",io$basedir,args$anno,args$motif_set)
 ## END TEST ##
 
 #####################
@@ -69,8 +70,30 @@ motifOverlap.se <- create_motif_overlap_matrix(
   width = args$width
 )
 
+# Rename motifs
+names(motifOverlap.se$motifPositions) <- names(pwms)
+
+########################################################
+## Create BED file with the motif matches coordinates ##
+########################################################
+
+names(motifOverlap.se$motifPositions) %>% walk(function(i) {
+  motif_matches.dt <- as.data.table(motifOverlap.se$motifPositions[[i]]) %>% 
+    .[,c(1,2,3,5)] %>% 
+    setnames(c("chr","start","end","strand")) %>%
+    .[,id:=sprintf("%s:%s-%s",chr,start,end)] %>%
+    .[,anno:=sprintf("%s_%s",args$anno,i)] %>%
+    .[,chr:=gsub("chr","",chr)] %>%
+    .[,c("start","end"):=list(start-args$extend,end+args$extend)] %>%
+    .[,c("chr","start","end","strand","id","anno")] %>% 
+    setorder(chr,start,end)
+  
+    fwrite(motif_matches.dt, sprintf("%s_%s.bed.gz",args$outprefix,i), sep="\t", quote=F)
+})# %>% rbindlist %>% setorder(chr,start,end)
+
+
 ##########
 ## Save ##
 ##########
 
-saveRDS(motifOverlap.se, args$outfile)
+saveRDS(motifOverlap.se, paste0(args$outprefix,".rds"))

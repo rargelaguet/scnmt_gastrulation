@@ -27,6 +27,7 @@ if (is.null(opts$annos)) { opts$annos <- list.files(io$features.dir, pattern=".b
 opts$motif_set <- c("jaspar2020", "cisbp")   # c("jaspar2020", "cisbp")
 opts$width <- 7
 opts$cutOff <- 5e-05
+opts$extend <- 50
 
 #########
 ## Run ##
@@ -42,7 +43,7 @@ for (i in opts$anno) {
     }
 
     outfile <- sprintf("%s/%s_%s_overlap.rds",io$outdir,i,j)
-    cmd <- sprintf("%s Rscript %s --anno %s --motif_set %s --width %d --cutOff %.10f --outfile %s", lsf, io$script, i, j, opts$width, opts$cutOff, outfile)
+    cmd <- sprintf("%s Rscript %s --anno %s --motif_set %s --extend %s --width %d --cutOff %.10f --outfile %s", lsf, io$script, i, j, opts$extend, opts$width, opts$cutOff, outfile)
       
     print(cmd)
     system(cmd)
