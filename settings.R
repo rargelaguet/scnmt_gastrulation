@@ -193,6 +193,6 @@ opts$stages <- c("E4.5", "E5.5", "E6.5", "E7.5")
 
 # factor.cols <- c("id_rna","id_met","id_acc","stage","lineage","lab","plate","embryo")
 
-sample_metadata <- fread(io$metadata) %>% 
-  .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")]
+# sample_metadata <- fread(io$metadata) %>% 
+#   .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")]
   # %>% .[,(factor.cols):=lapply(.SD, as.factor),.SDcols=(factor.cols)] %>% droplevels

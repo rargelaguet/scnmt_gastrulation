@@ -1,14 +1,46 @@
 suppressPackageStartupMessages(library(MOFA2))
 
+###################
+## Load settings ##
+###################
+
+if (grepl("ricard",Sys.info()['nodename'])) {
+  source("/Users/ricard/scnmt_gastrulation/metaccrna/mefisto/load_settings.R")
+} else if (grepl("ebi",Sys.info()['nodename'])) {
+  source("/homes/ricard/scnmt_gastrulation/metaccrna/mefisto/load_settings.R")
+} else {
+  stop()
+}
+
+###############
+## Load data ##
+###############
+
+if (grepl("ricard",Sys.info()['nodename'])) {
+  source("/Users/ricard/scnmt_gastrulation/metaccrna/mefisto/load_data.R")
+} else if (grepl("ebi",Sys.info()['nodename'])) {
+  source("/homes/ricard/scnmt_gastrulation/metaccrna/mefisto/load_data.R")
+} else {
+  stop()
+}
+
+############################
+## load pre-computed UMAP ##
+############################
+
+umap.dt <- fread(io$umap) %>%
+  .[sample%in%unique(data$sample)]
+
+sample_metadata <- sample_metadata %>% merge(umap.dt,by="sample")
+
 ########################
 ## Create MOFA object ##
 ########################
 
-# MOFAobject <- create_mofa_from_SingleCellExperiment(sce_filt.downsample, extract_metadata = TRUE)
 MOFAobject <- create_mofa_from_df(data.downsampled)
 
 # Visualise data structure
-plot_data_overview(MOFAobject)
+# plot_data_overview(MOFAobject)
 
 # Add covariates for MEFISTo
 covariates.dt <- umap.dt %>% .[sample%in%unlist(samples_names(MOFAobject))] %>% setkey(sample) %>% .[unlist(samples_names(MOFAobject))] %>%

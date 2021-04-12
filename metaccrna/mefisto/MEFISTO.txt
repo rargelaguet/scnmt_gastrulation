@@ -1,0 +1,23 @@
+
+As a final use case, we applied MEFISTO to a single-cell multi-omics data set where scNMT-seq was used to jointly profile RNA expression and DNA methylation in 1828 cells collected across four stages of mouse development. Here, we used the RNA expression to define a two-dimensional (non-linear) latent manifold that captures the differentiation trajectory of early gastrulation. The latent coordinates where then used as covariates for MEFISTO as a proxy for real developmental time. In this setting, MEFISTO provides a principled approach to identify covariation patterns between the transcriptome and the epigenome that is coordinated with the developmental dynamics.
+
+
+As input to the model, we quantified DNA methylation and chromatin accessibility at pre-defined enhancer elements (defined as distal H3K27ac sites). A significant challenge of this data set 
+Notably, the epigenetic readouts are extremely sparse, with, on average, only XX% of cells having recorded data at a gene promoter for DNA methylation and chromatin accessibility, respectively. In addition, XX% of the cells only have RNA expression information. 
+
+Finally, we assesed whether MEFISTO can be used to impute the developmental dynamics of DNA methylation for the cells which only have RNA expression measurements. Notably, MEFISTO can use the expectation of the Gaussian Process as a point estimate for the latent factors, which yields smooth patterns of variation across pseudotime.
+
+
+Figure:
+- var explained
+- umap with cell type colours
+- Factor vs pseudotime, including smoothness
+- UMAP before imputation and after imputation
+
+Suppl figure:
+- 
+Results:
+- MEFISTO can identify coordinates transcriptomic and epigenetic signatures in multidimensional trajectories
+- Factors that have a DNA methylation signature are smoother than factors with no DNA methylation signature. Suggests that DNA methylation changes are coordinated with RNA expression during gastrulation. 
+- Inspection of the feature weights reveals that the coordination between RNA expression and DNA methylation occurs mostly at the level of enhancers, not promoters (this message is also in Figure 4 of MOFA2 paper…)
+- MEFISTO can predict entire molecular assays along multidimensional trajectories. Valuable for single-cell multi-omics technologies with large amounts of missing values

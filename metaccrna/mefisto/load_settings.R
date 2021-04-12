@@ -5,46 +5,34 @@
 if (grepl("ricard",Sys.info()['nodename'])) {
   source("/Users/ricard/scnmt_gastrulation/settings.R")
   source("/Users/ricard/scnmt_gastrulation/utils.R")
+} else if (grepl("ebi",Sys.info()['nodename'])) {
+  source("/homes/ricard/scnmt_gastrulation/settings.R")
+  source("/homes/ricard/scnmt_gastrulation/utils.R")
 } else {
   stop()
 }
 
 # I/O
+io$umap <- paste0(io$basedir,"/metaccrna/mofa/all_stages/umap_coordinates.txt")
 io$outdir <- paste0(io$basedir,"/metaccrna/mefisto")
-io$mofa.outfile <- paste0(io$outdir,"/mefisto_model.rds")
+io$mofa.outfile <- paste0(io$outdir,"/mefisto_model_v2.rds")
 
 ## Define options ##
 # Define which annotations to look at
 opts$met.annos <- c(
-  "prom_2000_2000",
-  # "genebody",
-  # "E3.5_H3K27ac_distal",
-  # "H3K27ac_distal_E7.5_Mes_intersect12",
-  # "H3K27ac_distal_E7.5_Ect_intersect12",
-  # "H3K27ac_distal_E7.5_End_intersect12"
+  # "prom_2000_2000",
   "H3K27ac_distal_E7.5_union_intersect12"
-  # "E10.5_midbrain_H3K27ac_distal",
-  # "E10.5_heart_H3K27ac_distal",
-  # "E12.5_intestine_H3K27ac_distal"
 )
 
-# opts$acc.annos <- c(
-#   "prom_2000_2000",
-#   # "genebody",
-#   # "E3.5_H3K27ac_distal",
-#   "H3K27ac_distal_E7.5_Mes_intersect12",
-#   # "H3K27ac_distal_E7.5_Ect_intersect12",
-#   "H3K27ac_distal_E7.5_End_intersect12"
-#   # "E10.5_midbrain_H3K27ac_distal",
-#   # "E10.5_heart_H3K27ac_distal",
-#   # "E12.5_intestine_H3K27ac_distal"
-# )
+opts$acc.annos <- c(
+  # "prom_2000_2000",
+  "H3K27ac_distal_E7.5_union_intersect12"
+)
 
 
 opts$rename.annos <- c(
   "prom_2000_2000"="Promoters",
   "prom_200_200"="Promoters",
-  "genebody"="Gene bodies",
   "H3K27ac_distal_E7.5_Mes_intersect12"="Enhancers",
   "H3K27ac_distal_E7.5_Ect_intersect12"="Enhancers",
   "H3K27ac_distal_E7.5_End_intersect12"="Enhancers",
@@ -80,13 +68,13 @@ opts$stage_lineage <- c(
 
 # Filtering options for methylation
 opts$met_min.CpGs <- 1        # minimum number of CpG sites per feature
-opts$met_min.cells <- 25      # minimum number of cells per feature (per stage)
-opts$met_nfeatures <- 1500    # maximum number of features per view (filter based on variance)
+opts$met_min.cells <- 50      # minimum number of cells per feature (per stage)
+opts$met_nfeatures <- 1000    # maximum number of features per view (filter based on variance)
 
 # Filtering options for accessibility
 opts$acc_min.GpCs <- 5        # minimum number of GpC sites per feature
-opts$acc_min.cells <- 25      # minimum number of cells per feature (per stage)
-opts$acc_nfeatures <- 1500    # maximum number of features per view (filter based on variance)
+opts$acc_min.cells <- 50      # minimum number of cells per feature (per stage)
+opts$acc_nfeatures <- 1000    # maximum number of features per view (filter based on variance)
 
 # Filtering options for RNA
 # opts$rna_min.cdr <- 0.25      # Remove genes with cellular detection rate smaller than opts$min.cdr

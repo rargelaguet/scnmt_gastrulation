@@ -20,7 +20,7 @@ if (grepl("ricard",Sys.info()['nodename'])) {
 
 I/O
 ```{r}
-io$outdir <- paste0(io$basedir,"/acc/results/motifs")
+io$outdir <- paste0(io$basedir,"/acc/results/motifs/test")
 ```
 
 Options
@@ -30,8 +30,8 @@ opts$annos <- c("multiome_peaks") # H3K27ac_distal_E7.5_union_intersect12
 opts$motif.annotation <- "jaspar2020"
 
 opts$stage_lineage <- c(
-  "E4.5_Epiblast",
-  "E5.5_Epiblast",
+  # "E4.5_Epiblast",
+  # "E5.5_Epiblast",
   "E6.5_Epiblast",
   "E6.5_Primitive_Streak",
   "E7.5_Epiblast",
@@ -40,15 +40,38 @@ opts$stage_lineage <- c(
   "E7.5_Primitive_Streak",
   "E7.5_Endoderm"
 )
+
+opts$to.merge <- c(
+  "Anterior_Primitive_Streak" = "Primitive_Streak",
+  "Erythroid2" = "Erythroid",
+  "Erythroid1" = "Erythroid",
+  "Intermediate_mesoderm" = "Mature_mesoderm",
+  "Pharyngeal_mesoderm" = "Mature_mesoderm",
+  "Paraxial_mesoderm" = "Mature_mesoderm",
+  "Somitic_mesoderm" = "Mature_mesoderm"
+  # "Visceral_endoderm" = "ExE_endoderm"
+)
+
+opts$remove.small.lineages <- TRUE
 ```
 
 # Load sample metadata
 
 ```{r load_metadata}
-sample_metadata <- sample_metadata %>%
+sample_metadata <- fread(io$metadata) %>% 
+  .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")] %>%
   .[pass_accQC==TRUE & stage_lineage%in%opts$stage_lineage] %>%
-  .[,c("sample","id_acc","stage","lineage10x_2","stage_lineage")]
+  .[,lineage10x:=stringr::str_replace_all(lineage10x,opts$to.merge)] %>%
+  .[,c("sample","id_acc","stage","lineage10x","lineage10x_2","stage_lineage")]
   # .[,lineage10x_2:=stringr::str_replace_all(lineage10x_2,"_"," ")] %>% 
+
+if (opts$remove.small.lineages) {
+  opts$min.cells <- 5
+  sample_metadata <- sample_metadata %>%
+    .[,N:=.N,by=c("lineage10x")] %>% .[N>opts$min.cells] %>% .[,N:=NULL]
+}
+
+sample_metadata <- sample_metadata[id_acc!="E7.5_Plate13_D08"]
 ```
 
 # Load motifs
@@ -56,7 +79,7 @@ sample_metadata <- sample_metadata %>%
 ```{r}
 motifOverlap.se <- readRDS(sprintf("%s/%s_%s.rds",io$motifs.dir,opts$anno,opts$motif.annotation))
 opts$motifs <- colnames(motifOverlap.se$motifMatches)
-opts$motifs <- c("ATOH7_363","POU5F1_310","SOX2_617","TBX1_227","TCF4_622")
+# opts$motifs <- c("POU5F1_310","SOX2_617","TBX1_227","TCF4_622","ZEB1_320","TEAD3_230","TCF12.var.2_543","EHF_564","BARX2_366","BARHL2_65")
 ```
 
 ```{r}
@@ -72,6 +95,12 @@ opts$motifs <- c("ATOH7_363","POU5F1_310","SOX2_617","TBX1_227","TCF4_622")
 
 # Load data
 
+```{r}
+# i <- opts$annos[[1]]
+# j <- "POU5F1_310"
+opts$min.GpCs <- 3
+```
+
 ```{r load_data, echo=FALSE, include=FALSE}
 acc_dt <- opts$annos %>% map(function(i) {
   opts$motifs %>% map(function(j) {
@@ -80,7 +109,8 @@ acc_dt <- opts$annos %>% map(function(i) {
       fread(file, header=F, colClasses = c("factor","character","factor","integer","integer","integer")) %>%
         .[V1%in%sample_metadata$id_acc] %>%
         setnames(c("id_acc","id","anno","Nmet","Ntotal","rate")) %>%
-      .[,.(rate=100*(sum(Nmet)/sum(Ntotal)), Nmet=sum(Nmet), N=sum(Ntotal)),by=c("id_acc","anno")]
+        .[Ntotal>=opts$min.GpCs] %>%
+        .[,.(rate=100*(sum(Nmet)/sum(Ntotal)), Nmet=sum(Nmet), N=sum(Ntotal)),by=c("id_acc","anno")]
     }
   }) %>% rbindlist
 }) %>% rbindlist
@@ -94,19 +124,17 @@ opts$min.observations <- 50
 to.plot <- acc_dt %>%
   .[N>=opts$min.observations] %>%
   merge(sample_metadata, by="id_acc") %>%
-  .[,stage_lineage:=factor(stage_lineage, levels=names(opts$stagelineage.colors))] 
-```
-
-Rename annotations
-```{r}
-to.plot[,motif:=gsub(sprintf("%s_%s_",opts$annos,opts$motif.annotation),"",anno)]
+  .[,stage_lineage:=factor(stage_lineage, levels=names(opts$stagelineage.colors))]  %>%
+  .[,motif:=gsub(sprintf("%s_%s_",opts$annos,opts$motif.annotation),"",anno)]
 ```
 
 
 ```{r}
-# foo <- fread(io$acc.stats) %>% .[,c("id_acc","mean")]
-# to.plot <- to.plot %>% merge(foo, by="id_acc") %>%
-#   .[,new_rate:=lm(formula=rate~mean)[["residuals"]], by=c("motif","anno")]
+foo <- fread(io$acc.stats) %>% .[,c("id_acc","mean")]
+to.plot <- to.plot %>% merge(foo, by="id_acc") %>%
+  .[,rate:=lm(formula=rate~mean)[["residuals"]], by=c("motif","anno")]
+# bar <- foo %>% merge(sample_metadata,by="id_acc") %>%
+#   .[,.(rate=mean(mean), N=.N),by=c("lineage10x")] %>% setorder(-rate) %>% print
 ```
 
 Calculate z-score
@@ -120,8 +148,8 @@ Boxplots with accessibility rate per motif
 ```{r}
 for (i in unique(to.plot$motif)) {
   p <- ggplot(to.plot[motif==i], aes(x=stage_lineage, y=rate)) +
-    geom_violin(aes(fill=stage_lineage), outlier.shape=NA, coef=1) +
-    geom_boxplot(aes(fill=stage_lineage)) +
+    geom_violin(aes(fill=stage_lineage)) +
+    geom_boxplot(aes(fill=stage_lineage), outlier.shape=NA, coef=1) +
     scale_fill_manual(values=opts$stagelineage.colors) +
     labs(x="", y="Accessibility (%)") +
     # facet_wrap(~motif, scales="fixed") +
@@ -139,9 +167,38 @@ for (i in unique(to.plot$motif)) {
       legend.position="none",
       legend.title = element_blank()
     )
-  pdf(sprintf("%s/%s_boxplots_acc.pdf",io$outdir,i), width=6, height=3)
+  pdf(sprintf("%s/%s_boxplots_acc_lineage2.pdf",io$outdir,i), width=6, height=3)
   print(p)
   dev.off()
 }
+```
+
+```{r}
+for (i in unique(to.plot$motif)) {
+  p <- ggplot(to.plot[motif==i], aes(x=lineage10x, y=rate)) +
+    geom_violin() +
+    geom_boxplot(outlier.shape=NA, coef=1) +
+    labs(x="", y="Accessibility (%)") +
+    geom_hline(yintercept=0, linetype="dashed") +
+    # facet_wrap(~motif, scales="fixed") +
+    # coord_cartesian(ylim=c(8,93)) +
+    guides(x = guide_axis(angle = 90)) +
+    stat_summary(fun.data = give.n, geom = "text", size=2) +
+    theme_bw() +
+    theme(
+      axis.text = element_text(size=rel(0.5), color="black"),
+      axis.title.y = element_text(size=rel(0.7), color="black"),
+      strip.text = element_text(size=rel(1), color="black"),
+      legend.position="none",
+      legend.title = element_blank()
+    )
+  pdf(sprintf("%s/%s_boxplots_acc_lineage1.pdf",io$outdir,i), width=8, height=3)
+  print(p)
+  dev.off()
+}
+```
+
+```{r}
+to.plot[motif=="ATOH7_363" & stage%in%c("E7.5"),.(rate=mean(rate), N=.N),by=c("lineage10x_2","lineage10x")] %>% setorder(-rate) %>% print
 ```
 

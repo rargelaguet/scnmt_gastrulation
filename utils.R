@@ -302,3 +302,7 @@ GRangesToString <- function(grange, sep = c("-", "-")) {
   )
   return(regions)
 }
+
+give.n <- function(x){
+  return(c(y = mean(x), label = length(x)))
+}
