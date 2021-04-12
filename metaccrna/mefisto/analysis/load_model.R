@@ -1,8 +1,20 @@
 suppressMessages(library(RColorBrewer))
 suppressMessages(library(MOFA2))
 
-source("/Users/ricard/scnmt_gastrulation/metaccrna/mefisto/load_settings.R")
-mefisto <- readRDS("/Users/ricard/data/gastrulation/metaccrna/mefisto/mefisto_model.rds")
+###################
+## Load settings ##
+###################
+
+if (grepl("ricard",Sys.info()['nodename'])) {
+  source("/Users/ricard/scnmt_gastrulation/metaccrna/mefisto/load_settings.R")
+} else if (grepl("ebi",Sys.info()['nodename'])) {
+  source("/homes/ricard/scnmt_gastrulation/metaccrna/mefisto/load_settings.R")
+} else {
+  stop()
+}
+
+# mefisto <- readRDS(io$mofa.outfile)
+mefisto <- readRDS("/Users/ricard/data/gastrulation/metaccrna/mefisto/mefisto_model_v2.rds")
 
 ##################
 ## Rename views ##

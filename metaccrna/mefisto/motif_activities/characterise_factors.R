@@ -20,6 +20,13 @@ p1 <- ggplot(covariates.dt, aes(x=V1, y=V2, color=lineage10x_2)) +
   theme_classic() +
   ggplot_theme_NoAxes()
 
+ggplot(covariates.dt, aes(x=V1, y=V2, color=stage_lineage)) +
+  geom_point(alpha=0.7, size=2.0) +
+  guides(colour = guide_legend(override.aes = list(size=3))) +
+  labs(x="", y="") +
+  theme_classic() +
+  ggplot_theme_NoAxes()
+
 pdf(sprintf("%s/MOFA_%s.pdf",io$outdir,algorithm), width=5, height=7, useDingbats = F)
 print(p1)
 dev.off()
@@ -37,7 +44,7 @@ plot_variance_explained(mefisto, x="view", y="factor", max_r2 = 5)
 
 plot_factor_cor(mefisto)
 
-plot_factor(mefisto, factors = 3, groups="all", color_by = "stage_lineage", group_by = "stage", add_violin = T, dodge=T) +
+plot_factor(mefisto, factors = 5, groups="all", color_by = "stage_lineage", group_by = "stage", add_violin = T, dodge=T) +
   theme(
     axis.text.x = element_blank(),
     axis.ticks.x = element_blank()
@@ -51,10 +58,11 @@ plot_factor(mefisto, factors = 3, color_by = "stage", group_by = "stage", add_vi
     axis.ticks.x = element_blank()
   )
 
-plot_factors(mefisto, factors = c(1,2), color_by = "stage")# +
+plot_factors(mefisto, factors = c(6,7), color_by = "stage_lineage")# +
   # scale_fill_manual(values=opts$celltype.colors)
 
 plot_factors(mefisto, factors = c(1,2), color_by = colMeans(mefisto@data$RNA$single_group))
+plot_factors(mefisto, factors = c(6,7), color_by = colMeans(mefisto@data$motif_acc$single_group,na.rm=T))
 
 
 ##########
@@ -70,7 +78,10 @@ plot_dimred(mefisto, method="UMAP", color_by = "stage", stroke=0.1)# +
 ## Plot weights ##
 ##################
 
-plot_weights(mefisto, factor = 9, nfeatures = 10, scale = F)
+plot_weights(mefisto, factor = 1, view="motif_met", nfeatures = 5, scale = F)
+plot_top_weights(mefisto, factor = 2, view="motif_met", nfeatures = 25, scale = F)
+plot_top_weights(mefisto, factor = 10, view="motif_acc", nfeatures = 25, scale = F)
+plot_top_weights(mefisto, factor = 5, view="RNA", nfeatures = 25, scale = F)
 
 ###############
 ## Plot data ##

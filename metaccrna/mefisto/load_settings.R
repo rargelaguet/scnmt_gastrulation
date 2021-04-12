@@ -69,12 +69,12 @@ opts$stage_lineage <- c(
 # Filtering options for methylation
 opts$met_min.CpGs <- 1        # minimum number of CpG sites per feature
 opts$met_min.cells <- 50      # minimum number of cells per feature (per stage)
-opts$met_nfeatures <- 1000    # maximum number of features per view (filter based on variance)
+opts$met_nfeatures <- 2500    # maximum number of features per view (filter based on variance)
 
 # Filtering options for accessibility
 opts$acc_min.GpCs <- 5        # minimum number of GpC sites per feature
 opts$acc_min.cells <- 50      # minimum number of cells per feature (per stage)
-opts$acc_nfeatures <- 1000    # maximum number of features per view (filter based on variance)
+opts$acc_nfeatures <- 2500    # maximum number of features per view (filter based on variance)
 
 # Filtering options for RNA
 # opts$rna_min.cdr <- 0.25      # Remove genes with cellular detection rate smaller than opts$min.cdr

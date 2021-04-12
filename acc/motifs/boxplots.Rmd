@@ -53,6 +53,8 @@ opts$to.merge <- c(
 )
 
 opts$remove.small.lineages <- TRUE
+
+opts$min.GpCs <- 3
 ```
 
 # Load sample metadata
@@ -98,7 +100,6 @@ opts$motifs <- colnames(motifOverlap.se$motifMatches)
 ```{r}
 # i <- opts$annos[[1]]
 # j <- "POU5F1_310"
-opts$min.GpCs <- 3
 ```
 
 ```{r load_data, echo=FALSE, include=FALSE}
@@ -114,6 +115,10 @@ acc_dt <- opts$annos %>% map(function(i) {
     }
   }) %>% rbindlist
 }) %>% rbindlist
+```
+
+```{r}
+fwrite(acc_dt, paste0(io$outdir,"/motif_acc.txt.gz"), sep="\t")
 ```
 
 # Parse data
@@ -135,11 +140,6 @@ to.plot <- to.plot %>% merge(foo, by="id_acc") %>%
   .[,rate:=lm(formula=rate~mean)[["residuals"]], by=c("motif","anno")]
 # bar <- foo %>% merge(sample_metadata,by="id_acc") %>%
 #   .[,.(rate=mean(mean), N=.N),by=c("lineage10x")] %>% setorder(-rate) %>% print
-```
-
-Calculate z-score
-```{r}
-
 ```
 
 # Plot

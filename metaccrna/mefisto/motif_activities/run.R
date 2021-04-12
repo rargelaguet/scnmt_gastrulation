@@ -17,9 +17,9 @@ if (grepl("ricard",Sys.info()['nodename'])) {
 ###############
 
 if (grepl("ricard",Sys.info()['nodename'])) {
-  source("/Users/ricard/scnmt_gastrulation/metaccrna/mefisto/load_data.R")
+  source("/Users/ricard/scnmt_gastrulation/metaccrna/mefisto/motif_activities/load_data.R")
 } else if (grepl("ebi",Sys.info()['nodename'])) {
-  source("/homes/ricard/scnmt_gastrulation/metaccrna/mefisto/load_data.R")
+  source("/homes/ricard/scnmt_gastrulation/metaccrna/mefisto/motif_activities/load_data.R")
 } else {
   stop()
 }
@@ -37,15 +37,15 @@ sample_metadata <- sample_metadata %>% merge(umap.dt,by="sample")
 ## Create MOFA object ##
 ########################
 
-MOFAobject <- create_mofa_from_df(data.downsampled)
+MOFAobject <- create_mofa_from_df(data)
 
 # Visualise data structure
-# plot_data_overview(MOFAobject)
+plot_data_overview(MOFAobject)
 
 # Add covariates for MEFISTo
-# covariates.dt <- umap.dt %>% .[sample%in%unlist(samples_names(MOFAobject))] %>% setkey(sample) %>% .[unlist(samples_names(MOFAobject))] %>%
-#   melt(id.vars=c("sample"), variable.name="covariate")
-# MOFAobject <- set_covariates(MOFAobject, covariates = covariates.dt)
+covariates.dt <- umap.dt %>% .[sample%in%unlist(samples_names(MOFAobject))] %>% setkey(sample) %>% .[unlist(samples_names(MOFAobject))] %>%
+  melt(id.vars=c("sample"), variable.name="covariate")
+MOFAobject <- set_covariates(MOFAobject, covariates = covariates.dt)
 
 ####################
 ## Define options ##
@@ -60,7 +60,7 @@ train_opts <- get_default_training_options(MOFAobject)
 # train_opts$maxiter <- 15
 
 # MEFISTO options
-# mefisto_opts <- get_default_mefisto_options(MOFAobject)
+mefisto_opts <- get_default_mefisto_options(MOFAobject)
 # mefisto_opts$sparseGP <- TRUE
 # mefisto_opts$frac_inducing <- 0.50
 

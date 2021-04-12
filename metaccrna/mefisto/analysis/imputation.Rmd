@@ -64,7 +64,7 @@ colnames(imputed_data_interpolated) <- colnames(mefisto@data[[view]][[1]])
 # Plot
 
 ```{r}
-view <- "met_Enhancers"
+view <- "motif_met"
 factor <- 7
 ```
 
@@ -73,6 +73,8 @@ Feature selection
 # features.to.plot <- names(tail(sort(get_weights(mefisto, views=view, factor=factor)[[1]][,1]), n=50)) %>% list
 features.to.plot <- names(head(sort(get_weights(mefisto, views=view, factor=factor)[[1]][,1]), n=50)) %>% list
 names(features.to.plot) <- view
+
+features.to.plot <- features_names(mefisto)["motif_met"]
 ```
 
 Fetch data
@@ -90,9 +92,10 @@ Prepare data
 to.plot <- data.table(
   sample = unlist(samples_names(mefisto)),
   met_imputed = colMeans(met_data_imputed,na.rm=T),
-  met_non_imputed = colMeans(met_data,na.rm=T),
-  met_interpolated = colMeans(met_data_imputed_GP,na.rm=T)
-) %>% melt(id.vars="sample", value.name="m_value") %>% merge(covariates.dt, by="sample")
+  met_non_imputed = colMeans(met_data,na.rm=T)
+  # met_interpolated = colMeans(met_data_imputed_GP,na.rm=T)
+) %>% melt(id.vars="sample", value.name="m_value") %>% 
+  merge(covariates.dt, by="sample")
 ```
 
 ```{r}
