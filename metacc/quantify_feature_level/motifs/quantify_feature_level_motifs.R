@@ -16,7 +16,7 @@ args <- p$parse_args(commandArgs(TRUE))
 ## START TEST ##
 # args <- list()
 # args$context <- "GC"
-# args$annos <- c("prom_2000_2000")
+# args$annos <- c("prom_2000_2000_jaspar2020_ARGFX_359")
 ## END TEST ##
 
 # Define what context to look at: CG (MET) or GC (ACC)
@@ -41,10 +41,10 @@ if (grepl("ricard",Sys.info()['nodename'])) {
 
 if (args$context == "GC") {
   io$in.folder <- io$acc_data_raw
-  io$out.folder <- io$acc_data_parsed
+  io$out.folder <- paste0(io$acc_data_parsed,"/motifs");  dir.create(io$out.folder)
 } else if (args$context=="CG") {
   io$in.folder <- io$met_data_raw
-  io$out.folder <- io$met_data_parsed
+  io$out.folder <- paste0(io$met_data_parsed,"/motifs");  dir.create(io$out.folder)
 }
 
 #############
@@ -53,7 +53,7 @@ if (args$context == "GC") {
 
 # Annotations to analyse
 if (is.null(args$annos)) {
-  args$annos <- list.files(io$features.dir, pattern=".bed.gz") %>% gsub(".bed.gz","",.)
+  args$annos <- list.files(io$motifs.dir, pattern=".bed.gz") %>% gsub(".bed.gz","",.)
 }
 
 # Define cells
@@ -68,7 +68,7 @@ if (args$context=="CG") {
 # ###########
 
 cat("\nProcessing methylation samples with the following options:\n")
-cat(sprintf("- Input folder for annotation: %s\n",io$features.dir))
+cat(sprintf("- Input folder for annotation: %s\n",io$motifs.dir))
 cat(sprintf("- Input folder for bismark files: %s\n",io$in.folder))
 cat(sprintf("- Output folder: %s\n",io$out.folder))
 cat(sprintf("- Annotations: %s\n", paste(args$annos, collapse=" ")))
@@ -80,8 +80,8 @@ cat(sprintf("- Annotating CG or GC?: %s\n",args$context))
 
 anno_list <- list()
 for (i in 1:length(args$annos)) {
-  anno_list[[i]] <- fread(sprintf("%s/%s.bed.gz",io$features.dir,args$annos[i]), header=F, select=c(1,2,3,4,5)) %>%
-    setnames(c("chr","start","end","strand","id")) %>%
+  anno_list[[i]] <- fread(sprintf("%s/%s.bed.gz",io$motifs.dir,args$annos[i]), header=T, select=c(1,2,3,5)) %>%
+    setnames(c("chr","start","end","id")) %>%
     .[,chr:=as.factor(chr)] %>%
     setkey(chr,start,end)
 }
@@ -96,8 +96,7 @@ names(anno_list) <- args$annos
 dir.create(sprintf("%s/tmp",io$out.folder), recursive=T)
 
 for (i in 1:length(samples_keep)) {
-  files_processed <- list.files(sprintf("%s/tmp",io$out.folder))
-  if (all(sprintf("%s_%s.gz",samples_keep[i],args$annos) %in% files_processed)) {
+  if (all(file.exists(sprintf("%s/tmp/%s/%s.gz",io$out.folder,args$annos,samples_keep[i])))) {
     cat(sprintf("Sample %s already processed for all required annotations...\n",samples_keep[i])) 
   } else {
     cat(sprintf("Sample %s has not been processed, annotating...\n",samples_keep[i]))  
@@ -114,7 +113,8 @@ for (i in 1:length(samples_keep)) {
     
     # Overlap data with annotations
     for (anno in args$annos) {
-      fname.out <- sprintf("%s/tmp/%s_%s.gz",io$out.folder,samples_keep[i],anno)
+      dir.create(sprintf("%s/tmp/%s",io$out.folder,anno))
+      fname.out <- sprintf("%s/tmp/%s/%s.gz",io$out.folder,anno,samples_keep[i])
       if (file.exists(fname.out)) {
         cat(sprintf("Annotation for %s with %s already found, loading...\n",samples_keep[i],anno))
       } else {
@@ -130,11 +130,14 @@ for (i in 1:length(samples_keep)) {
           .[,c("sample","id","anno","Nmet","N","rate")]
         
         # Store and save results
+        print(fname.out)
         fwrite(ov, fname.out, quote=FALSE, sep="\t", col.names=FALSE)
       }
     }
   }
 }
+
+warnings()
 
 #####################################
 ## Concatenate everything and save ##
@@ -145,6 +148,7 @@ for (i in args$annos) {
   if(file.exists(outfile)) {
     cat(sprintf("File %s already exists, ignoring...\n", outfile))
   } else {
-    system(sprintf("cat %s/tmp/*_%s.gz | zgrep -E -v 'sample|id_met|id_acc' | pigz > %s", io$out.folder, i, outfile))
+    system(sprintf("cat %s/tmp/%s/*.gz | zgrep -E -v 'sample|id_met|id_acc' | pigz > %s", io$out.folder, i, outfile))
   }
 }
+

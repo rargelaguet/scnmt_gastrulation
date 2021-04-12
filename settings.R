@@ -28,12 +28,14 @@ io$metadata <- paste0(io$basedir,"/sample_metadata.txt")
 # Methylation
 io$met_data_raw <- paste0(io$basedir,"/met/cpg_level")
 io$met_data_parsed <- paste0(io$basedir,"/met/feature_level")
+io$met_data_motifs <- paste0(io$basedir,"/met/feature_level/motifs")
 io$met.stats <- paste0(io$basedir,"/met/results/stats/sample_stats.txt")
 io$met.stats_per_chr <- paste0(io$basedir,"/met/results/stats/sample_stats_per_chr.txt.gz")
 
 # Accessibility
 io$acc_data_raw <- paste0(io$basedir,"/acc/gpc_level")
 io$acc_data_parsed <- paste0(io$basedir,"/acc/feature_level")
+io$acc_data_motifs <- paste0(io$basedir,"/acc/feature_level/motifs")
 io$acc.stats <- paste0(io$basedir,"/acc/results/stats/sample_stats.txt")
 io$acc.stats_per_chr <- paste0(io$basedir,"/acc/results/stats/sample_stats_per_chr.txt.gz")
 
@@ -43,6 +45,7 @@ io$rna.stats <- paste0(io$basedir,"/rna/results/stats/rna_stats.txt")
 
 # Other
 io$features.dir <- paste0(io$basedir,"/features/genomic_contexts")
+io$motifs.dir <- paste0(io$basedir,"/features/motifs")
 # io$cpg.density <- paste0(io$basedir,"/met/stats/features/cpg_density_perfeature.txt.gz")
 io$scmet <- paste0(io$basedir,"/met/results/variability")
 io$mae <- paste0(io$basedir,"/metaccrna/MultiAssayExperiment/scnmtseq_gastrulation_mae.rds")
@@ -84,6 +87,21 @@ opts$celltype2.colors <- c(
   "Ectoderm"="steelblue",
   "Epiblast/Ectoderm"="steelblue",
   "Visceral_endoderm"="darkgreen"
+)
+
+opts$stagelineage.colors <- c(
+  "E4.5_Epiblast" = "#C1CDCD",
+  "E4.5_Primitive_endoderm" = "darkgreen",
+  "E5.5_Epiblast" = "#C1CDCD",
+  "E5.5_Visceral_endoderm" = "darkgreen",
+  "E6.5_Epiblast" = "#C1CDCD",
+  "E6.5_Visceral_endoderm" = "darkgreen",
+  "E6.5_Primitive_Streak"="sandybrown",
+  "E7.5_Epiblast" = "#C1CDCD",
+  "E7.5_Primitive_Streak"="sandybrown",
+  "E7.5_Ectoderm" = "steelblue",
+  "E7.5_Endoderm" = "#43CD80",
+  "E7.5_Mesoderm" = "#CD3278"
 )
 
 opts$celltypes = c(
@@ -178,22 +196,3 @@ opts$stages <- c("E4.5", "E5.5", "E6.5", "E7.5")
 sample_metadata <- fread(io$metadata) %>% 
   .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")]
   # %>% .[,(factor.cols):=lapply(.SD, as.factor),.SDcols=(factor.cols)] %>% droplevels
-
-###############
-## Functions ##
-###############
-
-load_SingleCellExperiment <- function(file, normalise = FALSE, features = NULL, cells = NULL, remove_non_expressed_genes = FALSE) {
-  sce <- readRDS(file)
-  if (!is.null(cells)) sce <- sce[,cells]
-  if (!is.null(features)) sce <- sce[features,]
-  if (normalise) sce <- scuttle::logNormCounts(sce)
-  if (remove_non_expressed_genes) sce <- sce[which(Matrix::rowMeans(counts(sce))>1e-4),]
-  return(sce)
-}
-
-matrix.please<-function(x) {
-  m<-as.matrix(x[,-1])
-  rownames(m)<-x[[1]]
-  m
-}

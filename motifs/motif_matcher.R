@@ -81,14 +81,14 @@ names(motifOverlap.se$motifPositions) %>% walk(function(i) {
   motif_matches.dt <- as.data.table(motifOverlap.se$motifPositions[[i]]) %>% 
     .[,c(1,2,3,5)] %>% 
     setnames(c("chr","start","end","strand")) %>%
-    .[,id:=sprintf("%s:%s-%s",chr,start,end)] %>%
     .[,anno:=sprintf("%s_%s",args$anno,i)] %>%
     .[,chr:=gsub("chr","",chr)] %>%
     .[,c("start","end"):=list(start-args$extend,end+args$extend)] %>%
+    .[,id:=sprintf("%s:%s-%s",chr,start,end)] %>%
     .[,c("chr","start","end","strand","id","anno")] %>% 
     setorder(chr,start,end)
   
-    fwrite(motif_matches.dt, sprintf("%s_%s.bed.gz",args$outprefix,i), sep="\t", quote=F)
+    fwrite(motif_matches.dt, sprintf("%s_%s.bed.gz",args$outprefix,i), sep="\t", quote=F, col.names = F)
 })# %>% rbindlist %>% setorder(chr,start,end)
 
 

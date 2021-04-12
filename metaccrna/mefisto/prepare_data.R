@@ -83,39 +83,39 @@ met_dt <- met_dt %>% split(.$anno) %>% map2(.,names(.), function(x,y) x[id %in% 
 ## Load accessibility data ##
 #############################
 
-acc_dt <- lapply(opts$acc.annos, function(n) {
-  fread(sprintf("%s/%s.tsv.gz",io$acc_data_parsed,n), showProgress=F) %>% .[V1%in%opts$acc_cells]
-}) %>% rbindlist %>% setnames(c("id_acc","id","anno","Nacc","N","rate"))
-
-# Filter features by minimum number of GpCs
-acc_dt <- acc_dt[N>=opts$acc_min.GpCs]
-
-# Filter features by  minimum number of cells
-acc_dt <- acc_dt[,ncells:=.N, by=c("id","anno")] %>% .[ncells>=opts$acc_min.cells] %>% .[,ncells:=NULL]
-
-# Calculate M value from Beta value
-acc_dt[,m:=log2(((rate/100)+0.01)/(1-(rate/100)+0.01))]
-
-# Rename annotations
-acc_dt[,anno:=stringr::str_replace_all(anno,opts$rename.annos)]
-
-# Regress out technical covariates 
-foo <- fread(io$acc.stats) %>%
-  .[,mean:=log2(((mean/100)+0.01)/(1-(mean/100)+0.01))] %>%
-  .[,c("id_acc","mean")]
-acc_dt <- acc_dt %>% merge(foo, by="id_acc") %>%
-  .[,m:=lm(formula=m~mean)[["residuals"]], by=c("id","anno")]
-
-# Filter features by variance
-keep_hv_sites <- acc_dt %>% split(.$anno) %>% map(~ .[,.(var=var(m)), by="id"] %>% .[var>0] %>% setorder(-var) %>% head(n=opts$acc_nfeatures) %>% .$id)
-acc_dt <- acc_dt %>% split(.$anno) %>% map2(.,names(.), function(x,y) x[id %in% keep_hv_sites[[y]]]) %>% rbindlist %>% droplevels()
+# acc_dt <- lapply(opts$acc.annos, function(n) {
+#   fread(sprintf("%s/%s.tsv.gz",io$acc_data_parsed,n), showProgress=F) %>% .[V1%in%opts$acc_cells]
+# }) %>% rbindlist %>% setnames(c("id_acc","id","anno","Nacc","N","rate"))
+# 
+# # Filter features by minimum number of GpCs
+# acc_dt <- acc_dt[N>=opts$acc_min.GpCs]
+# 
+# # Filter features by  minimum number of cells
+# acc_dt <- acc_dt[,ncells:=.N, by=c("id","anno")] %>% .[ncells>=opts$acc_min.cells] %>% .[,ncells:=NULL]
+# 
+# # Calculate M value from Beta value
+# acc_dt[,m:=log2(((rate/100)+0.01)/(1-(rate/100)+0.01))]
+# 
+# # Rename annotations
+# acc_dt[,anno:=stringr::str_replace_all(anno,opts$rename.annos)]
+# 
+# # Regress out technical covariates 
+# foo <- fread(io$acc.stats) %>%
+#   .[,mean:=log2(((mean/100)+0.01)/(1-(mean/100)+0.01))] %>%
+#   .[,c("id_acc","mean")]
+# acc_dt <- acc_dt %>% merge(foo, by="id_acc") %>%
+#   .[,m:=lm(formula=m~mean)[["residuals"]], by=c("id","anno")]
+# 
+# # Filter features by variance
+# keep_hv_sites <- acc_dt %>% split(.$anno) %>% map(~ .[,.(var=var(m)), by="id"] %>% .[var>0] %>% setorder(-var) %>% head(n=opts$acc_nfeatures) %>% .$id)
+# acc_dt <- acc_dt %>% split(.$anno) %>% map2(.,names(.), function(x,y) x[id %in% keep_hv_sites[[y]]]) %>% rbindlist %>% droplevels()
 
 ##############################
 ## Merge data with metadata ##
 ##############################
 
 met_dt <- merge(met_dt, sample_metadata[,c("sample","id_met","stage")], by="id_met")
-acc_dt <- merge(acc_dt, sample_metadata[,c("sample","id_acc","stage")], by="id_acc")
+# acc_dt <- merge(acc_dt, sample_metadata[,c("sample","id_acc","stage")], by="id_acc")
 rna_dt <- merge(rna_dt, sample_metadata[,c("sample","id_rna","stage")], by="id_rna")
 
 ###########################
@@ -130,10 +130,10 @@ data2 <- met_dt %>% .[,c("sample","id","m","anno")] %>%
   .[,view:=paste0("met_",view)] %>%
   .[,feature:=paste0("met_",feature)]
 
-data3 <- acc_dt %>% .[,c("sample","id","m","anno")] %>%
-  setnames(c("sample","feature","value","view")) %>%
-  .[,view:=paste0("acc_",view)] %>%
-  .[,feature:=paste0("acc_",feature)]
+# data3 <- acc_dt %>% .[,c("sample","id","m","anno")] %>%
+#   setnames(c("sample","feature","value","view")) %>%
+#   .[,view:=paste0("acc_",view)] %>%
+#   .[,feature:=paste0("acc_",feature)]
 
 # data <- do.call("rbind",list(data1,data2,data3)) %>%
 data <- do.call("rbind",list(data1,data2)) %>%

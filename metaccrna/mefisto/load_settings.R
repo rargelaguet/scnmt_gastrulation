@@ -4,6 +4,7 @@
 
 if (grepl("ricard",Sys.info()['nodename'])) {
   source("/Users/ricard/scnmt_gastrulation/settings.R")
+  source("/Users/ricard/scnmt_gastrulation/utils.R")
 } else {
   stop()
 }
@@ -18,25 +19,26 @@ opts$met.annos <- c(
   "prom_2000_2000",
   # "genebody",
   # "E3.5_H3K27ac_distal",
-  "H3K27ac_distal_E7.5_Mes_intersect12",
+  # "H3K27ac_distal_E7.5_Mes_intersect12",
   # "H3K27ac_distal_E7.5_Ect_intersect12",
-  "H3K27ac_distal_E7.5_End_intersect12"
+  # "H3K27ac_distal_E7.5_End_intersect12"
+  "H3K27ac_distal_E7.5_union_intersect12"
   # "E10.5_midbrain_H3K27ac_distal",
   # "E10.5_heart_H3K27ac_distal",
   # "E12.5_intestine_H3K27ac_distal"
 )
 
-opts$acc.annos <- c(
-  "prom_2000_2000",
-  # "genebody",
-  # "E3.5_H3K27ac_distal",
-  "H3K27ac_distal_E7.5_Mes_intersect12",
-  # "H3K27ac_distal_E7.5_Ect_intersect12",
-  "H3K27ac_distal_E7.5_End_intersect12"
-  # "E10.5_midbrain_H3K27ac_distal",
-  # "E10.5_heart_H3K27ac_distal",
-  # "E12.5_intestine_H3K27ac_distal"
-)
+# opts$acc.annos <- c(
+#   "prom_2000_2000",
+#   # "genebody",
+#   # "E3.5_H3K27ac_distal",
+#   "H3K27ac_distal_E7.5_Mes_intersect12",
+#   # "H3K27ac_distal_E7.5_Ect_intersect12",
+#   "H3K27ac_distal_E7.5_End_intersect12"
+#   # "E10.5_midbrain_H3K27ac_distal",
+#   # "E10.5_heart_H3K27ac_distal",
+#   # "E12.5_intestine_H3K27ac_distal"
+# )
 
 
 opts$rename.annos <- c(
@@ -45,7 +47,8 @@ opts$rename.annos <- c(
   "genebody"="Gene bodies",
   "H3K27ac_distal_E7.5_Mes_intersect12"="Enhancers",
   "H3K27ac_distal_E7.5_Ect_intersect12"="Enhancers",
-  "H3K27ac_distal_E7.5_End_intersect12"="Enhancers"
+  "H3K27ac_distal_E7.5_End_intersect12"="Enhancers",
+  "H3K27ac_distal_E7.5_union_intersect12"="Enhancers"
 )
 
 

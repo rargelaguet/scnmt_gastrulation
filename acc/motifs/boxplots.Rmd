@@ -1,0 +1,147 @@
+---
+title: ""
+---
+
+```{r load_modules, echo=FALSE, include=FALSE}
+
+```
+
+# Define settings
+
+```{r}
+if (grepl("ricard",Sys.info()['nodename'])) {
+  source("/Users/ricard/scnmt_gastrulation/settings.R")
+} else if (grepl("ebi",Sys.info()['nodename'])) {
+  source("/homes/ricard/scnmt_gastrulation/settings.R")
+} else {
+  stop("Computer not recognised")
+}
+```
+
+I/O
+```{r}
+io$outdir <- paste0(io$basedir,"/acc/results/motifs")
+```
+
+Options
+```{r}
+# Define genomic contexts
+opts$annos <- c("multiome_peaks") # H3K27ac_distal_E7.5_union_intersect12
+opts$motif.annotation <- "jaspar2020"
+
+opts$stage_lineage <- c(
+  "E4.5_Epiblast",
+  "E5.5_Epiblast",
+  "E6.5_Epiblast",
+  "E6.5_Primitive_Streak",
+  "E7.5_Epiblast",
+  "E7.5_Ectoderm",
+  "E7.5_Mesoderm",
+  "E7.5_Primitive_Streak",
+  "E7.5_Endoderm"
+)
+```
+
+# Load sample metadata
+
+```{r load_metadata}
+sample_metadata <- sample_metadata %>%
+  .[pass_accQC==TRUE & stage_lineage%in%opts$stage_lineage] %>%
+  .[,c("sample","id_acc","stage","lineage10x_2","stage_lineage")]
+  # .[,lineage10x_2:=stringr::str_replace_all(lineage10x_2,"_"," ")] %>% 
+```
+
+# Load motifs
+
+```{r}
+motifOverlap.se <- readRDS(sprintf("%s/%s_%s.rds",io$motifs.dir,opts$anno,opts$motif.annotation))
+opts$motifs <- colnames(motifOverlap.se$motifMatches)
+opts$motifs <- c("ATOH7_363","POU5F1_310","SOX2_617","TBX1_227","TCF4_622")
+```
+
+```{r}
+# motifs.dt <- opts$annos %>% map(function(i) {
+#   opts$motifs %>% map(function(j) {
+#   fread(sprintf("%s/%s_%s_%s.bed.gz",io$motifs.dir,i,opts$motif.annotation,j), header=T, colClasses = c("factor","integer","integer","factor","character","factor")) %>%
+#     setnames(c("chr","start","end","strand","id","anno")) %>%
+#     setkey(chr,start,end)
+#   }) %>% rbindlist
+# }) %>% rbindlist
+# head(motifs.dt,n=3)
+```
+
+# Load data
+
+```{r load_data, echo=FALSE, include=FALSE}
+acc_dt <- opts$annos %>% map(function(i) {
+  opts$motifs %>% map(function(j) {
+    file <- sprintf("%s/%s_%s_%s.tsv.gz",io$acc_data_motifs,i,opts$motif.annotation,j)
+    if (file.exists(file)) {
+      fread(file, header=F, colClasses = c("factor","character","factor","integer","integer","integer")) %>%
+        .[V1%in%sample_metadata$id_acc] %>%
+        setnames(c("id_acc","id","anno","Nmet","Ntotal","rate")) %>%
+      .[,.(rate=100*(sum(Nmet)/sum(Ntotal)), Nmet=sum(Nmet), N=sum(Ntotal)),by=c("id_acc","anno")]
+    }
+  }) %>% rbindlist
+}) %>% rbindlist
+```
+
+# Parse data
+
+```{r}
+opts$min.observations <- 50
+
+to.plot <- acc_dt %>%
+  .[N>=opts$min.observations] %>%
+  merge(sample_metadata, by="id_acc") %>%
+  .[,stage_lineage:=factor(stage_lineage, levels=names(opts$stagelineage.colors))] 
+```
+
+Rename annotations
+```{r}
+to.plot[,motif:=gsub(sprintf("%s_%s_",opts$annos,opts$motif.annotation),"",anno)]
+```
+
+
+```{r}
+# foo <- fread(io$acc.stats) %>% .[,c("id_acc","mean")]
+# to.plot <- to.plot %>% merge(foo, by="id_acc") %>%
+#   .[,new_rate:=lm(formula=rate~mean)[["residuals"]], by=c("motif","anno")]
+```
+
+Calculate z-score
+```{r}
+
+```
+
+# Plot
+
+Boxplots with accessibility rate per motif
+```{r}
+for (i in unique(to.plot$motif)) {
+  p <- ggplot(to.plot[motif==i], aes(x=stage_lineage, y=rate)) +
+    geom_violin(aes(fill=stage_lineage), outlier.shape=NA, coef=1) +
+    geom_boxplot(aes(fill=stage_lineage)) +
+    scale_fill_manual(values=opts$stagelineage.colors) +
+    labs(x="", y="Accessibility (%)") +
+    # facet_wrap(~motif, scales="fixed") +
+    # coord_cartesian(ylim=c(8,93)) +
+    guides(x = guide_axis(angle = 90)) +
+    theme_bw() +
+    # guides(color=F, fill=F)# +
+    theme(
+      # plot.title = element_text(size=rel(1.2), color="black", hjust=0.5),
+      # axis.text.x = element_text(size=rel(1.4), color="black", angle=50, vjust=1, hjust=1),
+      axis.text = element_text(size=rel(0.5), color="black"),
+      axis.title.y = element_text(size=rel(0.7), color="black"),
+      # strip.background = element_rect(fill="#F37A71"),
+      strip.text = element_text(size=rel(1), color="black"),
+      legend.position="none",
+      legend.title = element_blank()
+    )
+  pdf(sprintf("%s/%s_boxplots_acc.pdf",io$outdir,i), width=6, height=3)
+  print(p)
+  dev.off()
+}
+```
+

@@ -20,11 +20,17 @@ io$tmpdir <- paste0(io$outdir,"/tmp");  dir.create(io$tmpdir, showWarnings = F)
 #############
 
 opts$anno <- c(
-  "prom_2000_2000"
+  # "H3K27ac_distal_E7.5_Ect_intersect12",
+  # "H3K27ac_distal_E7.5_End_intersect12",
+  # "H3K27ac_distal_E7.5_Mes_intersect12",
+  # "H3K27ac_distal_E7.5_union_intersect12",
+  # "prom_2000_2000"
+  "multiome_peaks"
 )
+
 if (is.null(opts$annos)) { opts$annos <- list.files(io$features.dir, pattern=".bed.gz") %>% gsub(".bed.gz","",.) }
 
-opts$motif_set <- c("jaspar2020", "cisbp")   # c("jaspar2020", "cisbp")
+opts$motif_set <- c("jaspar2020")   # c("jaspar2020", "cisbp")
 opts$width <- 7
 opts$cutOff <- 5e-05
 opts$extend <- 50
@@ -42,8 +48,7 @@ for (i in opts$anno) {
       lsf <- ""
     }
 
-    outfile <- sprintf("%s/%s_%s_overlap.rds",io$outdir,i,j)
-    cmd <- sprintf("%s Rscript %s --anno %s --motif_set %s --extend %s --width %d --cutOff %.10f --outfile %s", lsf, io$script, i, j, opts$extend, opts$width, opts$cutOff, outfile)
+    cmd <- sprintf("%s Rscript %s --anno %s --motif_set %s --extend %s --width %d --cutOff %.10f --outprefix %s", lsf, io$script, i, j, opts$extend, opts$width, opts$cutOff, sprintf("%s/%s_%s",io$outdir,i,j))
       
     print(cmd)
     system(cmd)
