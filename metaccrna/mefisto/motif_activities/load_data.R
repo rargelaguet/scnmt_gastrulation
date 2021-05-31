@@ -20,11 +20,10 @@ hvgs <- rownames(decomp)[decomp$mean > 0.1 & decomp$p.value <= 0.10]
 
 # Convert to data.table
 rna_dt <-  as.matrix(logcounts(sce[hvgs,])) %>% t %>% as.data.table(keep.rownames = "id_rna") %>%
-  melt(id.vars = "id_rna", value.name = "expr", variable.name = "ens_id") %>%
-  merge(rowData(sce) %>% as.data.frame(row.names = rownames(sce)) %>% tibble::rownames_to_column("ens_id") %>% .[,c("symbol","ens_id")] %>% setnames("symbol","gene"))
+  melt(id.vars = "id_rna", value.name = "expr", variable.name = "gene") 
 
 # Regress out technical covariates: number of expressed genes
-foo <- data.table(id_rna=colnames(sce), covariate=sce$total_features_by_counts/nrow(sce))
+foo <- data.table(id_rna=colnames(sce), covariate=colMeans(counts(sce)>0))
 rna_dt <- rna_dt %>% merge(foo, by="id_rna") %>%
   .[,expr:=lm(formula=expr~covariate)[["residuals"]], by="gene"] %>%
   .[,covariate:=NULL]
@@ -47,7 +46,7 @@ rna_dt <- rbind(
 ## Load motif methylation data ##
 #################################
 
-met_dt <- fread(paste0(io$basedir,"/met/results/motifs/test/motif_met.txt.gz")) %>%
+met_dt <- fread(paste0(io$basedir,"/met/results/motifs/motif_met.txt.gz")) %>%
   setnames("anno","id") %>%
   .[,id:=gsub("multiome_peaks_jaspar2020_","",id)]
 
@@ -69,7 +68,7 @@ met_dt <- met_dt[id %in% keep_hv_motifs] %>% droplevels
 ## Load accessibility data ##
 #############################
 
-acc_dt <- fread(paste0(io$basedir,"/acc/results/motifs/test/motif_acc.txt.gz")) %>%
+acc_dt <- fread(paste0(io$basedir,"/acc/results/motifs/motif_acc.txt.gz")) %>%
   setnames("anno","id") %>%
   .[,id:=gsub("multiome_peaks_jaspar2020_","",id)]
 
@@ -128,5 +127,5 @@ data <- do.call("rbind",list(data1,data2,data3)) %>%
 ## Save ##
 ##########
 
-# file <- paste0(io$outdir,"/data.txt.gz")
-# fwrite(data, file, col.names=T, quote=F, sep="\t")
+file <- paste0(io$outdir,"/vignette/data.txt.gz")
+fwrite(data, file, col.names=T, quote=F, sep="\t")

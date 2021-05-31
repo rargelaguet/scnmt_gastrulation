@@ -42,6 +42,7 @@ io$acc.stats_per_chr <- paste0(io$basedir,"/acc/results/stats/sample_stats_per_c
 # RNA
 io$rna.sce <- paste0(io$basedir,"/rna/SingleCellExperiment.rds")
 io$rna.stats <- paste0(io$basedir,"/rna/results/stats/rna_stats.txt")
+io$cell.cycle <- paste0(io$basedir,"/rna/results/cell_cycle/cell_cycle_scran.txt.gz")
 
 # Other
 io$features.dir <- paste0(io$basedir,"/features/genomic_contexts")
@@ -49,6 +50,7 @@ io$motifs.dir <- paste0(io$basedir,"/features/motifs")
 # io$cpg.density <- paste0(io$basedir,"/met/stats/features/cpg_density_perfeature.txt.gz")
 io$scmet <- paste0(io$basedir,"/met/results/variability")
 io$mae <- paste0(io$basedir,"/metaccrna/MultiAssayExperiment/scnmtseq_gastrulation_mae.rds")
+io$umap <- paste0(io$basedir,"/metaccrna/mofa/all_stages/umap_coordinates.txt")
 
 # RNA atlas (PijuanSala2019)
 io$atlas.metadata <- paste0(io$atlas.basedir,"/sample_metadata.txt.gz")
@@ -80,16 +82,19 @@ opts$stage_lineage <- c(
 )
 
 opts$celltype2.colors <- c(
+  "ICM" = "#C6E2FF",
   "Epiblast"="grey70",
   "Mesoderm"="#CD3278",
   "Primitive_Streak"="sandybrown",
   "Endoderm"="#43CD80",
   "Ectoderm"="steelblue",
   "Epiblast/Ectoderm"="steelblue",
-  "Visceral_endoderm"="darkgreen"
+  "Visceral_endoderm"="#BC8F8F",
+  "Primitive_endoderm"="#BC8F8F"
 )
 
 opts$stagelineage.colors <- c(
+  "E3.5_ICM" = "#b63fba",
   "E4.5_Epiblast" = "#C1CDCD",
   "E4.5_Primitive_endoderm" = "darkgreen",
   "E5.5_Epiblast" = "#C1CDCD",
@@ -97,6 +102,7 @@ opts$stagelineage.colors <- c(
   "E6.5_Epiblast" = "#C1CDCD",
   "E6.5_Visceral_endoderm" = "darkgreen",
   "E6.5_Primitive_Streak"="sandybrown",
+  "E6.5_ExE_ectoderm"="black",
   "E7.5_Epiblast" = "#C1CDCD",
   "E7.5_Primitive_Streak"="sandybrown",
   "E7.5_Ectoderm" = "steelblue",

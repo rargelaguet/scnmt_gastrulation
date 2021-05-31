@@ -53,7 +53,7 @@ smoother_aggregate_nearest_nb <- function(mat, D, k){
     nb_cid <- head(order(D[cid, ]), k)
     closest_mat <- mat[, nb_cid, drop=FALSE]
     # return(Matrix::rowSums(closest_mat))
-    return(Matrix::rowMeans(closest_mat))
+    return(Matrix::rowMeans(closest_mat, na.rm=TRUE))
   })
 }
 

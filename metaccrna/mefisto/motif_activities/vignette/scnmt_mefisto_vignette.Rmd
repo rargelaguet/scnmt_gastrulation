@@ -1,0 +1,355 @@
+---
+title: "MEFISTO analysis of the scNMT-seq gastrulation data set"
+author:
+- name: "Ricard Argelaguet"
+  affiliation: "babraham Institute, Cambridge, UK"
+  email: "ricard@ebi.ac.uk"
+- name: "Britta Velten"
+  affiliation: "German Cancer Research Center(DKFZ), Heidelberg, Germany"
+date: "`r Sys.Date()`"
+output:
+  BiocStyle::html_document:
+    toc: true
+vignette: >
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+# Description
+
+This vignette demonstrates how MEFISTO can be used to integrate single-cell multi-omics data sets. Here we used the [scNMT-seq gastrulation data set](https://www.nature.com/articles/s41586-019-1825-8), which consists of ~1,500 cells collected across four stages of mouse development, and can be downloaded from [here](https://github.com/rargelaguet/scnmt_gastrulation). For roughly half of the cells we profiled RNA expression, DNA methylation and chromatin accessibility from the same cell, and for the other half only RNA expression was profiled. Thus, a significant challenge of this data set is the sparsity of the epigenetic readouts.
+
+You may wonder, how can we use MEFISTO here if we don't have continuous spatial or temporal covariates? Here we'll use the RNA expression to derive a multivariate developmental trajectory, which we can then take as a proxy for real time, and use this manifold as a covariate in MEFISTO. This approach wil allow us to identify coordinated patterns of variation between the transcriptome and epigenome during development.
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE, error=FALSE, fig.align="center")
+```
+
+# Load libraries
+
+```{r, message=FALSE}
+library(data.table)
+library(purrr)
+library(ggplot2)
+library(ggpubr)
+library(ggrepel)
+
+# MOFA
+library(MOFA2)
+```
+
+```{r echo=FALSE}
+ggplot_theme_NoAxes <- function() {
+  theme(
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank()
+  )
+}
+```
+
+```{r echo=FALSE}
+celltype.colors <- c(
+  "Epiblast"="grey70",
+  "Mesoderm"="#CD3278",
+  "Primitive_Streak"="sandybrown",
+  "Endoderm"="#43CD80",
+  "Ectoderm"="steelblue"
+)
+```
+
+# Load data
+
+The input data consists of three modalities: RNA expression quantified over genes; and DNA methylation and chromatin accessibility quantified over TF motifs. The script to do this step can be found [here](https://github.com/rargelaguet/scnmt_gastrulation/tree/develop/metacc/quantify_feature_level/motifs). Then, it is just a matter of doing some feature selection and preparing the input data for MEFISTO. The script for this step can be found [here](https://github.com/bioFAM/MEFISTO_analyses/blob/master/scnmt/load_data.R). For the purpose of this vignette we will load the multi-omics data already processed in a long data.table format
+
+```{r}
+data <- fread("/Users/ricard/data/gastrulation/metaccrna/mefisto/vignette/data.txt.gz")
+head(data,n=3)
+```
+
+Print number of features per view
+```{r}
+data[,length(unique(feature)),by="view"]
+```
+
+Load cell metadata
+```{r}
+sample_metadata <- fread("/Users/ricard/data/gastrulation/metaccrna/mefisto/vignette/sample_metadata.txt")
+colnames(sample_metadata)
+```
+
+There are two cell type columns: `lineage10x` and `lineage10x_2`. The first one is obtained by mapping the scNMT-seq cells to the [RNA gastrulation atlas](https://www.nature.com/articles/s41586-019-0933-9). The problem with the most this annotation is that we have very few cells per cell type. In the second column these lineages are aggregated into bigger classes
+
+```{r}
+table(sample_metadata$lineage10x)
+```
+
+```{r}
+table(sample_metadata$lineage10x_2)
+```
+
+For defining the multivariate pseudotime trajectory we applied UMAP on the RNA expression data. Due to the randomness of the algorithm, there is flexibility on how to calculate the latent manifold. For reproducibility purposes we included our precomputed UMAP coordinates in the samples metadata columns `UMAP1` and `UMAP2`
+
+```{r}
+ggscatter(sample_metadata, x="UMAP1", y="UMAP2", color="lineage10x_2") +
+  scale_color_manual(values=celltype.colors) +
+  theme_classic() +
+  ggplot_theme_NoAxes()
+```
+
+# Create and train the MEFISTO object
+
+Create the MEFISTO object
+```{r}
+mefisto <- create_mofa_from_df(data)
+mefisto
+```
+
+
+Add sample metadata to the model
+```{r}
+samples_metadata(mefisto) <- sample_metadata %>% 
+  .[sample%in%unlist(samples_names(mefisto))] %>%
+  setkey(sample) %>% .[unlist(samples_names(mefisto))]
+```
+  
+Add covariates
+```{r}
+mefisto <- set_covariates(mefisto, c("UMAP1","UMAP2"))
+```
+
+Define options
+```{r}
+model_opts <- get_default_model_options(mefisto)
+model_opts$num_factors <- 10
+```
+
+Prepare MEFISTO object
+```{r}
+mefisto <- prepare_mofa(
+  object = mefisto,
+  model_options = model_opts,
+)
+```
+
+
+Visualise data structure
+```{r}
+plot_data_overview(mefisto)
+```
+
+Train the MEFISTO model (~30min in my MacBook)
+```{r eval=FALSE}
+mefisto <- run_mofa(mefisto)
+```
+
+For reprodudicibility purposes, we also provide the precomputed MEFISTO model that we used for the manuscript:
+```{r}
+mefisto <- readRDS("/Users/ricard/data/gastrulation/metaccrna/mefisto/mefisto_model_motifs_v2.rds")
+```
+
+Select factors that explain at least 1% of variance in the RNA expression
+```{r}
+r2 <- get_variance_explained(mefisto, views="RNA")[["r2_per_factor"]][[1]]
+factors <- names(which(r2[,"RNA"]>1))
+mefisto <- subset_factors(mefisto, factors)
+mefisto
+```
+
+# Downstream analysis
+
+## Variance decomposition
+
+Variance decomposition analysis. Plot the variance explained for each factor in each view
+```{r}
+plot_variance_explained(mefisto, x="view", y="factor", max_r2 = 9)
+```
+
+## Analyses of factors
+
+Plot the smothness coefficient for each Factor. We note that Factors 1, 3 and 5 capture smooth patterns across the trajectory, whereas the remaining factors do not.
+```{r}
+plot_smoothness(mefisto)
+```
+
+Visualise the Factor values overlayed onto the UMAP. Note that, as predicted from the smooth coefficients, Factors 1 and 3 capture smooth cell fate decision events, whereas Factor 2 is capturing some variation that is not associated with the developmental trajectory:
+
+```{r}
+factors.dt <- get_factors(mefisto, factors=c(1,3,4))[[1]] %>% 
+  as.data.table(keep.rownames = T) %>% 
+  setnames("rn","sample")
+
+to.plot <- sample_metadata[,c("sample","UMAP1","UMAP2")] %>% 
+  merge(factors.dt, by="sample") %>%
+  melt(id.vars=c("UMAP1","UMAP2","sample"), variable.name="factor") %>%
+  .[,value:=value/max(abs(value)),by="factor"]
+
+ggscatter(to.plot, x="UMAP1", y="UMAP2", fill="value", shape=21, stroke=0.15) +
+  facet_wrap(~factor) +
+  scale_fill_gradient2(low = "gray50", mid="gray90", high = "red") +
+  theme_classic() +
+  ggplot_theme_NoAxes()
+```
+
+# Analyses of weights
+
+Let's fetch the weights for motif DNA methylation and the weights for motif chromatin accessibility, and remove the prefix to match the feature names. Then we can merge all into a single data.frame for plotting
+```{r}
+w.met <- get_weights(mefisto, views="motif_met",  factors=c(1,3), as.data.frame=T) %>% 
+  as.data.table %>% .[,feature:=gsub("_met","",feature)] %>%
+  .[,value:=value/max(abs(value)),by=c("factor")]
+
+w.acc <- get_weights(mefisto, views="motif_acc", factors=c(1,3), as.data.frame=T) %>% 
+  as.data.table %>% .[,feature:=gsub("_acc","",feature)] %>%
+  .[,value:=value/max(abs(value)),by=c("factor")]
+
+# Merge loadings
+w.dt <- merge(
+  w.met[,c("feature","factor","value")], 
+  w.acc[,c("feature","factor","value")], 
+  by = c("feature","factor")
+) %>% .[,feature:=strsplit(feature,"_") %>% map_chr(c(1))]
+
+head(w.dt)
+```
+
+Scatterplots of DNA methylation weights vs chromatin accessibility weights. Let's highlight the top genes with the highest weights. The weights of these factors reflected the known negative relationship of DNA methylation and chromatin accessibility and identified key TFs associated with this process, including TBX6 and MSGN1 for the mesoderm fate and FOXA2 and HNF1 for the endoderm fate:
+
+```{r}
+for (i in unique(w.dt$factor)) {
+  
+  to.plot <- w.dt[factor==i]
+  
+  to.label <- w.dt %>% 
+    .[factor==i] %>%
+    .[,value:=abs(value.x)+abs(value.y)] %>% setorder(-value) %>% head(n=10)
+  
+  p <- ggscatter(to.plot, x="value.x", y="value.y", size=1.5, add="reg.line", conf.int=TRUE) +
+    coord_cartesian(xlim=c(-1,1), ylim=c(-1,1)) +
+    scale_x_continuous(breaks=c(-1,0,1)) +
+    scale_y_continuous(breaks=c(-1,0,1)) +
+    geom_text_repel(data=to.label, aes(x=value.x, y=value.y, label=feature), size=3,  max.overlaps=100) +
+    geom_vline(xintercept=0, linetype="dashed") +
+    geom_hline(yintercept=0, linetype="dashed") +
+    stat_cor(method = "pearson") +
+    labs(x="Methylation weights", y="Accessibility weights")
+  
+  print(p)
+}
+```
+
+# Imputation
+
+MEFISTO can exploit its generative model to perform data imputation and can use the posterior means of the Gaussian Process to obtain smooth estimates along the covariates.
+
+Interpolate factor values (~1min)
+```{r}
+mefisto <- interpolate_factors(mefisto, mefisto@covariates[[1]])
+Z_interpol <- t(get_interpolated_factors(mefisto, only_mean = TRUE)[[1]]$mean)
+```
+
+Imputation
+```{r}
+imputed_data <- list()
+for (i in views_names(mefisto)) {
+  imputed_data[[i]] <- tcrossprod(Z_interpol,get_weights(mefisto,i)[[1]]) %>% t
+  colnames(imputed_data[[i]]) <- colnames(mefisto@data[[i]][[1]])
+}
+```
+
+Plot DNA methylation and chromatin accessibility before and after imputation
+```{r}
+for (view in c("motif_met","motif_acc")) {
+  
+  # Define features to plot
+  # features.to.plot <- features_names(mefisto)[view]
+  features.to.plot <- list(paste0("MSGN1_412",gsub("motif","",view)))
+  names(features.to.plot) <- view
+  
+  # Get original and imputed data
+  data <- get_data(mefisto, views=view, features=features.to.plot)[[1]][[1]]
+  data_imputed <- imputed_data[[view]][features.to.plot[[1]],,drop=F]
+  
+  for (i in features.to.plot[[view]]) {
+    
+    to.plot <- data.table(
+      sample = unlist(samples_names(mefisto)),
+      non_imputed = data[i,],
+      imputed = data_imputed[i,]
+    ) %>% 
+      setnames(c("sample",sprintf("%s (original)",i),sprintf(" %s (MEFISTO imputed)",i))) %>%
+      melt(id.vars="sample", value.name="value") %>% 
+      merge(sample_metadata[,c("sample","UMAP1","UMAP2")], by="sample")
+    
+    # Scale min/max values for visualisation
+    max.value <- max(to.plot[variable==sprintf(" %s (MEFISTO imputed)",i),value])
+    min.value <- min(to.plot[variable==sprintf(" %s (MEFISTO imputed)",i),value])
+    to.plot[value>max.value,value:=max.value]
+    to.plot[value<min.value,value:=min.value]
+    
+    p <- ggscatter(to.plot, x="UMAP1", y="UMAP2", color="value") +
+      facet_wrap(~variable) +
+      theme_classic() +
+      ggplot_theme_NoAxes() +
+      theme(
+        legend.position = "none",
+      )
+    
+    if (view=="motif_met") {
+      p <- p + scale_color_gradient2(low = "blue", mid="gray90", high = "red")
+    } else if (view=="motif_acc") {
+      p <- p + scale_color_gradient2(low = "yellow", mid="gray90", high = "purple")
+    }
+    
+    print(p)
+  }
+}
+```
+
+
+# Gene set enrichment analysis
+
+Sometimes factors cannot be easily characterised by simply inspecting the genes with the largest weight in each factor. Sometimes it is useful to combine information across genes and work instead with gene sets (i.e. biological pathways).  
+
+Here we applied GSEA on the RNA weights, and used this approach to link Factor 4 to cell cycle variation. For more details we refer the reader to our [GSEA vignette](https://raw.githack.com/bioFAM/MOFA2_tutorials/master/R_tutorials/GSEA.html)
+
+## Load GSEA annotation
+
+There are a large number of gene set annotations, and the right one to use will depend on your data set. Some generic and commonly used ones are [MSigDB](https://www.gsea-msigdb.org/gsea/msigdb/index.jsp), [Reactome](https://reactome.org/) and [Gene Ontology](http://geneontology.org/).  
+
+We have manually processed some gene sets, which can be found in the [MOFAdata package](https://bioconductor.org/packages/release/data/experiment/html/MOFAdata.html).
+```{r}
+library(MOFAdata)
+data("MSigDB_v6.0_C5_mouse") 
+```
+
+```{r echo=FALSE}
+features_names(mefisto)[["RNA"]] <- toupper(features_names(mefisto)[["RNA"]])
+```
+
+## Run enrichment analysis
+
+```{r}
+enrichment.out <- run_enrichment(
+  object = mefisto,
+  view = "RNA",
+  feature.sets = MSigDB_v6.0_C5_mouse,
+  statistical.test = "parametric",
+  alpha = 0.01
+)
+```
+
+## Visualise enrichment analysis
+
+```{r}
+plot_enrichment(enrichment.out, factor=4, max.pathways = 15)
+```
+
+<details>
+  <summary>**Session Info**</summary>
+  
+```{r}
+sessionInfo()
+```
+
+</details>

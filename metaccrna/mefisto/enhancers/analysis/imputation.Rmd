@@ -1,0 +1,125 @@
+
+```{r}
+suppressMessages(library(RColorBrewer))
+suppressMessages(library(MOFA2))
+```
+
+
+```{r}
+if (grepl("ricard",Sys.info()['nodename'])) {
+  source("/Users/ricard/scnmt_gastrulation/settings.R")
+} else {
+  stop()
+}
+```
+
+I/O
+```{r}
+io$outdir <- paste0(io$basedir,"/metaccrna/mefisto")
+io$mefisto.model <- paste0(io$outdir,"/mefisto_model.rds")
+```
+
+Options
+```{r}
+theme_pub <- function() {
+  theme_classic() +
+  theme(
+    legend.position = "right",
+    legend.title = element_blank(),
+    legend.text = element_text(size=rel(1.2)),
+    axis.title = element_text(size=rel(1.2), color="black"),
+    axis.text = element_blank(),
+    axis.ticks = element_blank()
+  )
+}
+```
+
+# Load MEFISTO model
+
+```{r}
+mefisto <- readRDS(io$mefisto.model)
+```
+
+```{r}
+covariates.dt <- get_covariates(mefisto, as.data.frame = T) %>% as.data.table %>% dcast(sample~covariate)
+```
+
+# Imputation
+
+```{r}
+mefisto <- impute(mefisto)
+```
+
+# Imputation using GP means
+
+```{r}
+mefisto <- interpolate_factors(mefisto, mefisto@covariates[[1]])
+Z_interpol <- t(get_interpolated_factors(mefisto, only_mean = TRUE)[[1]]$mean)
+
+mefisto@imputed_data[[view]][[1]] <- tcrossprod(Z_interpol,get_weights(mefisto, view)[[1]]) %>% t
+imputed_data_interpolated <- tcrossprod(Z_interpol,get_weights(mefisto, view)[[1]]) %>% t
+colnames(imputed_data_interpolated) <- colnames(mefisto@data[[view]][[1]])
+```
+
+# Plot
+
+```{r}
+view <- "motif_met"
+factor <- 7
+```
+
+Feature selection
+```{r}
+# features.to.plot <- names(tail(sort(get_weights(mefisto, views=view, factor=factor)[[1]][,1]), n=50)) %>% list
+features.to.plot <- names(head(sort(get_weights(mefisto, views=view, factor=factor)[[1]][,1]), n=50)) %>% list
+names(features.to.plot) <- view
+
+features.to.plot <- features_names(mefisto)["motif_met"]
+```
+
+Fetch data
+```{r}
+met_data <- get_data(mefisto, views=view, features=features.to.plot)[[1]][[1]]
+met_data_imputed <- get_imputed_data(mefisto, views=view, features=features.to.plot)[[1]][[1]]
+met_data_imputed_GP <- imputed_data_interpolated[features.to.plot[[1]],]
+```
+
+
+# Plot
+
+Prepare data
+```{r}
+to.plot <- data.table(
+  sample = unlist(samples_names(mefisto)),
+  met_imputed = colMeans(met_data_imputed,na.rm=T),
+  met_non_imputed = colMeans(met_data,na.rm=T)
+  # met_interpolated = colMeans(met_data_imputed_GP,na.rm=T)
+) %>% melt(id.vars="sample", value.name="m_value") %>% 
+  merge(covariates.dt, by="sample")
+```
+
+```{r}
+# to.plot[m_value>opts$max_met,m_value:=opts$max_met]
+# to.plot[m_value<opts$min_met,m_value:=opts$min_met]
+```
+
+Convert M-values to B-values
+```{r}
+to.plot[,beta_value:=100*2**m_value/(1+2**m_value)]
+```
+
+Plot
+```{r}
+p <- ggplot(to.plot, aes(x=V1, y=V2, color=beta_value)) +
+  geom_point(alpha=0.7, size=2.0) +
+  facet_wrap(~variable) +
+  scale_colour_gradientn(colours = brewer.pal(9, "OrRd")) +
+  theme_pub() 
+# print(p)
+
+# pdf(sprintf("%s/MOFA_%s_%d.pdf",io$outdir,view,factor), width=6, height=6, useDingbats = F)
+print(p)
+# dev.off()
+```
+
+

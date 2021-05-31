@@ -5,9 +5,9 @@ suppressPackageStartupMessages(library(MOFA2))
 ###################
 
 if (grepl("ricard",Sys.info()['nodename'])) {
-  source("/Users/ricard/scnmt_gastrulation/metaccrna/mefisto/load_settings.R")
+  source("/Users/ricard/scnmt_gastrulation/metaccrna/mefisto/motif_activities/load_settings.R")
 } else if (grepl("ebi",Sys.info()['nodename'])) {
-  source("/homes/ricard/scnmt_gastrulation/metaccrna/mefisto/load_settings.R")
+  source("/homes/ricard/scnmt_gastrulation/metaccrna/mefisto/motif_activities/load_settings.R")
 } else {
   stop()
 }
@@ -37,6 +37,8 @@ sample_metadata <- sample_metadata %>% merge(umap.dt,by="sample")
 ## Create MOFA object ##
 ########################
 
+data <- data[sample%in%unique(umap.dt$sample)]
+
 MOFAobject <- create_mofa_from_df(data)
 
 # Visualise data structure
@@ -57,7 +59,7 @@ model_opts$num_factors <- 10
 
 # Training options
 train_opts <- get_default_training_options(MOFAobject)
-# train_opts$maxiter <- 15
+# train_opts$maxiter <- 5
 
 # MEFISTO options
 mefisto_opts <- get_default_mefisto_options(MOFAobject)
