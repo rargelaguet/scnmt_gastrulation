@@ -2,7 +2,7 @@
 # Load genomic annotations
 anno_list <- list()
 for (anno in names(opts$annos)) {
-  tmp <- fread(sprintf("%s/%s.bed",io$annos_dir,anno))[,c(1,2,3,4,5,6)]
+  tmp <- fread(sprintf("%s/%s.bed.gz",io$annos_dir,anno))[,c(1,2,3,4,5,6)]
   colnames(tmp) <- c("chr","start","end","strand","id","anno")
   
   # Define central position for the window approach

@@ -7,6 +7,7 @@ suppressPackageStartupMessages(library(MOFA2))
 if (grepl("ricard",Sys.info()['nodename'])) {
   source("/Users/ricard/scnmt_gastrulation/metaccrna/mefisto/motif_activities/load_settings.R")
 } else if (grepl("ebi",Sys.info()['nodename'])) {
+  reticulate::use_python("/nfs/research1/stegle/users/ricard/conda-envs/R4/bin/python", required=TRUE)
   source("/homes/ricard/scnmt_gastrulation/metaccrna/mefisto/motif_activities/load_settings.R")
 } else {
   stop()
@@ -59,7 +60,7 @@ model_opts$num_factors <- 10
 
 # Training options
 train_opts <- get_default_training_options(MOFAobject)
-# train_opts$maxiter <- 5
+# train_opts$maxiter <- 25
 
 # MEFISTO options
 mefisto_opts <- get_default_mefisto_options(MOFAobject)
@@ -82,7 +83,10 @@ MOFAobject <- prepare_mofa(
 ## Train the model ##
 #####################
 
-mofa <- run_mofa(MOFAobject)
+io$hdf5.outfile <- paste0(io$outdir,"/test.hdf5")
+mofa <- run_mofa(MOFAobject, outfile = io$hdf5.outfile)
+
+stop()
 
 ###############################
 ## Add metadata to the model ##

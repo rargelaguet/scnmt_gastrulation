@@ -12,11 +12,13 @@ io <- list()
 if (grepl("ricard",Sys.info()['nodename'])) {
   io$basedir <- "/Users/ricard/data/gastrulation"
   io$atlas.basedir <- "/Users/ricard/data/gastrulation10x"
+  io$multiome.basedir <- "/Users/ricard/data/gastrulation_multiome_10x"
   io$gene.metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
   io$mm10.genome <- "/Users/ricard/data/mm10_sequence/mm10.genome"
 } else if (grepl("ebi",Sys.info()['nodename'])) {
   io$basedir <- "/hps/nobackup2/research/stegle/users/ricard/scnmt_gastrulation"
   io$atlas.basedir <- "/hps/nobackup2/research/stegle/users/ricard/gastrulation10x"
+  io$multiome.basedir <- "/hps/nobackup2/research/stegle/users/ricard/gastrulation_multiome_10x"
   io$gene.metadata <- "/hps/nobackup2/research/stegle/users/ricard/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
   io$mm10.genome <- "/hps/nobackup2/research/stegle/users/ricard/mm10_sequence/mm10.genome"
 } else {
@@ -59,6 +61,17 @@ io$atlas.differential <- paste0(io$atlas.basedir,"/results/differential")
 io$atlas.average_expression_per_celltype <- paste0(io$atlas.basedir,"/results/marker_genes/avg_expr_per_celltype_and_gene.txt.gz")
 io$atlas.sce <- paste0(io$atlas.basedir,"/processed/SingleCellExperiment.rds")
 
+# Multiome
+io$multiome.metadata <- paste0(io$multiome.basedir,"/sample_metadata.txt.gz")
+io$multiome.rna.sce <- paste0(io$multiome.basedir,"/processed/rna/SingleCellExperiment.rds")
+io$multiome.rna.pseudobulk.sce <- paste0(io$multiome.basedir,"/results/rna/pseudobulk/SingleCellExperiment.rds")
+io$multiome.rna.differential <- paste0(io$multiome.basedir,"/results/rna/differential")
+io$multiome.atac.peaks.bed <- paste0(io$multiome.basedir,"/PeakCalls/bed/peaks_archR_macs2.bed.gz")
+io$multiome.atac.differential.dir <- paste0(io$basedir,"/results/atac/archR/differential/PeakMatrix")
+io$multiome.atac.marker_peaks <- paste0(io$multiome.basedir,"/results/atac/archR/differential/PeakMatrix/markers/marker_peaks.txt.gz")
+io$multiome.atac.peak_metadata <- paste0(io$multiome.basedir,"/PeakCalls/peak_metadata.tsv.gz")
+io$multiome.atac.peak_stats <- paste0(io$basedir,"/results/atac/archR/peak_calling/peak_stats.txt.gz")
+io$multiome.atac.pseudobulk.peakMatrix.se <- paste0(io$multiome.basedir,"/pseudobulk/pseudobulk_PeakMatrix_summarized_experiment.rds")
 
 #############
 ## Options ##
