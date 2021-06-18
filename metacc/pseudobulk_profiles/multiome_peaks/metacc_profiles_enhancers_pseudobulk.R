@@ -9,37 +9,23 @@ if (grepl("ricard",Sys.info()['nodename'])) {
   source("/homes/ricard/scnmt_gastrulation/metacc/pseudobulk_profiles/multiome_peaks/load_settings.R")
 }
 
-opts$test <- FALSE
+opts$test <- TRUE
 
-###################
-## Load metadata ##
-###################
-
-sample_metadata <- fread(io$metadata) %>%
-  .[,c("sample","id_acc","id_met","stage","lineage10x_2")] %>%
-  .[,stage_lineage:=paste(stage,lineage10x_2,sep="_")] %>%
-  .[,c("lineage10x_2"):=NULL] %>%
-  .[id_met%in%opts$met.cells | id_acc%in%opts$acc.cells]
-
-sample_metadata[,c("stage","stage_lineage"):=list(factor(stage,levels=opts$stages), factor(stage_lineage,levels=opts$stage_lineage))]
-sample_metadata[,c("sample","id_acc","id_met"):=list(as.factor(sample), as.factor(id_acc), as.factor(id_met))]
-
-# Merge E5.5 and E6.5 epiblast
-# sample_metadata %>% .[,stage_lineage:=ifelse(stage_lineage=="E5.5 Epiblast","E6.5 Epiblast",stage_lineage)]
-
-# Subset cells
-if (opts$test) {
-  opts$ncells <- 5
-  opts$filt.cells <- sample_metadata[,head(unique(sample),n=opts$ncells),by="stage_lineage"] %>% .$V1
-  sample_metadata <- sample_metadata[sample %in% opts$filt.cells]
-  opts$met.cells <- sample_metadata$id_met
-  opts$acc.cells <- sample_metadata$id_acc
-}
-
+if (opts$test) opts$stage_lineage <- opts$stage_lineage %>% head(n=2)
 
 ##############################
 ## Load genomic annotations ##
 ##############################
+
+# Define genomic contexts
+opts$annos <- c(
+  "prom_2000_2000" = "Promoters"
+)
+
+# Define window positions and characteristics
+opts$positions <- c(
+  "prom_2000_2000"="center"
+)
 
 if (grepl("ricard",Sys.info()['nodename'])) {
   source("/Users/ricard/scnmt_gastrulation/metacc/pseudobulk_profiles/load_annotations.R")
@@ -53,46 +39,28 @@ anno_df.acc <- anno_df
 ## Load genome-wide global methylation and accessibility stats ##
 #################################################################
 
-met.stats <- fread(io$met.stats) %>% .[,c("id_met","mean")] %>%
-  merge(sample_metadata[,.(sample,id_met)], by="id_met") %>% .[,context:="CG"]
-
-acc.stats <- fread(io$acc.stats) %>% .[,c("id_acc","mean")] %>%
-  merge(sample_metadata[,.(sample,id_acc)], by="id_acc") %>% .[,context:="GC"]
-
-stats <- rbind(
-  met.stats[,c("sample","mean","context")],
-  acc.stats[,c("sample","mean","context")]
-) %>% merge(sample_metadata[,c("sample","stage","stage_lineage")],by="sample") %>%
-  .[,.(mean=mean(mean)),by=c("stage_lineage","context")]
-
-
-#########################
-## Load scNMT-seq data ##
-#########################
+####################################
+## Load pseudobulk scNMT-seq data ##
+####################################
 
 if (grepl("ricard",Sys.info()['nodename'])) {
-  source("/Users/ricard/scnmt_gastrulation/metacc/pseudobulk_profiles/load_data.R")
+  source("/Users/ricard/scnmt_gastrulation/metacc/pseudobulk_profiles/load_pseudobulk_data.R")
 } else if (grepl("ebi",Sys.info()['nodename'])) {
-  source("/homes/ricard/scnmt_gastrulation/metacc/pseudobulk_profiles/load_data.R")
+  source("/homes/ricard/scnmt_gastrulation/metacc/pseudobulk_profiles/load_pseudobulk_data.R")
 }
-
-# Add sample metadata
-met <- met %>% merge(sample_metadata, by="id_met") %>% droplevels()
-acc <- acc %>% merge(sample_metadata, by="id_acc") %>% droplevels()
 
 # Merge
 data <- rbind(
-  met[,c("sample","stage","stage_lineage","id","anno","dist","rate","context")],
-  acc[,c("sample","stage","stage_lineage","id","anno","dist","rate","context")]
+  met.dt[,c("sample","stage","stage_lineage","id","anno","dist","rate","context")],
+  acc.dt[,c("sample","stage","stage_lineage","id","anno","dist","rate","context")]
 )
-# data[,rate:=rate*100]
 
 # Rename genomic annotations
 # data[,anno:=stringr::str_replace_all(anno,opts$annos)]
 
 # Load precomputed data
-saveRDS(data, paste0(io$outdir,"/data.rds"))
-data <- readRDS(paste0(io$outdir,"/data.rds"))
+saveRDS(data, paste0(io$outdir,"/pseudobulk_data.rds"))
+data <- readRDS(paste0(io$outdir,"/pseudobulk_data.rds"))
 
 ###########################
 ## Split by marker peaks ##

@@ -15,7 +15,7 @@ if (grepl("ricard",Sys.info()['nodename'])) {
 
 # CpG or GpC
 opts$contexts <- c(
-  "CG",
+  # "CG",
   "GC"
 )
 

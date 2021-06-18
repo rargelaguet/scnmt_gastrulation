@@ -3,6 +3,7 @@ suppressPackageStartupMessages(library(purrr))
 suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(ggpubr))
 suppressPackageStartupMessages(library(SingleCellExperiment))
+suppressPackageStartupMessages(library(stringr))
 
 #########
 ## I/O ##
@@ -29,6 +30,7 @@ io$metadata <- paste0(io$basedir,"/sample_metadata.txt")
 
 # Methylation
 io$met_data_raw <- paste0(io$basedir,"/met/cpg_level")
+io$met_data_pseudobulk_raw <- paste0(io$basedir,"/met/cpg_level/pseudobulk")
 io$met_data_parsed <- paste0(io$basedir,"/met/feature_level")
 io$met_data_motifs <- paste0(io$basedir,"/met/feature_level/motifs")
 io$met.stats <- paste0(io$basedir,"/met/results/stats/sample_stats.txt")
@@ -36,6 +38,7 @@ io$met.stats_per_chr <- paste0(io$basedir,"/met/results/stats/sample_stats_per_c
 
 # Accessibility
 io$acc_data_raw <- paste0(io$basedir,"/acc/gpc_level")
+io$acc_data_pseudobulk_raw <- paste0(io$basedir,"/acc/gpc_level/pseudobulk")
 io$acc_data_parsed <- paste0(io$basedir,"/acc/feature_level")
 io$acc_data_motifs <- paste0(io$basedir,"/acc/feature_level/motifs")
 io$acc.stats <- paste0(io$basedir,"/acc/results/stats/sample_stats.txt")

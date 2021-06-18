@@ -20,7 +20,7 @@ io$met.dir <- io$met_data_raw
 io$acc.dir <- io$acc_data_raw
 
 # Output directory
-io$outdir <- paste0(io$basedir,"/metacc/exploration/multiome_peaks")
+io$outdir <- paste0(io$basedir,"/metacc/pseudobulked_profiles/multiome_peaks")
 
 ####################
 ## Define options ##
