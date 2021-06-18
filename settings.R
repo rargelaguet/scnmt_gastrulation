@@ -80,6 +80,7 @@ io$multiome.atac.pseudobulk.peakMatrix.se <- paste0(io$multiome.basedir,"/pseudo
 opts <- list()
 
 opts$stage_lineage <- c(
+  "E3.5_ICM",
   "E4.5_Epiblast",
   "E4.5_Primitive_endoderm",
   "E5.5_Epiblast",
@@ -94,7 +95,7 @@ opts$stage_lineage <- c(
   "E7.5_Mesoderm"
 )
 
-opts$celltype2.colors <- c(
+opts$celltype_aggregated.colors <- c(
   "ICM" = "#C6E2FF",
   "Epiblast"="grey70",
   "Mesoderm"="#CD3278",
@@ -204,7 +205,7 @@ opts$celltype.colors = c(
 )
 
 opts$chr <- paste0("chr",c(1:19,"X","Y"))
-opts$stages <- c("E4.5", "E5.5", "E6.5", "E7.5")
+opts$stages <- c("E3.5", "E4.5", "E5.5", "E6.5", "E7.5")
 
 ##########################
 ## Load sample metadata ##
