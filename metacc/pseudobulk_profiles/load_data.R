@@ -38,6 +38,6 @@ acc <- rbindlist(acc_list) %>%
 rm(acc_list)
 
 # Merge data with sample metadata
-met <- met %>% merge(sample_metadata, by="id_met") %>% droplevels()
-acc <- acc %>% merge(sample_metadata, by="id_acc") %>% droplevels()
+# met <- met %>% merge(sample_metadata, by="id_met") %>% droplevels()
+# acc <- acc %>% merge(sample_metadata, by="id_acc") %>% droplevels()
 

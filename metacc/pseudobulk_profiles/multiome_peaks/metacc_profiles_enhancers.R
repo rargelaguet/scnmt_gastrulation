@@ -1,21 +1,15 @@
----
-title: "Gastrulation scNMT-seq: pseudobulked profiles of DNA methylation and chromatin accessibility"
----
+## ----load_modules, echo=FALSE, include=FALSE----------------------------------
 
-```{r load_modules, echo=FALSE, include=FALSE}
-```
 
-Define settings
-```{r define_options, echo=FALSE}
+## ----define_options, echo=FALSE-----------------------------------------------
 if (grepl("ricard",Sys.info()['nodename'])) {
   source("/Users/ricard/scnmt_gastrulation/metacc/pseudobulk_profiles/multiome_peaks/load_settings.R")
 } else if (grepl("ebi",Sys.info()['nodename'])) {
   source("/homes/ricard/scnmt_gastrulation/metacc/pseudobulk_profiles/multiome_peaks/load_settings.R")
 }
-```
 
-Load sample metadata
-```{r load_metadata}
+
+## ----load_metadata------------------------------------------------------------
 sample_metadata <- fread(io$metadata) %>%
   .[,c("sample","id_acc","id_met","id_rna","stage","lineage10x_2")] %>%
   .[,stage_lineage:=paste(stage,lineage10x_2,sep=" ")] %>%
@@ -23,20 +17,18 @@ sample_metadata <- fread(io$metadata) %>%
 
 # Merge E5.5 and E6.5 epiblast
 # sample_metadata %>% .[,stage_lineage:=ifelse(stage_lineage=="E5.5 Epiblast","E6.5 Epiblast",stage_lineage)]
-```
 
-<!-- (ONLY FOR TESTING) Subset cells to reduce memory burden -->
-```{r}
+
+## -----------------------------------------------------------------------------
 opts$ncells <- 5
 opts$filt.cells <- sample_metadata[,head(unique(sample),n=opts$ncells),by="stage_lineage"] %>% .$V1
 
 sample_metadata <- sample_metadata[sample %in% opts$filt.cells]
 opts$met.cells <- sample_metadata$id_met
 opts$acc.cells <- sample_metadata$id_acc
-```
 
-Load genomic annotations
-```{r}
+
+## -----------------------------------------------------------------------------
 if (grepl("ricard",Sys.info()['nodename'])) {
   source("/Users/ricard/scnmt_gastrulation/metacc/pseudobulk_profiles/load_annotations.R")
 } else if (grepl("ebi",Sys.info()['nodename'])) {
@@ -44,51 +36,43 @@ if (grepl("ricard",Sys.info()['nodename'])) {
 }
 anno_df.met <- anno_df
 anno_df.acc <- anno_df
-```
 
-Load marker peaks based on the Multiome data
-```{r}
+
+## -----------------------------------------------------------------------------
 multiome_marker_peaks.dt <- fread(io$multiome.atac.marker_peaks)
-```
 
-# Load data
 
-This takes a long time, see code chunk later where we load the pre-computed object
-```{r load_data, echo=FALSE}
+## ----load_data, echo=FALSE----------------------------------------------------
 if (grepl("ricard",Sys.info()['nodename'])) {
   source("/Users/ricard/scnmt_gastrulation/metacc/pseudobulk_profiles/load_data.R")
 } else if (grepl("ebi",Sys.info()['nodename'])) {
   source("/homes/ricard/scnmt_gastrulation/metacc/pseudobulk_profiles/load_data.R")
 }
-```
-Add sample metadata
-```{r}
+
+
+## -----------------------------------------------------------------------------
 met <- met %>% merge(sample_metadata, by="id_met") %>% droplevels()
 acc <- acc %>% merge(sample_metadata, by="id_acc") %>% droplevels()
-```
 
-Merge DNA methylation and chromatin acessibility data
-```{r}
+
+## -----------------------------------------------------------------------------
 data <- rbind(
   met[,c("sample","stage","stage_lineage","id","anno","dist","rate","context")],
   acc[,c("sample","stage","stage_lineage","id","anno","dist","rate","context")]
 )
 data[,rate:=rate*100]
-```
 
-Rename genomic contexts
-```{r}
+
+## -----------------------------------------------------------------------------
 # data[,anno:=stringr::str_replace_all(anno,opts$annos)]
-```
 
-Load pre-computed object
-```{r}
+
+## -----------------------------------------------------------------------------
 # saveRDS(data, "/Users/ricard/data/gastrulation/metacc/pseudobulked_profiles/lineage_enhancers/data.rds")
 # data <- readRDS("/Users/ricard/data/gastrulation/metacc/pseudobulked_profiles/lineage_enhancers/data.rds")
-```
 
-Load genome-wide global methylation and accessibility stats
-```{r}
+
+## -----------------------------------------------------------------------------
 met.stats <- fread(io$met.stats) %>% .[,c("id_met","mean")] %>%
   merge(sample_metadata[,.(sample,id_met)], by="id_met") %>% .[,context:="CG"]
 
@@ -100,18 +84,14 @@ stats <- rbind(
   acc.stats[,c("sample","mean","context")]
 ) %>% merge(sample_metadata[,c("sample","stage","stage_lineage")],by="sample") %>%
   .[,.(mean=mean(mean)),by=c("stage_lineage","context")]
-```
 
-```{r}
+
+## -----------------------------------------------------------------------------
 data[,stage_lineage:=stringr::str_replace_all(stage_lineage,"_"," ")]
 stats[,stage_lineage:=stringr::str_replace_all(stage_lineage,"_"," ")]
-```
 
 
-<!-- Plot joint methylation and accessibility profiles -->
-
-Per stage_lineage, genomic contexts side by side
-```{r}
+## -----------------------------------------------------------------------------
 p_list <- list()
 
 for (i in unique(data$stage_lineage)) {
@@ -141,4 +121,4 @@ for (i in unique(data$stage_lineage)) {
   print(p_list[[i]])
   dev.off()
 }
-```
+

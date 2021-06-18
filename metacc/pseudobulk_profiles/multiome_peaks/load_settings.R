@@ -5,6 +5,9 @@
 if (grepl("ricard",Sys.info()['nodename'])) {
   source("/Users/ricard/scnmt_gastrulation/settings.R")
   source("/Users/ricard/scnmt_gastrulation/utils.R")
+} else if (grepl("ebi",Sys.info()['nodename'])) {
+  source("/homes/ricard/scnmt_gastrulation/settings.R")
+  source("/homes/ricard/scnmt_gastrulation/utils.R")
 } else {
   stop()
 }
