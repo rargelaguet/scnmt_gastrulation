@@ -14,20 +14,26 @@ if (grepl("ricard",Sys.info()['nodename'])) {
 }
 
 # Options
-opts$number_samples_to_mask <- c(50)
+opts$number_samples_to_mask <- c(100)
 
 # I/O
+io$original.data <- paste0(io$outdir,"/original_data.rds")
 io$mefitsto.models.dir <- paste0(io$basedir,"/metaccrna/mefisto/quantification_imputation")
 io$outdir <- paste0(io$basedir,"/metaccrna/mefisto/quantification_imputation")
 io$mefisto.models <- sprintf("%s/mefisto_imputation_N%s.rds",io$mefitsto.models.dir,opts$number_samples_to_mask)
 
+########################
+## Load original data ##
+########################
+
+original_data <- readRDS(io$original.data)
 
 ################
 ## Load model ##
 ################
 
 # mefisto <- readRDS(io$mefisto.model)
-mefisto_models <- io$mefisto.models %>% map(~ readRDS(.))
+mefisto_models <- io$mefisto.models %>% map(readRDS)
 names(mefisto_models) <- as.character(opts$number_samples_to_mask)
 
 # Get covariates
@@ -37,52 +43,51 @@ names(mefisto_models) <- as.character(opts$number_samples_to_mask)
 ## Imputation ##
 ################
 
+views.to.impute <- c("motif_acc", "motif_met")
+
 for (i in 1:length(mefisto_models)) {
   
   samples_masked <- mefisto_models[[i]]$samples_masked
   model <- mefisto_models[[i]]$model
   
   # Standard MOFA imputation
-  model <- impute(model)
+  model <- impute(model, views=views.to.impute)
+  imputed_data_mofa <- model@imputed_data[]
   
   # MEFISTO imputation using GP means
   model <- interpolate_factors(model, model@covariates[[1]])
   Z_interpol <- t(get_interpolated_factors(model, only_mean = TRUE)[[1]]$mean)
-  imputed_data_interpolated <- list()
-  for (i in views_names(model)) {
+  imputed_data_mefisto <- list()
+  for (j in views.to.impute) {
     # model@imputed_data[[view]][[1]] <- tcrossprod(Z_interpol,get_weights(model, view)[[1]]) %>% t
-    imputed_data_interpolated[[i]] <- tcrossprod(Z_interpol,get_weights(model, i)[[1]]) %>% t
-    colnames(imputed_data_interpolated[[i]]) <- colnames(model@data[[i]][[1]])
+    imputed_data_mefisto[[j]] <- tcrossprod(Z_interpol,get_weights(model, j)[[1]]) %>% t
+    colnames(imputed_data_mefisto[[j]]) <- colnames(model@data[[j]][[1]])
   }
   
   # mean imputation
   imputed_data_mean <- list()
-  for (i in views_names(model)) {
-    feature_means <- rowMeans(get_data(model, views=i)[[1]][[1]], na.rm=T)
-    
-    imputed_data_mean[[i]] <- smoother_aggregate_nearest_nb(
-      mat =, 
-      D = pdist(t(model@covariates[[1]])), 
-      k = 25
-    )
-    colnames(imputed_data_mean[[i]]) <- colnames(model@data[[i]][[1]])
+  for (j in views.to.impute) {
+    tmp <- get_data(model, views=j)[[1]][[1]]
+    imputed_data_mean[[j]] <- apply(tmp, 1, function(x) { x[is.na(x)] <- mean(x, na.rm = TRUE); x }) %>% t
   }
   
   
   # kNN imputation
   imputed_data_knn <- list()
-  for (i in views_names(model)) {
-    imputed_data_knn[[i]] <- smoother_aggregate_nearest_nb(
-      mat = get_data(model, views=i)[[1]][[1]], 
+  for (j in views.to.impute) {
+    imputed_data_knn[[j]] <- smoother_aggregate_nearest_nb(
+      mat = get_data(model, views=j)[[1]][[1]], 
       D = pdist(t(model@covariates[[1]])), 
       k = 25
     )
-    colnames(imputed_data_knn[[i]]) <- colnames(model@data[[i]][[1]])
+    colnames(imputed_data_knn[[j]]) <- colnames(model@data[[j]][[1]])
   }
 }
 
 
-
+###################
+## Calculate MSE ##
+###################
 
 # foo <- data.table(
 #   sample = unlist(samples_names(mefisto)),
@@ -91,6 +96,15 @@ for (i in 1:length(mefisto_models)) {
 #   interpolated = colMeans(data_imputed_GP,na.rm=T)
 # )
 
+i <- "motif_met"
+N <- 50
+data.table(
+  N = N,
+  mefisto = sum(abs(imputed_data_mefisto[[i]][,samples_masked] - original_data[[i]][[1]][,samples_masked]),na.rm=T),
+  mofa = sum(abs(imputed_data_mofa[[i]][[1]][,samples_masked] - original_data[[i]][[1]][,samples_masked]),na.rm=T),
+  mean = sum(abs(imputed_data_mean[[i]][,samples_masked] - original_data[[i]][[1]][,samples_masked]),na.rm=T),
+  knn = sum(abs(imputed_data_knn[[i]][,samples_masked] - original_data[[i]][[1]][,samples_masked]),na.rm=T)
+)
 
 ##########
 ## Plot ##
@@ -102,7 +116,7 @@ for (view in c("motif_met","motif_acc")) {
   # features.to.plot <- list(paste0("MSGN1_412",gsub("motif","",view))); names(features.to.plot) <- view
   data <- get_data(mefisto, views=view, features=features.to.plot)[[1]][[1]]
   data_imputed <- get_imputed_data(mefisto, views=view, features=features.to.plot)[[1]][[1]]
-  data_imputed_mefisto <- imputed_data_interpolated[[view]][features.to.plot[[1]],,drop=F]
+  data_imputed_mefisto <- imputed_data_mefisto[[view]][features.to.plot[[1]],,drop=F]
   data_imputed_knn <- imputed_data_knn[[view]][features.to.plot[[1]],,drop=F]
   
   for (i in features.to.plot[[view]]) {

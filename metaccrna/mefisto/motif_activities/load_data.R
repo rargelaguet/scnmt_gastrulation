@@ -127,5 +127,5 @@ data <- do.call("rbind",list(data1,data2,data3)) %>%
 ## Save ##
 ##########
 
-file <- paste0(io$outdir,"/vignette/data.txt.gz")
-fwrite(data, file, col.names=T, quote=F, sep="\t")
+# file <- paste0(io$outdir,"/vignette/data.txt.gz")
+# fwrite(data, file, col.names=T, quote=F, sep="\t")
