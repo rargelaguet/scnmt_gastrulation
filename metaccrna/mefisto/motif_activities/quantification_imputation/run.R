@@ -7,7 +7,7 @@ suppressPackageStartupMessages(library(argparse))
 
 p <- ArgumentParser(description='')
 p$add_argument('--number_samples_to_mask',  type="integer",  default=0, help='Number of samples to mask')
-p$add_argument('--seed',  type="seed",  default=42, help='Random seed')
+p$add_argument('--seed',  type="integer",  default=42, help='Random seed')
 p$add_argument('--test_mode', action="store_true", help='Testing mode?')
 args <- p$parse_args(commandArgs(TRUE))
 
@@ -45,7 +45,7 @@ if (grepl("ricard",Sys.info()['nodename'])) {
 # saveRDS(MOFAobject@data, paste0(io$outdir,"/original_data.rds"))
 
 if (args$test_mode) {
-  samples <- data[view=="motif_met",sample] %>% unique %>% sample(25)
+  samples <- data[view=="motif_met",sample] %>% unique %>% sample(100)
   data <- data[sample%in%samples]
 }
 
@@ -64,10 +64,9 @@ data <- data[sample%in%unique(umap.dt$sample)]
 ## Mask epigenetic values from entire samples ##
 ################################################
 
-# nsamples = sample_metadata[pass_metQC==T & pass_accQC==T,.N]
 if (args$number_samples_to_mask>0) {
   set.seed(args$seed)
-  samples_to_mask <- sample(sample_metadata$sample, size=args$number_samples_to_mask)
+  samples_to_mask <- sample(sample_metadata[pass_metQC==T & pass_accQC==T,sample], size=args$number_samples_to_mask)
   print(sprintf("Masking epigenetic values from N=%s samples",length(samples_to_mask)))
   data[sample%in%samples_to_mask & view%in%c("motif_acc","motif_met"),value:=NA]
 } else {
@@ -150,8 +149,8 @@ samples_metadata(mofa) <- sample_metadata %>%
 ## Save ##
 ##########
 
-if (!args$test_mode) {
-  io$mofa.outfile <- sprintf("%s/mefisto_imputation_N%s_seed%s.rds",io$outdir,args$number_samples_to_mask,args$seed)
-  print(sprintf("Saving model in %s...",io$mofa.outfile))
-  saveRDS(list("samples_masked"=samples_to_mask, "model"=mofa), io$mofa.outfile)
-}
+# if (!args$test_mode) {
+io$mofa.outfile <- sprintf("%s/mefisto_imputation_N%s_seed%s.rds",io$outdir,args$number_samples_to_mask,args$seed)
+print(sprintf("Saving model in %s...",io$mofa.outfile))
+saveRDS(list("samples_masked"=samples_to_mask, "model"=mofa, "seed"=args$seed), io$mofa.outfile)
+# }

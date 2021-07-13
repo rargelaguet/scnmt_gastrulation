@@ -13,6 +13,7 @@ library(scater)
 Define I/O
 ```{r define_io}
 source("/Users/ricard/scnmt_gastrulation/settings.R")
+source("/Users/ricard/scnmt_gastrulation/utils.R")
 io$outdir <- paste0(io$basedir,"/rna/results/dimensionality_reduction")
 ```
 
@@ -20,20 +21,22 @@ Define options
 ```{r}
 # Define which cells to use
 opts$stage_lineage <- c(
-  "E4.5_Epiblast",
-  "E4.5_Primitive_endoderm",
-  "E5.5_Epiblast",
-  "E5.5_Visceral_endoderm",
+  # "E4.5_Epiblast",
+  # "E4.5_Primitive_endoderm",
+  # "E5.5_Epiblast",
+  # "E5.5_Visceral_endoderm",
   "E6.5_Epiblast",
-  "E6.5_Primitive_Streak",
-  "E6.5_Visceral_endoderm",
-  "E6.5_Mesoderm",
+  # "E6.5_Primitive_Streak",
+  # "E6.5_Visceral_endoderm",
+  # "E6.5_Mesoderm",
   "E7.5_Epiblast",
   "E7.5_Primitive_Streak",
   "E7.5_Ectoderm",
   "E7.5_Endoderm",
   "E7.5_Mesoderm"
+  # "E7.5_Visceral_endoderm"
 )
+
 
 # Stage-specific colors for RNA
 opts$stage.colors <- c(
@@ -46,18 +49,23 @@ opts$stage.colors <- c(
 
 Update sample metadata
 ```{r}
-sample_metadata <- sample_metadata %>% 
+sample_metadata <- fread(io$metadata) %>% 
+  .[,stage_lineage:=as.factor(paste(stage,lineage10x_2,sep="_"))] %>%
   .[pass_rnaQC==T & stage_lineage%in%opts$stage_lineage] %>%
-  .[,c("id_rna","stage","lineage10x_2","stage_lineage")]
+  droplevels
 table(sample_metadata$stage_lineage)
 ```
 
 # Load RNA expression data
 
 ```{r load_data}
-stop()
-# sce <- readRDS(io$rna)[,sample_metadata$id_rna]
-# sce
+sce <- load_SingleCellExperiment(
+  file = io$rna.sce, 
+  cells = sample_metadata$id_rna, 
+  normalise = TRUE, 
+  remove_non_expressed_genes = TRUE
+)
+rownames(sce) <- rowData(sce)$symbol
 ```
 
 Parse RNA expression data
@@ -73,30 +81,7 @@ Select HVG
 ```{r}
 decomp <- modelGeneVar(sce)
 hvgs <- rownames(decomp)[decomp$p.value<0.01 & decomp$mean > 0.01]
-```
-
-Plot HVG
-```{r}
-to.plot <- data.table(
-  mean = apply(logcounts(sce),1,mean),
-  var = apply(logcounts(sce),1,var),
-  hvg = decomp$p.value < 0.01
-) %>% .[is.na(hvg),hvg:=F]
-
-ggplot(to.plot, aes(x=mean, y=var)) +
-  geom_point(aes(fill=hvg, size=hvg), shape=21, stroke=0.1) +
-  stat_smooth() +
-  scale_fill_manual(values=c("black","red")) +
-  scale_size_manual(values=c(0.8,1.6)) +
-  guides(fill = guide_legend(override.aes = list(size=2.5))) +
-  xlab('Mean') + ylab('Variance') +
-  theme_classic()
-```
-
-Subset SingleCellExperiment
-```{r}
 sce_filt <- sce[hvgs,]
-sce_filt
 ```
 
 (Optional) Regress out covariates
@@ -130,8 +115,13 @@ Plot PCA
 Run UMAP
 ```{r}
 set.seed(41)
-sce_filt <- runUMAP(sce_filt, dimred="PCA", n_neighbors = 15, min_dist = 0.55)
+sce_filt <- runUMAP(sce_filt, dimred="PCA", n_neighbors = 25, min_dist = 0.35)
 reducedDim(sce, "UMAP") <- reducedDim(sce_filt, "UMAP") 
+```
+
+```{r}
+plotUMAP(sce_filt, colour_by="stage_lineage", ncomponents = c(1,2)) +
+  scale_color_manual(values=opts$stagelineage.colors)
 ```
 
 Plot UMAP
