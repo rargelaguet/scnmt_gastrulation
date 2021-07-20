@@ -14,7 +14,8 @@ io$outdir <- paste0(io$basedir,"/met/results/stats")
 
 # Define cells
 opts$cells <- list.files(io$met_data_raw, pattern = "*.tsv.gz") %>% 
-  stringr::str_replace_all(".tsv.gz","")
+# opts$cells <- list.files(io$met_data_raw, pattern = "^E3.5_.*tsv.gz") %>% 
+  stringr::str_replace_all(".tsv.gz","") %>% head(n=3)
 
 ####################################################
 ## Load methylation data and calculate statistics ##

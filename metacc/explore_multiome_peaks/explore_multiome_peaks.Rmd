@@ -8,8 +8,10 @@ Load default settings
 ```{r echo=TRUE, include=FALSE}
 if (grepl("ricard",Sys.info()['nodename'])) {
   source("/Users/ricard/scnmt_gastrulation/settings.R")
+  source("/Users/ricard/scnmt_gastrulation/utils.R")
 } else if(grepl("ebi",Sys.info()['nodename'])){
   source("/homes/ricard/scnmt_gastrulation/settings.R")
+  source("/homes/ricard/scnmt_gastrulation/utils.R")
 } else {
   stop("Computer not recognised")
 }
@@ -174,26 +176,9 @@ stopifnot(unique(met_dt$id) %in% feature_metadata$id)
 stopifnot(unique(acc_dt$id) %in% feature_metadata$id)
 ```
 
-# Filter features
-
 ```{r}
-# met_dt.filt <- met_dt %>% merge(multiome_diff.dt[sig==T,c("id","sign")], by="id")
-# acc_dt.filt <- acc_dt %>% merge(multiome_diff.dt[sig==T,c("id","sign")], by="id")
-```
-
-```{r}
-# met_dt.filt <- met_dt %>% 
-#   .[id%in%marker_peaks.dt$id] %>%
-#   merge(marker_peaks.dt[,c("id","celltype","score")], by="id")
-# 
-# acc_dt.filt <- acc_dt %>% 
-#   .[id%in%marker_peaks.dt$id] %>%
-#   merge(marker_peaks.dt[,c("id","celltype","score")], by="id")
-```
-
-```{r}
-length(unique(met_dt.filt$id))
-length(unique(acc_dt.filt$id))
+length(unique(met_dt$id))
+length(unique(acc_dt$id))
 ```
 
 
@@ -247,7 +232,7 @@ p <- ggplot(to.plot2[stage_lineage=="E7.5_Endoderm"], aes(x=lineage10x, y=rate, 
 print(p)
 ```
 
-# Plot
+# Met/Acc plot per marker gene class
 
 Define global stats per cell
 
@@ -268,6 +253,8 @@ theme_pub <- function() {
 ```
 
 ```{r}
+facet.labels <- c(CG = "DNA methylation", GC = "Chromatin accessibility")
+
 for (i in unique(marker_peaks.dt$celltype)) {
   
   ## Prepare data
@@ -277,7 +264,6 @@ for (i in unique(marker_peaks.dt$celltype)) {
     .[,.(rate=100*(sum(Nmet)/sum(Ntotal))),by=c("id_met")] %>%
     merge(sample_metadata[,c("id_met","id_rna","lineage10x","stage_lineage")], by="id_met") %>%
     merge(met.stats,by="id_met") %>% .[,norm_rate:=rate/mean]  %>%
-    # .[,lineage10x:=factor(lineage10x, levels=opts$)]
     .[,stage_lineage:=factor(stage_lineage, levels=opts$stage_lineage)]
   
   to.plot.acc <- acc_dt %>% 
@@ -288,16 +274,15 @@ for (i in unique(marker_peaks.dt$celltype)) {
     # .[,lineage10x:=factor(lineage10x, levels=opts$)]
     .[,stage_lineage:=factor(stage_lineage, levels=opts$stage_lineage)]
   
+  to.plot <- rbind(
+    to.plot.met[,c("id_rna","stage_lineage","rate","norm_rate","context")],
+    to.plot.acc[,c("id_rna","stage_lineage","rate","norm_rate","context")]
+  )
+  
   ## Plot
   
-  p.met.unscaled <- ggboxplot(to.plot.met, x = "stage_lineage", y = "rate", fill="stage_lineage", coef=0.5, outlier.shape=NA) +
-    scale_fill_manual(values=opts$stagelineage.colors) +
-    labs(x="", y="Methylation (%)") +
-    guides(x = guide_axis(angle = 90)) +
-    coord_cartesian(ylim=c(0,100)) +
-    theme_pub()
-
-  p.met.scaled <- ggboxplot(to.plot.met, x = "stage_lineage", y = "norm_rate", fill="stage_lineage", coef=0.5, outlier.shape=NA) +
+  p.scaled <- ggboxplot(to.plot, x = "stage_lineage", y = "norm_rate", fill="stage_lineage", coef=0.5, outlier.shape=NA) +
+    facet_wrap(~context, nrow=1, scales="free_y",  labeller = as_labeller(facet.labels)) +
     geom_hline(yintercept=1, linetype="dashed", alpha=0.75, size=0.75) +
     scale_fill_manual(values=opts$stagelineage.colors) +
     labs(x="", y="Methylation (% relative to bgd)") +
@@ -305,24 +290,40 @@ for (i in unique(marker_peaks.dt$celltype)) {
     coord_cartesian(ylim=c(0.1,1.75)) +
     theme_pub()
   
-  p.acc.unscaled <- ggboxplot(to.plot.acc, x = "stage_lineage", y = "rate", fill="stage_lineage", coef=0.5, outlier.shape=NA) +
-    scale_fill_manual(values=opts$stagelineage.colors) +
-    labs(x="", y="Accessibility (%)") +
-    coord_cartesian(ylim=c(20,70)) +
-    guides(x = guide_axis(angle = 90)) +
-    theme_pub()
+  # p.met.unscaled <- ggboxplot(to.plot.met, x = "stage_lineage", y = "rate", fill="stage_lineage", coef=0.5, outlier.shape=NA) +
+  #   scale_fill_manual(values=opts$stagelineage.colors) +
+  #   labs(x="", y="Methylation (%)") +
+  #   guides(x = guide_axis(angle = 90)) +
+  #   coord_cartesian(ylim=c(0,100)) +
+  #   theme_pub()
+
+  # p.met.scaled <- ggboxplot(to.plot.met, x = "stage_lineage", y = "norm_rate", fill="stage_lineage", coef=0.5, outlier.shape=NA) +
+  #   geom_hline(yintercept=1, linetype="dashed", alpha=0.75, size=0.75) +
+  #   scale_fill_manual(values=opts$stagelineage.colors) +
+  #   labs(x="", y="Methylation (% relative to bgd)") +
+  #   guides(x = guide_axis(angle = 90)) +
+  #   coord_cartesian(ylim=c(0.1,1.75)) +
+  #   theme_pub()
+  
+  # p.acc.unscaled <- ggboxplot(to.plot.acc, x = "stage_lineage", y = "rate", fill="stage_lineage", coef=0.5, outlier.shape=NA) +
+  #   scale_fill_manual(values=opts$stagelineage.colors) +
+  #   labs(x="", y="Accessibility (%)") +
+  #   coord_cartesian(ylim=c(20,70)) +
+  #   guides(x = guide_axis(angle = 90)) +
+  #   theme_pub()
 
   
-  p.acc.scaled <- ggboxplot(to.plot.acc, x = "stage_lineage", y = "norm_rate", fill="stage_lineage", coef=0.5, outlier.shape=NA) +
-    geom_hline(yintercept=1, linetype="dashed", alpha=0.75, size=0.75) +
-    scale_fill_manual(values=opts$stagelineage.colors) +
-    labs(x="", y="Accessibility (% relative to bgd)") +
-    coord_cartesian(ylim=c(0.6,1.8)) +
-    guides(x = guide_axis(angle = 90)) +
-    theme_pub()
+  # p.acc.scaled <- ggboxplot(to.plot.acc, x = "stage_lineage", y = "norm_rate", fill="stage_lineage", coef=0.5, outlier.shape=NA) +
+  #   geom_hline(yintercept=1, linetype="dashed", alpha=0.75, size=0.75) +
+  #   scale_fill_manual(values=opts$stagelineage.colors) +
+  #   labs(x="", y="Accessibility (% relative to bgd)") +
+  #   coord_cartesian(ylim=c(0.6,1.8)) +
+  #   guides(x = guide_axis(angle = 90)) +
+  #   theme_pub()
   
-  p <- cowplot::plot_grid(plotlist=list(p.met.unscaled, p.met.scaled, p.acc.unscaled, p.acc.scaled), nrow = 2, ncol=2)
-  pdf(sprintf("%s/%s_markerPeaks_scnmt_metacc.pdf",io$outdir,i), width=11, height=8)
+  # p <- cowplot::plot_grid(plotlist=list(p.met.unscaled, p.met.scaled, p.acc.unscaled, p.acc.scaled), nrow = 2, ncol=2)
+  p <- cowplot::plot_grid(plotlist=list(p.met.scaled, p.acc.scaled), nrow=2, ncol=1)
+  pdf(sprintf("%s/%s_markerPeaks_scnmt_metacc.pdf",io$outdir,i), width=6, height=8)
   print(p)
   dev.off()
 
