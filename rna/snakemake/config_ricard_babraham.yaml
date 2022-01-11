@@ -1,0 +1,189 @@
+samples:
+    - E7.5_TET_TKO
+    - E7.5_TET_TKO_crispr
+    - E8.5_WT_CD41+
+    - E8.5_TET_TKO_CD41+
+    - E8.5_WT_KDR+
+    - E8.5_TET_TKO_KDR+
+    - E8.5_WT_KDR+_CD41+
+    - E8.5_TET_TKO_KDR+_CD41+
+    - E8.5_WT
+    - E8.5_TET_TKO
+
+plates:
+    - E7.5_tet_chimera_plate3
+    - E7.5_tet_crispr_plate5
+    - E7.5_tet_crispr_plate6
+    - E8.5_oct20_plate1
+    - E8.5_oct20_plate2
+    - E8.5_oct20_plate3
+    - E8.5_oct20_plate4
+    - E8.5_oct20_plate5
+    - E8.5_oct20_plate6
+    - E8.5_oct20_plate7
+    - E8.5_oct20_plate8
+    - Tet-tko-chimera_embryo01
+    - Tet-tko-chimera_embryo02
+    - Tet-tko-chimera_embryo04
+    - Tet-tko-chimera_embryo05
+    - tet_chimera_march20_plate1
+    - tet_chimera_march20_plate2
+    - tet_chimera_march20_plate3
+    - tet_chimera_march20_plate4_tet_tko
+    - tet_chimera_march20_plate4_wt
+    - tet_chimera_march20_plate5_tet_tko
+    - tet_chimera_march20_plate5_wt
+    - tet_chimera_march20_plate6_tet_tko
+    - tet_chimera_march20_plate6_wt
+    
+#################
+## Directories ##
+#################
+
+directories:
+    base: /bi/group/reik/ricard/data/scnmt_gastrulation_argelaguet2019
+    original_data: /bi/group/reik/ricard/data/scnmt_gastrulation_argelaguet2019/original
+    processed_data: /bi/group/reik/ricard/data/scnmt_gastrulation_argelaguet2019/processed/rna_new
+    results: /bi/group/reik/ricard/data/scnmt_gastrulation_argelaguet2019/results_new
+    atlas: /bi/group/reik/ricard/data/pijuansala2019_gastrulation10x
+
+###############
+## Resources ##
+###############
+
+resources:
+    marker_genes: /bi/group/reik/ricard/data/pijuansala2019_gastrulation10x/results/marker_genes/all_stages/marker_genes.txt.gz
+    umap: "/bi/group/reik/ricard/data/scnmt_gastrulation_argelaguet2019/results/rna/dimensionality_reduction/umap_features1000_pcs30_neigh25_dist0.3.txt.gz"
+    celltypes: ["Epiblast", "Primitive_Streak", "Caudal_epiblast", "PGC", "Anterior_Primitive_Streak", "Notochord", "Def._endoderm", "Gut", "Nascent_mesoderm", "Mixed_mesoderm", "Intermediate_mesoderm", "Caudal_Mesoderm", "Paraxial_mesoderm", "Somitic_mesoderm", "Pharyngeal_mesoderm", "Cardiomyocytes", "Allantois", "ExE_mesoderm", "Mesenchyme", "Haematoendothelial_progenitors", "Endothelium", "Blood_progenitors_1", "Blood_progenitors_2", "Erythroid1", "Erythroid2", "Erythroid3", "NMP", "Rostral_neurectoderm", "Caudal_neurectoderm", "Neural_crest", "Forebrain_Midbrain_Hindbrain", "Spinal_cord", "Surface_ectoderm", "Visceral_endoderm", "ExE_endoderm", "ExE_ectoderm", "Parietal_endoderm"]
+    stages: ["E3.5","E4.5","E5.5","E6.5","E7.5"]
+    gene_metadata: /bi/group/reik/ricard/data/scnmt_gastrulation_argelaguet2019/features/gene_metadata/Mmusculus_genes_BioMart.87.txt
+    bedGraphToBigWig: "/bi/apps/ucsc_tools/5/bedGraphToBigWig"
+
+#############
+## Scripts ##
+#############
+
+scripts:
+    create_seurat: ../processing/1_create_seurat_rna.R
+    qc: ../processing/2_QC.R
+    seurat_to_sce: ../processing/3_seurat_to_SCE.R
+    mapping_mnn: ../mapping/run/mnn/mapping_mnn.R
+    mapping_seurat: ../mapping/run/seurat/mapping_seurat.R
+    parse_mapping: ../mapping/run/parse_sample_metadata_after_mapping.R
+    dimensionality_reduction_sce: ../dimensionality_reduction/dimensionality_reduction_sce.R
+    dimensionality_reduction_seurat: ../dimensionality_reduction/dimensionality_reduction_seurat.R
+    pseudobulk_rna: ../pseudobulk/pseudobulk_rna.R
+    plot_mapping_results: ../mapping/analysis/plot_mapping_umap.R
+    plot_celltype_proportions: ../celltype_proportions/plot_celltype_proportions.R
+
+
+################
+## Parameters ##
+################
+
+params:
+    pseudobulk_rna:
+        # group_by: ["celltype.mapped_mnn", "celltype.mapped_seurat"]
+        group_by: ["celltype.mapped"]
+        normalisation_method: "cpm"
+        
+    mapping_mnn:
+        atlas_stages: ["E6.5","E6.75","E7.0","E7.25","E7.5","E7.75","E8.0","E8.25","E8.5"]
+        npcs: 50
+        n_neighbours: 25
+
+    mapping_seurat:
+        atlas_stages: ["E6.5","E6.75","E7.0","E7.25","E7.5","E7.75","E8.0","E8.25","E8.5"]
+        npcs: 50
+        n_neighbours: 25
+
+    qc:
+        min_nFeature_RNA: 4000
+        max_nFeature_RNA: 10000
+        percent_mt: 10
+        percent_rib: 20
+        
+    dimensionality_reduction_sce:
+        npcs: 30
+        features: 1000
+        n_neighbors: 25
+        min_dist: 0.3
+        vars_to_regress: ["nFeature_RNA","mit_percent_RNA"]
+        # colour_by: ["plate", "celltype.mapped_mnn", "celltype.mapped_seurat"]
+        colour_by: ["plate", "celltype.mapped"]
+
+    dimensionality_reduction_seurat:
+        npcs: 30
+        features: 1000
+        n_neighbors: 25
+        min_dist: 0.3
+        seed: 42
+        vars_to_regress: ["nFeature_RNA","mit_percent_RNA"]
+        # colour_by: ["plate", "celltype.mapped_mnn", "celltype.mapped_seurat"]
+        colour_by: ["plate", "celltype.mapped"]
+
+    # celltype_validation_single_cells:
+    #     umap: "..."
+    #     celltype_label: "celltype.mapped_seurat"
+
+    # celltype_validation_pseudobulk:
+    #     umap: "..."
+    #     celltype_label: "celltype.mapped_seurat"
+
+    plot_celltype_proportions:
+        celltype_label: "celltype.mapped"
+        # celltype_label: ["celltype.mapped_seurat","celltype.mapped_mnn"]
+
+    # plot_mapping_results
+
+###########
+## Slurm ##
+###########
+
+slurm:  # memory in MB
+    create_seurat: 
+        memory: 5000
+        threads: 1
+    qc: 
+        memory: 2000
+        threads: 1
+    seurat_to_sce:
+        memory: 5000
+        threads: 1
+    pseudobulk_rna:
+        memory: 5000
+        threads: 1
+    mapping_mnn:
+        memory: 50000
+        threads: 1
+    mapping_mnn_all_samples:
+        memory: 60000
+        threads: 1
+    mapping_seurat:
+        memory: 100000
+        threads: 1
+    mapping_seurat_all_samples:
+        memory: 90000
+        threads: 1
+    parse_mapping_results:
+        memory: 2000
+        threads: 1
+    dimensionality_reduction_sce:
+        memory: 20000
+        threads: 1
+    dimensionality_reduction_seurat:
+        memory: 10000
+        threads: 1
+    # celltype_validation_single_cells:
+    #     memory: 15000
+    #     threads: 1
+    # celltype_validation_pseudobulk:
+    #     memory: 3000
+    #     threads: 1
+    plot_mapping_results:
+        memory: 3000
+        threads: 1
+    plot_celltype_proportions:
+        memory: 3000
+        threads: 1
+

@@ -7,6 +7,8 @@ suppressMessages(library(MOFA2))
 
 if (grepl("ricard",Sys.info()['nodename'])) {
   source("/Users/ricard/scnmt_gastrulation/metaccrna/mefisto/motif_activities/load_settings.R")
+} else if (grepl("argelagr",Sys.info()['nodename'])) {
+    source("/Users/argelagr/scnmt_gastrulation/metaccrna/mefisto/motif_activities/load_settings.R")
 } else if (grepl("ebi",Sys.info()['nodename'])) {
   source("/homes/ricard/scnmt_gastrulation/metaccrna/mefisto/motif_activities/load_settings.R")
 } else {

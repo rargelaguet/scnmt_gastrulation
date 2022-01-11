@@ -1,0 +1,420 @@
+import os
+from re import search
+import getpass
+
+
+############
+## Config ##
+############
+
+host = os.uname()[1]
+if search("BI2404M", host) and getpass.getuser()=="argelagr":
+    configfile: "config_ricard_local.yaml"
+elif search("[headstone|pebble]", host) and getpass.getuser()=="argelagr":
+    configfile: "config_ricard_babraham.yaml"
+elif search("[headstone|pebble]", host) and getpass.getuser()=="clarks":
+    configfile: "config_stephen_babraham.yaml"
+else:
+    print("Computer not recognised")
+    exit()
+
+# validate(config, schema="schemas/config.schema.yaml")
+
+###########
+## Rules ##
+###########
+
+rule all:
+    input: 
+        config["directories"]["processed_data"]+"/seurat.rds",
+        config["directories"]["results"]+"/rna/qc/sample_metadata_after_qc.txt.gz",
+        config["directories"]["processed_data"]+"/SingleCellExperiment.rds",
+        expand("%s/rna/mapping/mapping_mnn_{plate}.txt.gz" % config["directories"]["results"], plate=config["plates"]),
+        expand("%s/rna/mapping/mapping_mnn_all_samples.txt.gz" % config["directories"]["results"]),
+        # # expand("%s/rna/mapping/mapping_seurat_{plate}.txt.gz" % config["directories"]["results"], plate=config["plates"]),
+        # # expand("%s/rna/mapping/mapping_seurat_all_samples.txt.gz" % config["directories"]["results"]),
+        config["directories"]["results"]+"/rna/mapping/sample_metadata_after_mapping.txt.gz",
+        config["directories"]["results"]+"/rna/mapping/sample_metadata_after_mapping_all_samples.txt.gz",
+        expand("%s/rna/mapping/pdf/umap_mapped_allcells.pdf" % config["directories"]["results"]),
+        expand("%s/rna/celltype_proportions/per_sample/celltype_proportions_{sample}.pdf" % config["directories"]["results"], sample=config["samples"]),
+        expand("%s/rna/pseudobulk/SingleCellExperiment_pseudobulk_{group_by}.rds" % config["directories"]["results"], group_by=config["params"]["pseudobulk_rna"]["group_by"]),
+        expand("%s/rna/pseudobulk/Seurat_pseudobulk_{group_by}.rds" % config["directories"]["results"], group_by=config["params"]["pseudobulk_rna"]["group_by"])
+        
+##################################################
+## Load count matrices and create Seurat object ##
+##################################################
+
+rule create_seurat:
+    input:
+        script = config["scripts"]["create_seurat"],
+        counts = config["directories"]["processed_data"]+"/counts.txt.gz",
+        metadata = config["directories"]["base"]+"/processed/sample_metadata_merged.txt.gz",
+        gene_metadata = config["resources"]["gene_metadata"]
+    output:
+        seurat=config["directories"]["processed_data"]+"/seurat.rds",
+        metadata=config["directories"]["processed_data"]+"/metadata.txt.gz"
+    params:
+        outdir=config["directories"]["processed_data"]
+    conda:
+        "environment.yaml"
+    log: 
+        "logs/create_seurat.log"
+    threads: 
+        config["slurm"]["create_seurat"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["create_seurat"]["memory"]
+    shell:
+        "Rscript {input.script} --counts {input.counts} --metadata {input.metadata} --gene_metadata {input.gene_metadata} --outdir {params.outdir} > {log}"
+
+#####################
+## Quality control ##
+#####################
+
+rule qc:
+    input:
+    	metadata=rules.create_seurat.output.metadata,
+        # metadata=config["directories"]["processed_data"]+"/metadata.txt.gz",
+        script=config["scripts"]["qc"]
+    output:
+        config["directories"]["results"]+"/rna/qc/sample_metadata_after_qc.txt.gz"
+    params:
+        min_nFeature_RNA = config["params"]["qc"]["min_nFeature_RNA"],
+        max_nFeature_RNA = config["params"]["qc"]["max_nFeature_RNA"],
+        percent_mt = config["params"]["qc"]["percent_mt"],
+        percent_rib = config["params"]["qc"]["percent_rib"],
+        outdir=config["directories"]["results"]+"/rna/qc"
+    conda:
+        "environment.yaml"
+    log: 
+        "logs/qc.log"
+    threads: 
+        config["slurm"]["qc"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["qc"]["memory"]
+    shell:
+        "Rscript {input.script} --metadata {input.metadata} --outdir {params.outdir} --min_nFeature_RNA {params.min_nFeature_RNA} \
+        --max_nFeature_RNA {params.max_nFeature_RNA} --rib_percent_RNA {params.percent_rib} --mit_percent_RNA {params.percent_mt} > {log}"
+
+
+###################################################
+## Convert Seurat object to SingleCellExperiment ##
+###################################################
+
+rule seurat_to_sce:
+    input:
+        # seurat = rules.create_seurat.output.seurat,
+        # seurat = rules.create_seurat.output.seurat,
+        seurat = config["directories"]["processed_data"]+"/seurat.rds",
+    	metadata = rules.qc.output,
+        script = config["scripts"]["seurat_to_sce"],
+    output:
+        config["directories"]["processed_data"]+"/SingleCellExperiment.rds",
+    # params:
+        # sample = expand("{sample}", sample=config["samples"])
+    conda:
+        "environment.yaml"
+    log: 
+        "logs/seurat_to_sce.log"
+    threads: 
+        config["slurm"]["seurat_to_sce"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["seurat_to_sce"]["memory"]
+    shell:
+        "Rscript {input.script} --seurat {input.seurat} --metadata {input.metadata} --outfile {output} > {log}"
+
+##########################
+## Mapping to the atlas ##
+##########################
+
+rule mapping_mnn:
+    input:
+        atlas_sce = config["directories"]["atlas"]+"/processed/SingleCellExperiment.rds",
+    	atlas_metadata = config["directories"]["atlas"]+"/sample_metadata.txt.gz",
+        query_sce = rules.seurat_to_sce.output,
+        query_metadata = rules.qc.output,
+        script = config["scripts"]["mapping_mnn"]
+    output:
+        config["directories"]["results"]+"/rna/mapping/mapping_mnn_{plate}.txt.gz"
+    params:
+        atlas_stages=config["params"]["mapping_mnn"]["atlas_stages"],
+        npcs = config["params"]["mapping_mnn"]["npcs"],
+        n_neighbours = config["params"]["mapping_mnn"]["n_neighbours"]
+    conda:
+        "environment.yaml"
+    log: 
+        "logs/mapping_mnn_{plate}.log"
+    threads: 
+        config["slurm"]["mapping_mnn"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["mapping_mnn"]["memory"]
+    shell:
+        "Rscript {input.script} --query_samples {wildcards.plate} --atlas_stages {params.atlas_stages} --query_sce {input.query_sce} \
+        --atlas_sce {input.atlas_sce} --atlas_metadata {input.atlas_metadata} --query_metadata {input.query_metadata} \
+        --npcs {params.npcs} --n_neighbours {params.n_neighbours} --outfile {output}  > {log}"
+
+rule mapping_mnn_all_samples:
+    input:
+        atlas_sce = config["directories"]["atlas"]+"/processed/SingleCellExperiment.rds",
+        atlas_metadata = config["directories"]["atlas"]+"/sample_metadata.txt.gz",
+        query_sce = rules.seurat_to_sce.output,
+        # query_metadata=rules.qc.output,
+        query_metadata = rules.qc.output,
+        script = config["scripts"]["mapping_mnn"]
+        # outdir=config["directories"]["results"]+"/rna/mapping"
+    output:
+        config["directories"]["results"]+"/rna/mapping/mapping_mnn_all_samples.txt.gz"
+    params:
+        plates = expand("{plate}", plate=config["plates"]),
+        atlas_stages=config["params"]["mapping_mnn"]["atlas_stages"],
+        npcs = config["params"]["mapping_mnn"]["npcs"],
+        n_neighbours = config["params"]["mapping_mnn"]["n_neighbours"]
+    conda:
+        "environment.yaml"
+    log: 
+        "logs/mapping_mnn_all_samples.log"
+    threads: 
+        config["slurm"]["mapping_mnn"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["mapping_mnn_all_samples"]["memory"]
+    shell:
+        "Rscript {input.script} --query_samples {params.plates} --atlas_stages {params.atlas_stages} --query_sce {input.query_sce} \
+        --atlas_sce {input.atlas_sce} --atlas_metadata {input.atlas_metadata} --query_metadata {input.query_metadata} \
+        --npcs {params.npcs} --n_neighbours {params.n_neighbours} --outfile {output}  > {log}"
+
+
+rule mapping_seurat:
+    input:
+        atlas_sce = config["directories"]["atlas"]+"/processed/SingleCellExperiment.rds",
+        atlas_metadata = config["directories"]["atlas"]+"/sample_metadata.txt.gz",
+        query_sce = rules.seurat_to_sce.output,
+        query_metadata = rules.qc.output,
+        script = config["scripts"]["mapping_seurat"]
+    output:
+        config["directories"]["results"]+"/rna/mapping/mapping_seurat_{plate}.txt.gz"
+    params:
+        atlas_stages=config["params"]["mapping_seurat"]["atlas_stages"],
+        npcs = config["params"]["mapping_seurat"]["npcs"],
+        n_neighbours = config["params"]["mapping_seurat"]["n_neighbours"]
+    conda:
+        "environment.yaml"
+    log: 
+        "logs/mapping_seurat_{plate}.log"
+    threads: 
+        config["slurm"]["mapping_seurat"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["mapping_seurat"]["memory"]
+    shell:
+        "Rscript {input.script} --query_samples {wildcards.plate} --atlas_stages {params.atlas_stages} --query_sce {input.query_sce} \
+        --atlas_sce {input.atlas_sce} --atlas_metadata {input.atlas_metadata} --query_metadata {input.query_metadata} \
+        --npcs {params.npcs} --n_neighbours {params.n_neighbours} --outfile {output}  > {log}"
+
+rule mapping_seurat_all_samples:
+    input:
+        atlas_sce = config["directories"]["atlas"]+"/processed/SingleCellExperiment.rds",
+        atlas_metadata = config["directories"]["atlas"]+"/sample_metadata.txt.gz",
+        query_sce = rules.seurat_to_sce.output,
+        query_metadata = rules.qc.output,
+        script = config["scripts"]["mapping_seurat"]
+    output:
+        config["directories"]["results"]+"/rna/mapping/mapping_seurat_all_samples.txt.gz"
+    params:
+        plates = expand("{plate}", plate=config["plates"]),
+        atlas_stages=config["params"]["mapping_seurat"]["atlas_stages"],
+        npcs = config["params"]["mapping_seurat"]["npcs"],
+        n_neighbours = config["params"]["mapping_seurat"]["n_neighbours"]
+    conda:
+        "environment.yaml"
+    log: 
+        "logs/mapping_seurat_all_samples.log"
+    threads: 
+        config["slurm"]["mapping_seurat"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["mapping_seurat_all_samples"]["memory"]
+    shell:
+        "Rscript {input.script} --query_samples {params.plates} --atlas_stages {params.atlas_stages} --query_sce {input.query_sce} \
+        --atlas_sce {input.atlas_sce} --atlas_metadata {input.atlas_metadata} --query_metadata {input.query_metadata} \
+        --npcs {params.npcs} --n_neighbours {params.n_neighbours} --outfile {output}   > {log}"
+
+rule parse_mapping_results:
+    input:
+        query_metadata = rules.qc.output,
+        # mapping_seurat = expand(rules.mapping_seurat.output, plate=config["plates"]),
+        mapping_mnn = expand(rules.mapping_mnn.output, plate=config["plates"]),
+        script = config["scripts"]["parse_mapping"]
+    output:
+        config["directories"]["results"]+"/rna/mapping/sample_metadata_after_mapping.txt.gz"
+    conda:
+        "environment.yaml"
+    log: 
+        "logs/parse_mapping_results.log"
+    threads: 
+        config["slurm"]["parse_mapping_results"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["parse_mapping_results"]["memory"]
+    shell:
+        "Rscript {input.script} --metadata {input.query_metadata} --mapping_mnn {input.mapping_mnn} --outfile {output} > {log}" #  --mapping_seurat {input.mapping_seurat}
+
+
+rule parse_mapping_results_all_samples:
+    input:
+        query_metadata = rules.qc.output,
+        # mapping_seurat = rules.mapping_seurat_all_samples.output,
+        mapping_mnn = rules.mapping_mnn_all_samples.output,
+        script = config["scripts"]["parse_mapping"]
+    output:
+        config["directories"]["results"]+"/rna/mapping/sample_metadata_after_mapping_all_samples.txt.gz"
+    conda:
+        "environment.yaml"
+    log: 
+        "logs/parse_mapping_results.log"
+    threads: 
+        config["slurm"]["parse_mapping_results"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["parse_mapping_results"]["memory"]
+    shell:
+        "Rscript {input.script} --metadata {input.query_metadata} --mapping_mnn {input.mapping_mnn} --outfile {output} > {log}" # --mapping_seurat {input.mapping_seurat}
+
+##############################
+## Dimensionality reduction ##
+##############################
+
+rule dimensionality_reduction_sce: 
+    input:
+        script=config["scripts"]["dimensionality_reduction_sce"],
+        sce=rules.seurat_to_sce.output,
+        metadata=rules.parse_mapping_results.output
+    output:
+        # config["directories"]["results"]+"/rna/dimensionality_reduction/umap_features{dimred_sce_features}_pcs{dimred_sce_npcs}_neigh{n_neighbors}_dist{min_dist}.txt.gz",
+        config["directories"]["results"]+"/rna/dimensionality_reduction/sce/pca_features{dimred_sce_features}_pcs{dimred_sce_npcs}.txt.gz"
+    params:
+        outdir = config["directories"]["results"]+"/rna/dimensionality_reduction/sce",
+        n_neighbors = config["params"]["dimensionality_reduction_sce"]["n_neighbors"],
+        min_dist = config["params"]["dimensionality_reduction_sce"]["min_dist"],
+        vars_to_regress = config["params"]["dimensionality_reduction_sce"]["vars_to_regress"],
+        colour_by = config["params"]["dimensionality_reduction_sce"]["colour_by"]
+    conda:
+        "environment.yaml"
+    log: 
+        "logs/dimensionality_reduction_features{dimred_sce_features}_pcs{dimred_sce_npcs}.log"
+        # "logs/dimensionality_reduction_features{dimred_sce_features}_pcs{dimred_sce_npcs}_neigh{n_neighbors}_dist{min_dist}.log"
+    threads: 
+        config["slurm"]["dimensionality_reduction_sce"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["dimensionality_reduction_sce"]["memory"]
+    shell:
+        "Rscript {input.script} --sce {input.sce} --metadata {input.metadata} --npcs {wildcards.dimred_sce_npcs} --features {wildcards.dimred_sce_features} \
+        --vars_to_regress {params.vars_to_regress} \
+        --n_neighbors {params.n_neighbors} --min_dist {params.min_dist} --colour_by {params.colour_by} --outdir {params.outdir} > {log}"
+
+
+rule dimensionality_reduction_seurat: 
+    input:
+        script=config["scripts"]["dimensionality_reduction_seurat"],
+        # seurat=rules.create_seurat.output.seurat,
+        seurat = config["directories"]["processed_data"]+"/seurat.rds",
+        metadata=rules.parse_mapping_results.output
+    output:
+        # config["directories"]["results"]+"/rna/dimensionality_reduction/seurat/umap_features{dimred_seurat_features}_pcs{dimred_seurat_npcs}_neigh{dimred_seurat_n_neighbors}_dist{dimred_seurat_min_dist}.txt.gz",
+        config["directories"]["results"]+"/rna/dimensionality_reduction/seurat/pca_features{dimred_seurat_features}_pcs{dimred_seurat_npcs}.txt.gz"
+    params:
+        outdir = config["directories"]["results"]+"/rna/dimensionality_reduction/seurat",
+        colour_by = config["params"]["dimensionality_reduction_seurat"]["colour_by"],
+        n_neighbors = config["params"]["dimensionality_reduction_seurat"]["n_neighbors"],
+        min_dist = config["params"]["dimensionality_reduction_seurat"]["min_dist"],
+        vars_to_regress = config["params"]["dimensionality_reduction_seurat"]["vars_to_regress"],
+        seed = config["params"]["dimensionality_reduction_seurat"]["seed"]
+    conda:
+        "environment.yaml"
+    log: 
+        "logs/dimensionality_reduction_seurat_features{dimred_seurat_features}_pcs{dimred_seurat_npcs}.log"
+        # "logs/dimensionality_reduction_seurat_features{dimred_seurat_features}_pcs{dimred_seurat_npcs}_neigh{dimred_seurat_n_neighbors}_dist{dimred_seurat_min_dist}.log"
+    threads: 
+        config["slurm"]["dimensionality_reduction_seurat"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["dimensionality_reduction_seurat"]["memory"]
+    shell:
+        "Rscript {input.script} --seurat {input.seurat} --metadata {input.metadata} --npcs {wildcards.dimred_seurat_npcs} \
+        --features {wildcards.dimred_seurat_features} --n_neighbors {params.n_neighbors} --min_dist {params.min_dist} \
+        --vars_to_regress {params.vars_to_regress} --seed {params.seed}\
+        --colour_by {params.colour_by} --outdir {params.outdir} > {log}"
+
+################
+## Pseudobulk ##
+################
+
+rule pseudobulk_rna:
+    input:
+        # seurat = rules.create_seurat.output.seurat,
+        sce = rules.seurat_to_sce.output,
+        metadata = rules.parse_mapping_results.output,
+        script = config["scripts"]["pseudobulk_rna"]
+    output:
+        seurat = config["directories"]["results"]+"/rna/pseudobulk/Seurat_pseudobulk_{group_by}.rds",
+        sce = config["directories"]["results"]+"/rna/pseudobulk/SingleCellExperiment_pseudobulk_{group_by}.rds"
+    params:
+        normalisation_method = config["params"]["pseudobulk_rna"]["normalisation_method"],
+        outdir = config["directories"]["results"]+"/rna/pseudobulk"
+        # group_by=config["pseudobulk"]["group_by"]
+    conda:
+        "environment.yaml"
+    log: 
+        "logs/pseudobulk_rna_{group_by}.log"
+    threads: 
+        config["slurm"]["pseudobulk_rna"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["pseudobulk_rna"]["memory"]
+    shell:
+        "Rscript {input.script} --sce {input.sce} --metadata {input.metadata} --group_by {wildcards.group_by} \
+        --normalisation_method {params.normalisation_method} --outdir {params.outdir} > {log}"
+
+##########################
+## Plot mapping results ##
+##########################
+
+rule plot_mapping_results: 
+    input:
+        script = config["scripts"]["plot_mapping_results"],
+        query_metadata=rules.parse_mapping_results.output,
+        atlas_metadata = config["directories"]["atlas"]+"/sample_metadata.txt.gz"
+    output:
+        config["directories"]["results"]+"/rna/mapping/pdf/umap_mapped_allcells.pdf"
+    params:
+        plates = expand("{plate}", plate=config["plates"]),
+        outdir = config["directories"]["results"]+"/rna/mapping/pdf"
+    conda:
+        "environment.yaml"
+    log: 
+        "logs/plot_mapping_results.log"
+    threads: 
+        config["slurm"]["plot_mapping_results"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["plot_mapping_results"]["memory"]        
+    shell:
+        "Rscript {input.script} --query_metadata {input.query_metadata} --atlas_metadata {input.atlas_metadata} \
+        --samples {params.plates} --outdir {params.outdir} > {log}"
+
+################################
+## Plot cell type proportions ##
+################################
+
+rule plot_celltype_proportions: 
+    input:
+        script = config["scripts"]["plot_celltype_proportions"],
+        metadata=rules.parse_mapping_results.output
+    output:
+        expand(config["directories"]["results"]+"/rna/celltype_proportions/per_sample/celltype_proportions_{sample}.pdf", sample=config["samples"])
+    params:
+        samples = expand("{sample}", sample=config["samples"]),
+        celltype_label = config["params"]["plot_celltype_proportions"]["celltype_label"],
+        outdir = config["directories"]["results"]+"/rna/celltype_proportions"
+    conda:
+        "environment.yaml"
+    log: 
+        "logs/plot_celltype_proportions.log"
+    threads: 
+        config["slurm"]["plot_celltype_proportions"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["plot_celltype_proportions"]["memory"]        
+    shell:
+        "Rscript {input.script} --metadata {input.metadata} --celltype_label {params.celltype_label} \
+        --samples {params.samples} --outdir {params.outdir} > {log}"

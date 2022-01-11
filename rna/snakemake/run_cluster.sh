@@ -1,0 +1,2 @@
+# snakemake --use-conda --cores 15 -j 99 --latency-wait 90 -p --cluster "sbatch -n {threads} --mem {resources.mem_mb}M"
+snakemake --cores 15 -j 99 --latency-wait 90 -p --cluster "sbatch -n {threads} --mem {resources.mem_mb}M"

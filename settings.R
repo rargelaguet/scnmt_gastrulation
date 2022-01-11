@@ -4,6 +4,7 @@ suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(ggpubr))
 suppressPackageStartupMessages(library(SingleCellExperiment))
 suppressPackageStartupMessages(library(stringr))
+suppressPackageStartupMessages(library(argparse))
 
 #########
 ## I/O ##
@@ -22,6 +23,12 @@ if (grepl("ricard",Sys.info()['nodename'])) {
   io$multiome.basedir <- "/hps/nobackup2/research/stegle/users/ricard/gastrulation_multiome_10x"
   io$gene.metadata <- "/hps/nobackup2/research/stegle/users/ricard/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
   io$mm10.genome <- "/hps/nobackup2/research/stegle/users/ricard/mm10_sequence/mm10.genome"
+} else if (Sys.info()[['nodename']]=="BI2404M") {
+  io$basedir <- "/Users/argelagr/data/scnmt_gastrulation"
+  io$atlas.basedir <- "/Users/argelagr/data/pijuansala2019_gastrulation10x"
+  io$multiome.basedir <- "/Users/argelagr/data/gastrulation_multiome_10x"
+  io$gene.metadata <- "/Users/argelagr/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
+  io$mm10.genome <- "/Users/argelagr/data/mm10_sequence/mm10.genome"
 } else {
   stop("Computer not recognised")
 }
