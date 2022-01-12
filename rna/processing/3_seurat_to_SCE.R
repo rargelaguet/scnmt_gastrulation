@@ -11,11 +11,11 @@ source(here::here("settings.R"))
 ######################
 
 p <- ArgumentParser(description='')
-p$add_argument('--test',            action="store_true",                 help='Testing mode')
 p$add_argument('--normalise',       action="store_true",                 help='Log-Normalise?')
 p$add_argument('--seurat',         type="character", help='Seurat object (input)')
 p$add_argument('--metadata',         type="character", help='Metadata file')
 p$add_argument('--outfile',         type="character", help='Output file')
+p$add_argument('--test',            action="store_true",                 help='Testing mode')
 args <- p$parse_args(commandArgs(TRUE))
 
 #####################
@@ -23,12 +23,12 @@ args <- p$parse_args(commandArgs(TRUE))
 #####################
 
 ## START TEST ##
-args <- list()
-args$metadata <- file.path(io$basedir,"results/rna/qc/sample_metadata_after_qc.txt.gz")
-args$seurat <- file.path(io$basedir,"processed/rna/seurat.rds")
-args$normalise <- FALSE
-args$outfile <- file.path(io$basedir,"processed/rna/SingleCellExperiment.rds")
-args$test <- FALSE
+# args <- list()
+# args$metadata <- file.path(io$basedir,"results/rna/qc/sample_metadata_after_qc.txt.gz")
+# args$seurat <- file.path(io$basedir,"processed/rna/seurat.rds")
+# args$normalise <- FALSE
+# args$outfile <- file.path(io$basedir,"processed/rna/SingleCellExperiment.rds")
+# args$test <- FALSE
 ## END TEST ##
 
 ###############
@@ -37,10 +37,10 @@ args$test <- FALSE
 
 # Load sample metadata
 sample_metadata <- fread(args$metadata) %>% 
-	.[pass_rnaQC==TRUE] %>% .[,cell:=NULL] %>% setnames("id_rna","cell")
+	.[pass_rnaQC==TRUE]
 
 # Load seurat
-seurat <- readRDS(args$seurat)[,sample_metadata$cell]
+seurat <- readRDS(args$seurat)[,sample_metadata$id_rna]
 
 #####################################
 ## Convert to SingleCellExperiment ##

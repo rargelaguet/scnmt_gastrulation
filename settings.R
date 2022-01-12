@@ -15,25 +15,27 @@ if (grepl("ricard",Sys.info()['nodename'])) {
   io$basedir <- "/Users/ricard/data/gastrulation"
   io$atlas.basedir <- "/Users/ricard/data/gastrulation10x"
   io$multiome.basedir <- "/Users/ricard/data/gastrulation_multiome_10x"
-  io$gene.metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
+  io$gene.metadata <- io$gene_metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/all_genes/Mmusculus_genes_BioMart.87.txt"
   io$mm10.genome <- "/Users/ricard/data/mm10_sequence/mm10.genome"
 } else if (grepl("ebi",Sys.info()['nodename'])) {
   io$basedir <- "/hps/nobackup2/research/stegle/users/ricard/scnmt_gastrulation"
   io$atlas.basedir <- "/hps/nobackup2/research/stegle/users/ricard/gastrulation10x"
   io$multiome.basedir <- "/hps/nobackup2/research/stegle/users/ricard/gastrulation_multiome_10x"
-  io$gene.metadata <- "/hps/nobackup2/research/stegle/users/ricard/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
+  io$gene.metadata <- io$gene_metadata <- "/hps/nobackup2/research/stegle/users/ricard/ensembl/mouse/v87/BioMart/all_genes/Mmusculus_genes_BioMart.87.txt"
   io$mm10.genome <- "/hps/nobackup2/research/stegle/users/ricard/mm10_sequence/mm10.genome"
 } else if (Sys.info()[['nodename']]=="BI2404M") {
-  io$basedir <- "/Users/argelagr/data/scnmt_gastrulation"
+  # io$basedir <- "/Users/argelagr/data/scnmt_gastrulation"
+  io$basedir <- "/Users/argelagr/data/scnmt_gastrulation_argelaguet2019"
   io$atlas.basedir <- "/Users/argelagr/data/pijuansala2019_gastrulation10x"
   io$multiome.basedir <- "/Users/argelagr/data/gastrulation_multiome_10x"
-  io$gene.metadata <- "/Users/argelagr/data/ensembl/mouse/v87/BioMart/mRNA/Mmusculus_genes_BioMart.87.txt"
+  io$gene.metadata <- io$gene_metadata <- "/Users/argelagr/data/ensembl/mouse/v87/BioMart/all_genes/Mmusculus_genes_BioMart.87.txt"
   io$mm10.genome <- "/Users/argelagr/data/mm10_sequence/mm10.genome"
 } else {
   stop("Computer not recognised")
 }
 
 io$metadata <- paste0(io$basedir,"/sample_metadata.txt")
+io$plate_metadata <- paste0(io$basedir,"/plate_metadata.txt")
 
 # Methylation
 io$met_data_raw <- paste0(io$basedir,"/met/cpg_level")

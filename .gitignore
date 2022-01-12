@@ -30,3 +30,10 @@
 **/local-data
 *.Rproj.user
 .Rproj.user
+
+
+
+*.snakemake*
+
+
+*slurm*out

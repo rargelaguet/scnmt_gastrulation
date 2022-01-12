@@ -1,40 +1,106 @@
 samples:
-    - E7.5_TET_TKO
-    - E7.5_TET_TKO_crispr
-    - E8.5_WT_CD41+
-    - E8.5_TET_TKO_CD41+
-    - E8.5_WT_KDR+
-    - E8.5_TET_TKO_KDR+
-    - E8.5_WT_KDR+_CD41+
-    - E8.5_TET_TKO_KDR+_CD41+
-    - E8.5_WT
-    - E8.5_TET_TKO
-
+    - E3.5_sample_1
+    - E3.5_sample_2
+    - E5.5_sample_1
+    - E5.5_sample_1
+    - E5.5_sample_2
+    - E5.5_sample_2
+    - E4.5_sample_2
+    - E4.5_sample_2
+    - E4.5_sample_2
+    - E4.5_sample_2
+    - E4.5_sample_1
+    - E4.5_sample_1
+    - E4.5_sample_1
+    - E4.5_sample_1
+    - E6.5_sample_1
+    - E6.5_sample_2
+    - E6.5_sample_3
+    - E6.5_sample_4
+    - E6.5_sample_5
+    - E7.5_sample_1
+    - E7.5_sample_2
+    - E7.5_sample_3
+    - E7.5_sample_4
+    - E7.5_sample_5
+    - E7.5_sample_5
+    - E6.5_sample_9
+    - E6.5_sample_10
+    - E6.5_sample_11
+    - E7.5_sample_7
+    - E7.5_sample_7
+    - E7.5_sample_6
+    - E7.5_sample_6
+    - E7.5_sample_6
+    - E7.5_sample_8
+    - E7.5_sample_8
+    - E6.5_sample_6
+    - E6.5_sample_6
+    - E7.5_sample_9
+    - E6.5_sample_8
+    - E6.5_sample_8
+    - E6.5_sample_7
+    - E6.5_sample_7
+    - E6.5_sample_7
+    - E6.5_sample_12
+    - E7.5_sample_14
+    - E7.5_sample_15
+    - E7.5_sample_10
+    - E7.5_sample_11
+    - E7.5_sample_12
+    - E7.5_sample_13
 plates:
-    - E7.5_tet_chimera_plate3
-    - E7.5_tet_crispr_plate5
-    - E7.5_tet_crispr_plate6
-    - E8.5_oct20_plate1
-    - E8.5_oct20_plate2
-    - E8.5_oct20_plate3
-    - E8.5_oct20_plate4
-    - E8.5_oct20_plate5
-    - E8.5_oct20_plate6
-    - E8.5_oct20_plate7
-    - E8.5_oct20_plate8
-    - Tet-tko-chimera_embryo01
-    - Tet-tko-chimera_embryo02
-    - Tet-tko-chimera_embryo04
-    - Tet-tko-chimera_embryo05
-    - tet_chimera_march20_plate1
-    - tet_chimera_march20_plate2
-    - tet_chimera_march20_plate3
-    - tet_chimera_march20_plate4_tet_tko
-    - tet_chimera_march20_plate4_wt
-    - tet_chimera_march20_plate5_tet_tko
-    - tet_chimera_march20_plate5_wt
-    - tet_chimera_march20_plate6_tet_tko
-    - tet_chimera_march20_plate6_wt
+    - E3.5_Plate1
+    - E3.5_Plate2
+    - E4.5-5.5_new_Plate4
+    - E4.5-5.5_new_Plate4
+    - E4.5-5.5_new_Plate4
+    - E4.5-5.5_new_Plate3
+    - E4.5-5.5_new_Plate3
+    - E4.5-5.5_new_Plate3
+    - E4.5-5.5_new_Plate3
+    - E4.5-5.5_new_Plate4
+    - E4.5-5.5_new_Plate1
+    - E4.5-5.5_new_Plate1
+    - E4.5-5.5_new_Plate2
+    - E4.5-5.5_new_Plate2
+    - E6.5_Plate1
+    - E6.5_Plate2
+    - E6.5_Plate3
+    - E6.5_late_Plate1
+    - E6.5_late_Plate2
+    - PS_VE_Plate5
+    - PS_VE_Plate8
+    - PS_VE_Plate5
+    - PS_VE_Plate8
+    - PS_VE_Plate7
+    - PS_VE_Plate8
+    - PS_VE_Plate7
+    - PS_VE_Plate10
+    - PS_VE_Plate11
+    - PS_VE_Plate12
+    - PS_VE_Plate9
+    - E7.5_Plate1
+    - E7.5_Plate2
+    - E7.5_Plate3
+    - E7.5_Plate4
+    - PS_VE_Plate1
+    - PS_VE_Plate1
+    - PS_VE_Plate3
+    - PS_VE_Plate2
+    - PS_VE_Plate3
+    - PS_VE_Plate4
+    - PS_VE_Plate3
+    - PS_VE_Plate4
+    - PS_VE_Plate2
+    - PS_VE_Plate6
+    - Plate13
+    - Plate14
+    - Plate15
+    - Plate16
+    - Plate11
+    - Plate12
+
     
 #################
 ## Directories ##
@@ -75,6 +141,7 @@ scripts:
     pseudobulk_rna: ../pseudobulk/pseudobulk_rna.R
     plot_mapping_results: ../mapping/analysis/plot_mapping_umap.R
     plot_celltype_proportions: ../celltype_proportions/plot_celltype_proportions.R
+    sex_assignment: ../sex/sex_assignment.R
 
 
 ################
@@ -136,6 +203,9 @@ params:
 
     # plot_mapping_results
 
+    sex_assignment:
+        chrY_ratio_threshold: 0.001
+
 ###########
 ## Slurm ##
 ###########
@@ -186,4 +256,6 @@ slurm:  # memory in MB
     plot_celltype_proportions:
         memory: 3000
         threads: 1
-
+    sex_assignment:
+        memory: 5000
+        threads: 1

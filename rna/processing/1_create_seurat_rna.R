@@ -20,11 +20,11 @@ args <- p$parse_args(commandArgs(TRUE))
 #####################
 
 ## START TEST ##
-args <- list()
-args$counts <- file.path(io$basedir,"processed/rna/counts.txt.gz")
-args$metadata <- file.path(io$basedir,"processed/sample_metadata.txt.gz")
-args$gene_metadata <- io$gene_metadata
-args$outdir <- file.path(io$basedir,"processed/rna")
+# args <- list()
+# args$counts <- file.path(io$basedir,"processed/rna/counts_merged.txt.gz")
+# args$metadata <- file.path(io$basedir,"processed/sample_metadata_merged.txt.gz")
+# args$gene_metadata <- io$gene_metadata
+# args$outdir <- file.path(io$basedir,"processed/rna")
 ## END TEST ##
 
 #######################
@@ -38,6 +38,10 @@ rna_counts.mtx <- fread(args$count) %>% matrix.please
 ##########################
 
 metadata <- fread(args$metadata)
+
+metadata <- metadata[id_rna%in%colnames(rna_counts.mtx)]
+metadata$id_rna[!colnames(rna_counts.mtx)%in%metadata$id_rna]
+metadata$id_rna[!metadata$id_rna %in% colnames(rna_counts.mtx)]
 
 ########################
 ## Load gene metadata ##
