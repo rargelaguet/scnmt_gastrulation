@@ -1,11 +1,8 @@
-suppressPackageStartupMessages(library(argparse))
-
 here::here("metacc/qc/qc.R")
 
 # Load default settings
 source(here::here("settings.R"))
 source(here::here("utils.R"))
-
 
 ######################
 ## Define arguments ##
@@ -27,12 +24,12 @@ args <- p$parse_args(commandArgs(TRUE))
 #####################
 
 ## START TEST ##
-# args <- list()
-# args$metadata <- file.path(io$basedir,"results/acc/stats/sample_metadata_after_acc_stats.txt.gz")
-# args$context <- "GC"
-# # args$minimum_number_sites <- 5e3; args$min_rate <- 50; args$max_rate <- 100 # CG
+args <- list()
+args$metadata <- file.path(io$basedir,"results/met/stats/sample_metadata_after_met_stats.txt.gz")
+args$context <- "CG"
+args$minimum_number_sites <- 5e3; args$min_rate <- 50; args$max_rate <- 100 # CG
 # args$minimum_number_sites <- 1e4; args$min_rate <- 10; args$max_rate <- 40 # GC
-# args$outdir <- file.path(io$basedir,"results/acc/qc")
+args$outdir <- file.path(io$basedir,"results/acc/qc")
 ## END TEST ##
 
 # Sanity checks
@@ -80,8 +77,10 @@ dev.off()
 
 if (args$context=="CG") {
   sample_metadata %>% .[,pass_metQC:=met_rate<=args$max_rate & met_rate>=args$min_rate & nCG>=args$minimum_number_sites]
+  table(sample_metadata$pass_metQC)
 } else if (args$context=="GC") {
   sample_metadata %>% .[,pass_accQC:=acc_rate<=args$max_rate & acc_rate>=args$min_rate & nGC>=args$minimum_number_sites]
+  table(sample_metadata$pass_accQC)
 }
 
 #########################################################

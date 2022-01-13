@@ -57,9 +57,9 @@ rule all:
 
 rule calculate_global_stats_per_cell_met:
     input:
-        script=config["scripts"]["calculate_global_stats_per_cell"],
+        script = config["scripts"]["calculate_global_stats_per_cell"],
         metadata = config["directories"]["cell_metadata"],
-        indir=config["directories"]["processed_data"]+"/met/cpg_level"
+        indir = config["directories"]["processed_data"]+"/met/cpg_level"
     output:
         config["directories"]["results"]+"/met/stats/sample_metadata_after_met_stats.txt.gz"
     log: 
@@ -73,9 +73,9 @@ rule calculate_global_stats_per_cell_met:
 
 rule calculate_global_stats_per_cell_acc:
     input:
-        script=config["scripts"]["calculate_global_stats_per_cell"],
+        script = config["scripts"]["calculate_global_stats_per_cell"],
         metadata = config["directories"]["cell_metadata"],
-        indir=config["directories"]["processed_data"]+"/acc/gpc_level"
+        indir = config["directories"]["processed_data"]+"/acc/gpc_level"
     output:
         config["directories"]["results"]+"/acc/stats/sample_metadata_after_acc_stats.txt.gz"
     log: 

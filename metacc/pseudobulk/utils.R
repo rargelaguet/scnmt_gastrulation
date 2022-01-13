@@ -13,7 +13,7 @@ merge_and_sum <- function(dt1, dt2){
 
 fread_and_merge <- function(dt, file){
     # tmp <- fread(file, select=c(1,2,4)) %>% setnames(c("chr","pos","rate"))
-    tmp <- fread(file)
+    tmp <- fread(file) %>% .[,chr:=ifelse(grepl("chr",chr),chr,paste0("chr",chr))]
     stopifnot(tmp$rate%in%c(0,1))
     tmp %>%
         .[,met_sites:=rate] %>%

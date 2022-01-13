@@ -54,7 +54,7 @@ directories:
     genome_seq: /bi/group/reik/ricard/data/mm10_sequence/mm10.genome
     bedGraphToBigWig: "/bi/apps/ucsc_tools/5/bedGraphToBigWig"
     rna_SingleCellExperiment: /bi/group/reik/ricard/data/scnmt_gastrulation_argelaguet2019/processed/rna/SingleCellExperiment.rds
-    cell_metadata: /bi/group/reik/ricard/data/scnmt_gastrulation_argelaguet2019/results/rna/mapping/sample_metadata_after_mapping.txt.gz" # this is the output of the RNA snakemake pipeline
+    cell_metadata: /bi/group/reik/ricard/data/scnmt_gastrulation_argelaguet2019/results/rna/mapping/sample_metadata_after_mapping_all_samples.txt.gz # this is the output of the RNA snakemake pipeline
     tss_file: /bi/group/reik/ricard/data/mm10_regulation/genes/TSS_protein_coding.bed
 
 ###############
@@ -140,10 +140,10 @@ params:
 
 slurm:  # memory in MB
     calculate_global_stats_per_cell: 
-        memory: 5000
+        memory: 15000
         threads: 1
     calculate_chr_stats_per_cell: 
-        memory: 5000
+        memory: 15000
         threads: 1
     plot_global_stats_per_cell: 
         memory: 3000

@@ -26,7 +26,7 @@ args <- p$parse_args(commandArgs(TRUE))
 ## START TEST ##
 # args <- list()
 # args$indir <- file.path(io$basedir,"processed/acc/gpc_level")
-# args$metadata <- file.path(io$basedir,"results/rna/mapping/sample_metadata_after_mapping.txt.gz")
+# args$metadata <- file.path(io$basedir,"results/rna/mapping/sample_metadata_after_mapping_all_samples.txt.gz")
 # args$outfile <- file.path(io$basedir,"results/acc/stats/sample_metadata_after_acc_stats.txt.gz")
 # args$context <- "GC"
 # args$test <- TRUE
@@ -67,6 +67,7 @@ for (i in opts$cells) {
     # data <- fread(sprintf("%s/%s.tsv.gz",args$indir,i), sep="\t", verbose=F, showProgress=F, select=c(1,2,4)) %>%
     #   setnames(c("chr","pos","rate"))
     data <- fread(sprintf("%s/%s.tsv.gz",args$indir,i), sep="\t", verbose=F, showProgress=F) %>%
+      .[,chr:=ifelse(grepl("chr",chr),chr,paste0("chr",chr))] %>%
       .[chr%in%opts$chr]
 
     # Compute genome-wide statistics
