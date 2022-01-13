@@ -27,6 +27,8 @@ args <- p$parse_args(commandArgs(TRUE))
 # args$outdir <- file.path(io$basedir,"processed/rna")
 ## END TEST ##
 
+dir.create(args$outdir, showWarnings=F)
+
 #######################
 ## Load count matrix ##
 #######################
@@ -39,9 +41,10 @@ rna_counts.mtx <- fread(args$count) %>% matrix.please
 
 metadata <- fread(args$metadata)
 
-metadata <- metadata[id_rna%in%colnames(rna_counts.mtx)]
-metadata$id_rna[!colnames(rna_counts.mtx)%in%metadata$id_rna]
-metadata$id_rna[!metadata$id_rna %in% colnames(rna_counts.mtx)]
+# metadata <- metadata[id_rna%in%colnames(rna_counts.mtx)]
+# metadata$id_rna[!colnames(rna_counts.mtx)%in%metadata$id_rna]
+# metadata$id_rna[!metadata$id_rna %in% colnames(rna_counts.mtx)]
+stopifnot(sort(metadata$id_rna)==sort(colnames(rna_counts.mtx)))
 
 ########################
 ## Load gene metadata ##

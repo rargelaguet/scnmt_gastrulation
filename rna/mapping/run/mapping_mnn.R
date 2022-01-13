@@ -1,9 +1,8 @@
 suppressPackageStartupMessages(library(scran))
 suppressPackageStartupMessages(library(scater))
 suppressPackageStartupMessages(library(batchelor))
-suppressPackageStartupMessages(library(argparse))
 
-here::i_am("rna/mapping/run/mnn/mapping_mnn.R")
+here::i_am("rna/mapping/run/mapping_mnn.R")
 
 # Load default settings
 source(here::here("settings.R"))
@@ -15,7 +14,7 @@ source(here::here("utils.R"))
 
 p <- ArgumentParser(description='')
 p$add_argument('--atlas_stages',    type="character",   nargs='+',  help='Atlas stage(s)')
-p$add_argument('--query_samples',   type="character",   nargs='+',  help='Query batch(es)')
+p$add_argument('--query_stages',   type="character",   nargs='+',  help='Query stage(s)')
 p$add_argument('--query_sce',       type="character",               help='SingleCellExperiment file for the query')
 p$add_argument('--atlas_sce',       type="character",               help='SingleCellExperiment file for the atlas')
 p$add_argument('--query_metadata',  type="character",               help='metadata file for the query')
@@ -38,12 +37,12 @@ io$path2query <- io$basedir
 
 
 # Load mapping functions
-source(here::here("rna/mapping/run/mnn/mapping_functions.R"))
+source(here::here("rna/mapping/run/mapping_functions.R"))
 
 
 ## START TEST ##
 # args$atlas_stages <- c("E6.5","E6.75","E7.0","E7.25","E7.5","E7.75","E8.0","E8.25","E8.5")
-# args$query_samples <- opts$samples[1]
+# args$query_stages <- c("E6.5","E7.5","E8.5")
 # args$query_sce <- paste0(io$basedir,"/processed/rna_new/SingleCellExperiment.rds")
 # args$atlas_sce <- io$atlas.sce
 # args$query_metadata <- paste0(io$basedir,"/results/rna/qc/sample_metadata_after_qc.txt.gz")
@@ -64,7 +63,7 @@ if (isTRUE(args$test)) print("Test mode activated...")
 
 # Load cell metadata
 meta_query <- fread(args$query_metadata) %>% 
-  .[pass_rnaQC==TRUE & plate%in%args$query_samples] %>% 
+  .[pass_rnaQC==TRUE & stage%in%args$query_stages] %>% 
   .[,cell:=NULL] %>% setnames("id_rna","cell")
 if (isTRUE(args$test)) meta_query <- head(meta_query,n=1000)
 
@@ -184,8 +183,6 @@ mapping.dt <- mapping$mapping %>%
   .[,c("cell","celltype.mapped","celltype.score","closest.cell")] %>% 
   as.data.table
 
-# outfile <- sprintf("%s/mapping_mnn_%s.txt.gz",args$outdir,paste(args$query_samples,collapse="-"))
-# fwrite(mapping.dt, outfile, sep="\t")
 fwrite(mapping.dt, args$outfile, sep="\t")
 
 ##########

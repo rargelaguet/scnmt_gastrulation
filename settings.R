@@ -30,6 +30,16 @@ if (grepl("ricard",Sys.info()['nodename'])) {
   io$multiome.basedir <- "/Users/argelagr/data/gastrulation_multiome_10x"
   io$gene.metadata <- io$gene_metadata <- "/Users/argelagr/data/ensembl/mouse/v87/BioMart/all_genes/Mmusculus_genes_BioMart.87.txt"
   io$mm10.genome <- "/Users/argelagr/data/mm10_sequence/mm10.genome"
+} else if (grepl("pebble|headstone", Sys.info()['nodename'])) {
+    if (grepl("Clark", Sys.info()['effective_user'])) {
+      stop()
+    } else if (grepl("argelag", Sys.info()['effective_user'])) {
+      io$basedir <- "/bi/group/reik/ricard/data/scnmt_gastrulation_argelaguet2019"
+      io$atlas.basedir <- "/bi/group/reik/ricard/data/pijuansala2019_gastrulation10x"
+      io$multiome.basedir <- "/bi/group/reik/ricard/data/gastrulation_multiome_10x"
+      io$gene.metadata <- io$gene_metadata <- "/bi/group/reik/ricard/data/ensembl/mouse/v87/BioMart/all_genes/Mmusculus_genes_BioMart.87.txt"
+      io$mm10.genome <- "/bi/group/reik/ricard/data/mm10_sequence/mm10.genome"
+    }
 } else {
   stop("Computer not recognised")
 }

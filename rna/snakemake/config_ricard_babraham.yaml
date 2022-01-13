@@ -1,105 +1,88 @@
 samples:
     - E3.5_sample_1
     - E3.5_sample_2
-    - E5.5_sample_1
+    - E4.5_sample_1
+    - E4.5_sample_2
     - E5.5_sample_1
     - E5.5_sample_2
-    - E5.5_sample_2
-    - E4.5_sample_2
-    - E4.5_sample_2
-    - E4.5_sample_2
-    - E4.5_sample_2
-    - E4.5_sample_1
-    - E4.5_sample_1
-    - E4.5_sample_1
-    - E4.5_sample_1
     - E6.5_sample_1
     - E6.5_sample_2
     - E6.5_sample_3
     - E6.5_sample_4
     - E6.5_sample_5
+    - E6.5_sample_6
+    - E6.5_sample_7
+    - E6.5_sample_8
+    - E6.5_sample_9
+    - E6.5_sample_10
+    - E6.5_sample_11
+    - E6.5_sample_12
     - E7.5_sample_1
     - E7.5_sample_2
     - E7.5_sample_3
     - E7.5_sample_4
     - E7.5_sample_5
-    - E7.5_sample_5
-    - E6.5_sample_9
-    - E6.5_sample_10
-    - E6.5_sample_11
-    - E7.5_sample_7
     - E7.5_sample_7
     - E7.5_sample_6
-    - E7.5_sample_6
-    - E7.5_sample_6
     - E7.5_sample_8
-    - E7.5_sample_8
-    - E6.5_sample_6
-    - E6.5_sample_6
     - E7.5_sample_9
-    - E6.5_sample_8
-    - E6.5_sample_8
-    - E6.5_sample_7
-    - E6.5_sample_7
-    - E6.5_sample_7
-    - E6.5_sample_12
-    - E7.5_sample_14
-    - E7.5_sample_15
     - E7.5_sample_10
     - E7.5_sample_11
     - E7.5_sample_12
     - E7.5_sample_13
+    - E7.5_sample_14
+    - E7.5_sample_15
+    - TET_experiment_E8.5_WT_CD41+
+    - TET_experiment_E8.5_WT_KDR+
+    - TET_experiment_E8.5_WT_KDR+_CD41+
+    - TET_experiment_E8.5_WT
+    - TET_experiment_E7.5_WT
+
 plates:
     - E3.5_Plate1
     - E3.5_Plate2
-    - E4.5-5.5_new_Plate4
-    - E4.5-5.5_new_Plate4
-    - E4.5-5.5_new_Plate4
-    - E4.5-5.5_new_Plate3
-    - E4.5-5.5_new_Plate3
-    - E4.5-5.5_new_Plate3
-    - E4.5-5.5_new_Plate3
-    - E4.5-5.5_new_Plate4
-    - E4.5-5.5_new_Plate1
     - E4.5-5.5_new_Plate1
     - E4.5-5.5_new_Plate2
-    - E4.5-5.5_new_Plate2
+    - E4.5-5.5_new_Plate3
+    - E4.5-5.5_new_Plate4
     - E6.5_Plate1
     - E6.5_Plate2
     - E6.5_Plate3
     - E6.5_late_Plate1
     - E6.5_late_Plate2
-    - PS_VE_Plate5
-    - PS_VE_Plate8
-    - PS_VE_Plate5
-    - PS_VE_Plate8
-    - PS_VE_Plate7
-    - PS_VE_Plate8
-    - PS_VE_Plate7
-    - PS_VE_Plate10
-    - PS_VE_Plate11
-    - PS_VE_Plate12
-    - PS_VE_Plate9
     - E7.5_Plate1
     - E7.5_Plate2
     - E7.5_Plate3
     - E7.5_Plate4
     - PS_VE_Plate1
-    - PS_VE_Plate1
-    - PS_VE_Plate3
+    - PS_VE_Plate10
+    - PS_VE_Plate11
+    - PS_VE_Plate12
     - PS_VE_Plate2
     - PS_VE_Plate3
     - PS_VE_Plate4
-    - PS_VE_Plate3
-    - PS_VE_Plate4
-    - PS_VE_Plate2
+    - PS_VE_Plate5
     - PS_VE_Plate6
+    - PS_VE_Plate7
+    - PS_VE_Plate8
+    - PS_VE_Plate9
+    - Plate11
+    - Plate12
     - Plate13
     - Plate14
     - Plate15
     - Plate16
-    - Plate11
-    - Plate12
+    - E8.5_oct20_plate1
+    - E8.5_oct20_plate3
+    - E8.5_oct20_plate5
+    - E8.5_oct20_plate7
+    - Tet-tko-chimera_embryo04
+    - Tet-tko-chimera_embryo05
+    - tet_chimera_march20_plate1
+    - tet_chimera_march20_plate2
+    - tet_chimera_march20_plate4_wt
+    - tet_chimera_march20_plate5_wt
+    - tet_chimera_march20_plate6_wt
 
     
 #################
@@ -109,8 +92,8 @@ plates:
 directories:
     base: /bi/group/reik/ricard/data/scnmt_gastrulation_argelaguet2019
     original_data: /bi/group/reik/ricard/data/scnmt_gastrulation_argelaguet2019/original
-    processed_data: /bi/group/reik/ricard/data/scnmt_gastrulation_argelaguet2019/processed/rna_new
-    results: /bi/group/reik/ricard/data/scnmt_gastrulation_argelaguet2019/results_new
+    processed_data: /bi/group/reik/ricard/data/scnmt_gastrulation_argelaguet2019/processed/rna
+    results: /bi/group/reik/ricard/data/scnmt_gastrulation_argelaguet2019/results
     atlas: /bi/group/reik/ricard/data/pijuansala2019_gastrulation10x
 
 ###############
@@ -121,8 +104,8 @@ resources:
     marker_genes: /bi/group/reik/ricard/data/pijuansala2019_gastrulation10x/results/marker_genes/all_stages/marker_genes.txt.gz
     umap: "/bi/group/reik/ricard/data/scnmt_gastrulation_argelaguet2019/results/rna/dimensionality_reduction/umap_features1000_pcs30_neigh25_dist0.3.txt.gz"
     celltypes: ["Epiblast", "Primitive_Streak", "Caudal_epiblast", "PGC", "Anterior_Primitive_Streak", "Notochord", "Def._endoderm", "Gut", "Nascent_mesoderm", "Mixed_mesoderm", "Intermediate_mesoderm", "Caudal_Mesoderm", "Paraxial_mesoderm", "Somitic_mesoderm", "Pharyngeal_mesoderm", "Cardiomyocytes", "Allantois", "ExE_mesoderm", "Mesenchyme", "Haematoendothelial_progenitors", "Endothelium", "Blood_progenitors_1", "Blood_progenitors_2", "Erythroid1", "Erythroid2", "Erythroid3", "NMP", "Rostral_neurectoderm", "Caudal_neurectoderm", "Neural_crest", "Forebrain_Midbrain_Hindbrain", "Spinal_cord", "Surface_ectoderm", "Visceral_endoderm", "ExE_endoderm", "ExE_ectoderm", "Parietal_endoderm"]
-    stages: ["E3.5","E4.5","E5.5","E6.5","E7.5"]
-    gene_metadata: /bi/group/reik/ricard/data/scnmt_gastrulation_argelaguet2019/features/gene_metadata/Mmusculus_genes_BioMart.87.txt
+    stages: ["E3.5","E4.5","E5.5","E6.5","E7.5","E8.5"]
+    gene_metadata: /bi/group/reik/ricard/data/ensembl/mouse/v87/BioMart/all_genes/Mmusculus_genes_BioMart.87.txt
     bedGraphToBigWig: "/bi/apps/ucsc_tools/5/bedGraphToBigWig"
 
 #############
@@ -133,7 +116,7 @@ scripts:
     create_seurat: ../processing/1_create_seurat_rna.R
     qc: ../processing/2_QC.R
     seurat_to_sce: ../processing/3_seurat_to_SCE.R
-    mapping_mnn: ../mapping/run/mnn/mapping_mnn.R
+    mapping_mnn: ../mapping/run/mapping_mnn.R
     mapping_seurat: ../mapping/run/seurat/mapping_seurat.R
     parse_mapping: ../mapping/run/parse_sample_metadata_after_mapping.R
     dimensionality_reduction_sce: ../dimensionality_reduction/dimensionality_reduction_sce.R
@@ -156,6 +139,7 @@ params:
         
     mapping_mnn:
         atlas_stages: ["E6.5","E6.75","E7.0","E7.25","E7.5","E7.75","E8.0","E8.25","E8.5"]
+        query_stages: ["E6.5","E7.5","E8.5"]
         npcs: 50
         n_neighbours: 25
 
