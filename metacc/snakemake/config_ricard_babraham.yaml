@@ -54,6 +54,7 @@ directories:
     genome_seq: /bi/group/reik/ricard/data/mm10_sequence/mm10.genome
     bedGraphToBigWig: "/bi/apps/ucsc_tools/5/bedGraphToBigWig"
     rna_SingleCellExperiment: /bi/group/reik/ricard/data/scnmt_gastrulation_argelaguet2019/processed/rna/SingleCellExperiment.rds
+    cell_metadata: /bi/group/reik/ricard/data/scnmt_gastrulation_argelaguet2019/results/rna/mapping/sample_metadata_after_mapping.txt.gz" # this is the output of the RNA snakemake pipeline
     tss_file: /bi/group/reik/ricard/data/mm10_regulation/genes/TSS_protein_coding.bed
 
 ###############
@@ -61,7 +62,7 @@ directories:
 ###############
 
 resources:
-    celltypes: ["Epiblast", "Primitive_Streak", "Caudal_epiblast", "PGC", "Anterior_Primitive_Streak", "Notochord", "Def._endoderm", "Gut", "Nascent_mesoderm", "Mixed_mesoderm", "Intermediate_mesoderm", "Caudal_Mesoderm", "Paraxial_mesoderm", "Somitic_mesoderm", "Pharyngeal_mesoderm", "Cardiomyocytes", "Allantois", "ExE_mesoderm", "Mesenchyme", "Haematoendothelial_progenitors", "Endothelium", "Blood_progenitors_1", "Blood_progenitors_2", "Erythroid1", "Erythroid2", "Erythroid3", "NMP", "Rostral_neurectoderm", "Caudal_neurectoderm", "Neural_crest", "Forebrain_Midbrain_Hindbrain", "Spinal_cord", "Surface_ectoderm", "Visceral_endoderm", "ExE_endoderm", "ExE_ectoderm", "Parietal_endoderm"]
+    # celltypes: ["Epiblast", "Primitive_Streak", "Caudal_epiblast", "PGC", "Anterior_Primitive_Streak", "Notochord", "Def._endoderm", "Gut", "Nascent_mesoderm", "Mixed_mesoderm", "Intermediate_mesoderm", "Caudal_Mesoderm", "Paraxial_mesoderm", "Somitic_mesoderm", "Pharyngeal_mesoderm", "Cardiomyocytes", "Allantois", "ExE_mesoderm", "Mesenchyme", "Haematoendothelial_progenitors", "Endothelium", "Blood_progenitors_1", "Blood_progenitors_2", "Erythroid1", "Erythroid2", "Erythroid3", "NMP", "Rostral_neurectoderm", "Caudal_neurectoderm", "Neural_crest", "Forebrain_Midbrain_Hindbrain", "Spinal_cord", "Surface_ectoderm", "Visceral_endoderm", "ExE_endoderm", "ExE_ectoderm", "Parietal_endoderm"]
     stages: ["E3.5","E4.5","E5.5","E6.5","E7.5","E8.5"]
 
 #############
@@ -101,7 +102,7 @@ params:
         min_rate: 10
         max_rate: 40
     pseudobulk:
-        group_by: ["celltype", "stage_celltype"]
+        group_by: ["celltype"]
         min_cells: 10
     calculate_tss_profiles:
         window_size: 3000
