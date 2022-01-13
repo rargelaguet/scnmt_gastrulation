@@ -125,9 +125,9 @@ scripts:
     plot_mapping_results: ../mapping/analysis/plot_mapping_umap.R
     plot_celltype_proportions: ../celltype_proportions/plot_celltype_proportions.R
     sex_assignment: ../sex/sex_assignment.R
-    celltype_assignments_E35: ../celltype_assignment/celltype_assignment_E35.R
-    celltype_assignments_E45: ../celltype_assignment/celltype_assignment_E45.R
-    celltype_assignments_E55: ../celltype_assignment/celltype_assignment_E55.R
+    celltype_assignment_E35: ../celltype_assignment/celltype_assignment_E35.R
+    celltype_assignment_E45: ../celltype_assignment/celltype_assignment_E45.R
+    celltype_assignment_E55: ../celltype_assignment/celltype_assignment_E55.R
 
 
 
@@ -247,12 +247,12 @@ slurm:  # memory in MB
     sex_assignment:
         memory: 5000
         threads: 1
-    celltype_assignments_E35:
+    celltype_assignment_E35:
         memory: 5000
         threads: 1
-    celltype_assignments_E45:
+    celltype_assignment_E45:
         memory: 5000
         threads: 1
-    celltype_assignments_E55:
+    celltype_assignment_E55:
         memory: 5000
         threads: 1

@@ -1,0 +1,581 @@
+
+import os
+from re import search
+import getpass
+
+
+############
+## Config ##
+############
+
+host = os.uname()[1]
+if search("BI2404M", host) and getpass.getuser()=="argelagr":
+    configfile: "config_ricard_local.yaml"
+elif search("[headstone|pebble]", host) and getpass.getuser()=="argelagr":
+    configfile: "config_ricard_babraham.yaml"
+elif search("[headstone|pebble]", host) and getpass.getuser()=="clarks":
+    configfile: "config_stephen_babraham.yaml"
+else:
+    print("Computer not recognised")
+    exit()
+
+###########
+## Rules ##
+###########
+
+rule all:
+    input: 
+        config["directories"]["results"]+"/met/stats/sample_metadata_after_met_stats.txt.gz",
+        config["directories"]["results"]+"/acc/stats/sample_metadata_after_acc_stats.txt.gz",
+        config["directories"]["results"]+"/met/stats/pdf/CG_coverage_per_sample.pdf",
+        config["directories"]["results"]+"/acc/stats/pdf/GC_coverage_per_sample.pdf",
+        config["directories"]["results"]+"/met/qc/sample_metadata_after_met_qc.txt.gz",
+        config["directories"]["results"]+"/acc/qc/sample_metadata_after_acc_qc.txt.gz",
+        config["directories"]["results"]+"/metacc/qc/sample_metadata_after_metacc_qc.txt.gz",
+        config["directories"]["results"]+"/met/stats/met_stats_per_chr.txt.gz",
+        config["directories"]["results"]+"/acc/stats/acc_stats_per_chr.txt.gz"
+        # expand(config["directories"]["processed_data"]+"/met/feature_level/{genomic_context}.tsv.gz", genomic_context=config["genomic_contexts"]),
+        # expand(config["directories"]["processed_data"]+"/acc/feature_level/{genomic_context}.tsv.gz", genomic_context=config["genomic_contexts"]),
+        # expand(config["directories"]["results"]+"/metacc/boxplots_feature_level/boxplots_metacc_{genomic_context}.pdf", genomic_context=config["genomic_contexts"]),
+        # # expand(config["directories"]["processed_data"]+"/met/cpg_level/pseudobulk/{pseudobulk_group_by}/completed.txt", pseudobulk_group_by=config["params"]["pseudobulk"]["group_by"]),
+        # # expand(config["directories"]["processed_data"]+"/acc/gpc_level/pseudobulk/{pseudobulk_group_by}/completed.txt", pseudobulk_group_by=config["params"]["pseudobulk"]["group_by"]),
+        # expand(config["directories"]["processed_data"]+"/met/cpg_level/pseudobulk/{pseudobulk_group_by}", pseudobulk_group_by=config["params"]["pseudobulk"]["group_by"]),
+        # expand(config["directories"]["processed_data"]+"/acc/gpc_level/pseudobulk/{pseudobulk_group_by}", pseudobulk_group_by=config["params"]["pseudobulk"]["group_by"]),
+        # config["directories"]["results"]+"/metacc/profiles/tss/precomputed_metacc_prom_200_200.txt.gz",
+        # # config["directories"]["results"]+"/metacc/profiles/multiome_peaks/precomputed_metacc_multiome_peaks.txt.gz",
+        # # config["directories"]["results"]+"/metacc/tss_profiles/pdf/CG_ratio_vs_GC_ratio_coloured_by_nCG.pdf",
+        # expand(config["directories"]["processed_data"]+"/met/bigwig/{pseudobulk_group_by}/completed.txt", pseudobulk_group_by=config["params"]["pseudobulk"]["group_by"]),
+        # expand(config["directories"]["processed_data"]+"/acc/bigwig/{pseudobulk_group_by}/completed.txt", pseudobulk_group_by=config["params"]["pseudobulk"]["group_by"]),
+        # config["directories"]["results"]+"/metrna/coupling/precomputed_metrna_coupling.txt.gz",
+        # config["directories"]["results"]+"/metacc/coupling/precomputed_metacc_coupling.txt.gz",
+        # config["directories"]["results"]+"/accrna/coupling/precomputed_accrna_coupling.txt.gz"
+    
+
+#################################
+## Calculate global statistics ##
+#################################
+
+rule calculate_global_stats_per_cell_met:
+    input:
+        script=config["scripts"]["calculate_global_stats_per_cell"],
+        metadata = config["directories"]["results"]+"/rna/mapping/sample_metadata_after_mapping.txt.gz",
+        indir=config["directories"]["processed_data"]+"/met/cpg_level"
+    output:
+        config["directories"]["results"]+"/met/stats/sample_metadata_after_met_stats.txt.gz"
+    log: 
+        "logs/calculate_global_stats_per_cell_met.log"
+    threads: 
+        config["slurm"]["calculate_global_stats_per_cell"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["calculate_global_stats_per_cell"]["memory"]
+    shell:
+        "Rscript {input.script} --metadata {input.metadata}  --indir {input.indir} --context CG --outfile {output} > {log}"
+
+rule calculate_global_stats_per_cell_acc:
+    input:
+        script=config["scripts"]["calculate_global_stats_per_cell"],
+        metadata = config["directories"]["results"]+"/rna/mapping/sample_metadata_after_mapping.txt.gz",
+        indir=config["directories"]["processed_data"]+"/acc/gpc_level"
+    output:
+        config["directories"]["results"]+"/acc/stats/sample_metadata_after_acc_stats.txt.gz"
+    log: 
+        "logs/calculate_global_stats_per_cell_acc.log"
+    threads: 
+        config["slurm"]["calculate_global_stats_per_cell"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["calculate_global_stats_per_cell"]["memory"]
+    shell:
+        "Rscript {input.script} --metadata {input.metadata}  --indir {input.indir} --context GC --outfile {output} > {log}"
+
+#########################################
+## Calculate per chromosome statistics ##
+#########################################
+
+rule calculate_chr_stats_per_cell_met:
+    input:
+        script=config["scripts"]["calculate_chr_stats_per_cell"],
+        indir=config["directories"]["processed_data"]+"/met/cpg_level"
+    output:
+        config["directories"]["results"]+"/met/stats/met_stats_per_chr.txt.gz"
+    log: 
+        "logs/calculate_chr_stats_per_cell_met.log"
+    threads: 
+        config["slurm"]["calculate_chr_stats_per_cell"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["calculate_chr_stats_per_cell"]["memory"]
+    shell:
+        "Rscript {input.script}  --indir {input.indir} --context CG --outfile {output}  > {log}"
+
+rule calculate_chr_stats_per_cell_acc:
+    input:
+        script=config["scripts"]["calculate_chr_stats_per_cell"],
+        indir=config["directories"]["processed_data"]+"/acc/gpc_level"
+    output:
+        config["directories"]["results"]+"/acc/stats/acc_stats_per_chr.txt.gz"
+    log: 
+        "logs/calculate_chr_stats_per_cell_acc.log"
+    threads: 
+        config["slurm"]["calculate_chr_stats_per_cell"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["calculate_chr_stats_per_cell"]["memory"]
+    shell:
+        "Rscript {input.script}  --indir {input.indir} --context GC --outfile {output}  > {log}"
+
+#####################################
+## Plot global statistics per cell ##
+#####################################
+
+rule plot_global_stats_per_cell_met:
+    input:
+        script=config["scripts"]["plot_global_stats_per_cell"],
+        # metadata = config["directories"]["results"]+"/rna/mapping/sample_metadata_after_mapping.txt.gz",
+        metadata = rules.calculate_global_stats_per_cell_met.output,
+    output:
+        config["directories"]["results"]+"/met/stats/pdf/CG_coverage_per_sample.pdf"
+    params:
+        outdir = config["directories"]["results"]+"/met/stats/pdf"
+    log: 
+        "logs/plot_global_stats_per_cell_met.log"
+    threads: 
+        config["slurm"]["plot_global_stats_per_cell"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["plot_global_stats_per_cell"]["memory"]
+    shell:
+        "Rscript {input.script} --metadata {input.metadata} --context CG --outdir {params.outdir} > {log}"
+
+rule plot_global_stats_per_cell_acc:
+    input:
+        script=config["scripts"]["plot_global_stats_per_cell"],
+        # metadata = config["directories"]["results"]+"/rna/mapping/sample_metadata_after_mapping.txt.gz",
+        metadata = rules.calculate_global_stats_per_cell_acc.output,
+    output:
+        config["directories"]["results"]+"/acc/stats/pdf/GC_coverage_per_sample.pdf"
+    params:
+        outdir = config["directories"]["results"]+"/acc/stats/pdf"
+    log: 
+        "logs/plot_global_stats_per_cell_acc.log"
+    threads: 
+        config["slurm"]["plot_global_stats_per_cell"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["plot_global_stats_per_cell"]["memory"]
+    shell:
+        "Rscript {input.script} --metadata {input.metadata} --context GC --outdir {params.outdir} > {log}"
+
+########
+## QC ##
+########
+
+rule qc_met:
+    input:
+        script=config["scripts"]["qc"],
+        metadata = rules.calculate_global_stats_per_cell_met.output
+    output:
+        config["directories"]["results"]+"/met/qc/sample_metadata_after_met_qc.txt.gz"
+    params:
+        outdir = config["directories"]["results"]+"/met/qc",
+        minimum_number_sites = config["params"]["qc_met"]["minimum_number_sites"],
+        min_rate = config["params"]["qc_met"]["min_rate"],
+        max_rate = config["params"]["qc_met"]["max_rate"]
+    log: 
+        "logs/qc_met.log"
+    threads: 
+        config["slurm"]["qc"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["qc"]["memory"]
+    shell:
+        "Rscript {input.script} --metadata {input.metadata} --context CG \
+        --minimum_number_sites {params.minimum_number_sites} --min_rate {params.min_rate} --max_rate {params.max_rate} \
+        --outdir {params.outdir} > {log}"
+
+rule qc_acc:
+    input:
+        script=config["scripts"]["qc"],
+        metadata = rules.calculate_global_stats_per_cell_acc.output
+    output:
+        config["directories"]["results"]+"/acc/qc/sample_metadata_after_acc_qc.txt.gz"
+    params:
+        outdir = config["directories"]["results"]+"/acc/qc",
+        minimum_number_sites = config["params"]["qc_acc"]["minimum_number_sites"],
+        min_rate = config["params"]["qc_acc"]["min_rate"],
+        max_rate = config["params"]["qc_acc"]["max_rate"]
+    log: 
+        "logs/qc_acc.log"
+    threads: 
+        config["slurm"]["qc"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["qc"]["memory"]
+    shell:
+        "Rscript {input.script} --metadata {input.metadata} --context GC \
+        --minimum_number_sites {params.minimum_number_sites} --min_rate {params.min_rate} --max_rate {params.max_rate} \
+        --outdir {params.outdir} > {log}"
+
+rule parse_metadata_after_qc:
+    input:
+        script=config["scripts"]["parse_metadata_after_qc"],
+        metadata_met = rules.qc_met.output,
+        metadata_acc = rules.qc_acc.output
+    output:
+        config["directories"]["results"]+"/metacc/qc/sample_metadata_after_metacc_qc.txt.gz"
+    log: 
+        "logs/parse_metadata_after_qc.log"
+    threads: 1
+    resources: mem_mb = 1000
+    shell:
+        "Rscript {input.script} --metadata_met {input.metadata_met} --metadata_acc {input.metadata_acc} --outfile {output} > {log}"
+
+
+###########################################
+## Quantify met/acc at the feature level ##
+###########################################
+
+rule quantify_met_feature_level:
+    input:
+        script = config["scripts"]["quantify_feature_level"],
+        indir = config["directories"]["processed_data"]+"/met/cpg_level",
+        featuresdir = config["directories"]["features"],
+        metadata = rules.qc_met.output
+    output:
+        config["directories"]["processed_data"]+"/met/feature_level/{genomic_context}.tsv.gz"
+    params:
+        outdir = config["directories"]["processed_data"]+"/met/feature_level"
+    log: 
+        "logs/quantify_met_feature_level_{genomic_context}.log"
+    threads: 
+        config["slurm"]["quantify_feature_level"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["quantify_feature_level"]["memory"]
+    shell:
+        "Rscript {input.script} --indir {input.indir} --featuresdir {input.featuresdir} --metadata {input.metadata} --context CG --annos {wildcards.genomic_context} --outdir {params.outdir} > {log}"
+
+rule quantify_acc_feature_level:
+    input:
+        script = config["scripts"]["quantify_feature_level"],
+        indir = config["directories"]["processed_data"]+"/acc/gpc_level",
+        featuresdir = config["directories"]["features"],
+        metadata = rules.qc_acc.output
+    output:
+        config["directories"]["processed_data"]+"/acc/feature_level/{genomic_context}.tsv.gz"
+    params:
+        outdir = config["directories"]["processed_data"]+"/acc/feature_level"
+    log: 
+        "logs/quantify_acc_feature_level_{genomic_context}.log"
+    threads: 
+        config["slurm"]["quantify_feature_level"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["quantify_feature_level"]["memory"]
+    shell:
+        "Rscript {input.script} --indir {input.indir} --featuresdir {input.featuresdir} --metadata {input.metadata} --context GC --annos {wildcards.genomic_context} --outdir {params.outdir} > {log}"
+
+##############################################
+## Boxplots of met/acc at the feature level ##
+##############################################
+
+rule boxplots_metacc_feature_level:
+    input:
+        script = config["scripts"]["boxplots_metacc_feature_level"],
+        met_file = config["directories"]["processed_data"]+"/met/feature_level/{genomic_context}.tsv.gz",
+        acc_file = config["directories"]["processed_data"]+"/acc/feature_level/{genomic_context}.tsv.gz",
+        metadata = rules.parse_metadata_after_qc.output
+    output:
+        config["directories"]["results"]+"/metacc/boxplots_feature_level/boxplots_metacc_{genomic_context}.pdf"
+        # config["directories"]["results"]+"/metacc/boxplots_feature_level/boxplots_metacc_{genomic_context}_relative.pdf"
+    params:
+        outdir = config["directories"]["results"]+"/metacc/boxplots_feature_level"
+    log: 
+        "logs/quantify_acc_feature_level_{genomic_context}.log"
+    threads: 
+        config["slurm"]["quantify_feature_level"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["quantify_feature_level"]["memory"]
+    shell:
+        "Rscript {input.script} --met_file {input.met_file} --acc_file {input.acc_file} --metadata {input.metadata} \
+        --anno {wildcards.genomic_context} --outdir {params.outdir} > {log}"
+
+##################
+## TSS profiles ##
+##################
+
+rule calculate_tss_profiles:
+    input:
+        script = config["scripts"]["calculate_tss_profiles"],
+        metadata = rules.parse_metadata_after_qc.output
+    output:
+        config["directories"]["results"]+"/metacc/profiles/tss/precomputed_metacc_prom_200_200.txt.gz",
+    params:
+        window_size = config["params"]["calculate_tss_profiles"]["window_size"],
+        met_tile = config["params"]["calculate_tss_profiles"]["met_tile"],
+        acc_tile = config["params"]["calculate_tss_profiles"]["acc_tile"]
+    log: 
+        "logs/calculate_tss_profiles_prom_200_200.log"
+    threads: 
+        config["slurm"]["calculate_tss_profiles"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["quantify_feature_level"]["memory"]
+    shell:
+        "Rscript {input.script} --met_tile {params.met_tile} --acc_tile {params.acc_tile} --window_size {params.window_size} --metadata {input.metadata} \
+        --anno prom_200_200 --outfile {output} > {log}"
+
+
+rule calculate_profiles_multiome_peaks:
+    input:
+        script = config["scripts"]["calculate_tss_profiles"],
+        metadata = rules.parse_metadata_after_qc.output
+    output:
+        config["directories"]["results"]+"/metacc/profiles/multiome_peaks/precomputed_metacc_multiome_peaks.txt.gz",
+    params:
+        window_size = config["params"]["calculate_tss_profiles"]["window_size"],
+        met_tile = config["params"]["calculate_tss_profiles"]["met_tile"],
+        acc_tile = config["params"]["calculate_tss_profiles"]["acc_tile"]
+    log: 
+        "logs/calculate_tss_profiles_multiome_peaks.log"
+    threads: 
+        config["slurm"]["calculate_tss_profiles"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["quantify_feature_level"]["memory"]
+    shell:
+        "Rscript {input.script} --met_tile {params.met_tile} --acc_tile {params.acc_tile} --window_size {params.window_size} --metadata {input.metadata} \
+        --anno multiome_peaks --outfile {output} > {log}"
+
+
+rule plot_tss_profiles:
+    input:
+        script = config["scripts"]["plot_tss_profiles"],
+        metadata = rules.parse_metadata_after_qc.output,
+        file = rules.calculate_tss_profiles.output
+    output:
+        config["directories"]["results"]+"/metacc/tss_profiles/pdf/CG_ratio_vs_GC_ratio_coloured_by_nCG.pdf"
+    params:
+        outdir = config["directories"]["results"]+"/metacc/tss_profiles/pdf"
+    log: 
+        "logs/plot_tss_profiles_prom_200_200.log"
+    threads: 
+        config["slurm"]["plot_tss_profiles"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["quantify_feature_level"]["memory"]
+    shell:
+        "Rscript {input.script} --file {input.file} --metadata {input.metadata} --outdir {params.outdir} > {log}"
+
+################
+## Pseudobulk ##
+################
+
+rule pseudobulk_met:
+    input:
+        script = config["scripts"]["pseudobulk"],
+        indir = config["directories"]["processed_data"]+"/met/cpg_level",
+        featuresdir = config["directories"]["features"],
+        metadata = rules.qc_met.output
+    output:
+        directory(config["directories"]["processed_data"]+"/met/cpg_level/pseudobulk/{pseudobulk_group_by}")
+        # config["directories"]["processed_data"]+"/met/cpg_level/pseudobulk/{pseudobulk_group_by}/completed.txt"
+    params:
+        outdir = config["directories"]["processed_data"]+"/met/cpg_level/pseudobulk/{pseudobulk_group_by}",
+        # group_by = config["params"]["pseudobulk"]["group_by"],
+        min_cells = config["params"]["pseudobulk"]["min_cells"],
+        ncores = config["slurm"]["pseudobulk"]["threads"]
+    log: 
+        "logs/pseudobulk_met_{pseudobulk_group_by}.log"
+    threads: 
+        config["slurm"]["pseudobulk"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["pseudobulk"]["memory"]
+    shell:
+        "Rscript {input.script} --indir {input.indir} --metadata {input.metadata} --context CG --group_by {wildcards.pseudobulk_group_by} \
+        --ncores {params.ncores} --min_cells {params.min_cells} --outdir {params.outdir} > {log}"
+
+
+rule pseudobulk_acc:
+    input:
+        script = config["scripts"]["pseudobulk"],
+        indir = config["directories"]["processed_data"]+"/acc/gpc_level",
+        featuresdir = config["directories"]["features"],
+        metadata = rules.qc_acc.output
+    output:
+        directory(config["directories"]["processed_data"]+"/acc/gpc_level/pseudobulk/{pseudobulk_group_by}")
+        # config["directories"]["processed_data"]+"/acc/gpc_level/pseudobulk/{pseudobulk_group_by}/completed.txt"
+    params:
+        outdir = config["directories"]["processed_data"]+"/acc/gpc_level/pseudobulk/{pseudobulk_group_by}",
+        # group_by = config["params"]["pseudobulk"]["group_by"],
+        min_cells = config["params"]["pseudobulk"]["min_cells"],
+        ncores = config["slurm"]["pseudobulk"]["threads"]
+    log: 
+        "logs/pseudobulk_acc_{pseudobulk_group_by}.log"
+    threads: 
+        config["slurm"]["pseudobulk"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["pseudobulk"]["memory"]
+    shell:
+        "Rscript {input.script} --indir {input.indir} --metadata {input.metadata} --context GC --group_by {wildcards.pseudobulk_group_by} \
+        --ncores {params.ncores} --min_cells {params.min_cells} --outdir {params.outdir} > {log}"
+
+
+
+############
+## Bigwig ##
+############
+
+# babraham cluster: this needs to load the following package module:
+# module load ucsc_tools/5
+
+rule generate_bigwig_files_met:
+    input:
+        # rules.pseudobulk_met.output,
+        script = config["scripts"]["bigwig"],
+        indir = rules.pseudobulk_met.output
+        # indir = config["directories"]["processed_data"]+"/met/cpg_level/pseudobulk/{pseudobulk_group_by}",
+    output:
+        config["directories"]["processed_data"]+"/met/bigwig/{pseudobulk_group_by}/completed.txt"
+    params:
+        outdir = config["directories"]["processed_data"]+"/met/bigwig/{pseudobulk_group_by}",
+        bedGraphToBigWig = config["directories"]["bedGraphToBigWig"],
+        genome_seq = config["directories"]["genome_seq"],
+        step_size = config["params"]["bigwig_met"]["step_size"],
+        min_rate_bigwig = config["params"]["bigwig_met"]["min_rate_bigwig"]
+    log: 
+        "logs/generate_bigwig_files_met_{pseudobulk_group_by}.log"
+    threads: 
+        config["slurm"]["bigwig_met"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["bigwig_met"]["memory"]
+    shell:
+        "Rscript {input.script} --indir {input.indir} --bedGraphToBigWig {params.bedGraphToBigWig} \
+        --genome_seq {params.genome_seq} --step_size {params.step_size} --min_rate_bigwig {params.min_rate_bigwig} \
+        --outdir {params.outdir} --smooth_rates > {log}"
+
+# babraham cluster: this needs to load the following package module:
+# module load ucsc_tools/5
+
+rule generate_bigwig_files_acc:
+    input:
+        rules.pseudobulk_acc.output,
+        script = config["scripts"]["bigwig"],
+        # indir = config["directories"]["processed_data"]+"/acc/gpc_level/pseudobulk/{pseudobulk_group_by}",
+        indir = rules.pseudobulk_acc.output
+    output:
+        config["directories"]["processed_data"]+"/acc/bigwig/{pseudobulk_group_by}/completed.txt"
+    params:
+        outdir = config["directories"]["processed_data"]+"/acc/bigwig/{pseudobulk_group_by}",
+        bedGraphToBigWig = config["directories"]["bedGraphToBigWig"],
+        genome_seq = config["directories"]["genome_seq"],
+        step_size = config["params"]["bigwig_acc"]["step_size"],
+        min_rate_bigwig = config["params"]["bigwig_acc"]["min_rate_bigwig"]
+    log: 
+        "logs/generate_bigwig_files_acc_{pseudobulk_group_by}.log"
+    threads: 
+        config["slurm"]["bigwig_acc"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["bigwig_acc"]["memory"]
+    shell:
+        "Rscript {input.script} --indir {input.indir} --bedGraphToBigWig {params.bedGraphToBigWig} \
+        --genome_seq {params.genome_seq} --step_size {params.step_size} --min_rate_bigwig {params.min_rate_bigwig} \
+        --outdir {params.outdir} --smooth_rates > {log}"
+
+
+##############
+## Coupling ##
+##############
+
+rule calculate_metacc_coupling:
+    input:
+        script = config["scripts"]["metacc_coupling"],
+        metadata = rules.parse_metadata_after_qc.output,
+        tss_file = config["directories"]["tss_file"]
+    output:
+        config["directories"]["results"]+"/metacc/coupling/precomputed_metacc_coupling.txt.gz"
+    params:
+        up = config["params"]["metacc_coupling"]["up"],
+        down = config["params"]["metacc_coupling"]["down"],
+        window = config["params"]["metacc_coupling"]["window"],
+        tile = config["params"]["metacc_coupling"]["tile"]
+    log: 
+        "logs/calculate_metacc_coupling.log"
+    threads: 
+        config["slurm"]["metacc_coupling"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["metacc_coupling"]["memory"]
+    shell:
+        "Rscript {input.script} --metadata {input.metadata} --tss {input.tss_file} \
+        --up {params.up} --down {params.down} --window {params.window} --tile {params.tile} \
+        --outfile {output} > {log}"
+
+rule calculate_metrna_coupling:
+    input:
+        script = config["scripts"]["metrna_coupling"],
+        metadata = rules.parse_metadata_after_qc.output,
+        sce = config["directories"]["rna_SingleCellExperiment"],
+        tss_file = config["directories"]["tss_file"]
+    output:
+        config["directories"]["results"]+"/metrna/coupling/precomputed_metrna_coupling.txt.gz"
+    params:
+        up = config["params"]["metrna_coupling"]["up"],
+        down = config["params"]["metrna_coupling"]["down"],
+        window = config["params"]["metrna_coupling"]["window"],
+        tile = config["params"]["metrna_coupling"]["tile"]
+    log: 
+        "logs/calculate_metrna_coupling.log"
+    threads: 
+        config["slurm"]["metrna_coupling"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["metrna_coupling"]["memory"]
+    shell:
+        "Rscript {input.script} --sce {input.sce} --metadata {input.metadata} --tss {input.tss_file} \
+        --up {params.up} --down {params.down} --window {params.window} --tile {params.tile} \
+        --outfile {output} > {log}"
+
+# rule plot_metrna_coupling:
+#     input:
+#         script = config["scripts"]["plot_metrna_coupling"],
+#         file = rules.calculate_metrna_coupling.output,
+#         metadata = rules.parse_metadata_after_qc.output,
+#     output:
+#         config["directories"]["results"]+"/metrna/coupling/metrna_coupling_per_sample.pdf"
+#     params:
+#         outdir = config["directories"]["results"]+"/metrna/coupling"
+#     log: 
+#         "logs/plot_metrna_coupling.log"
+#     threads: 
+#         config["slurm"]["plot_metrna_coupling"]["threads"]
+#     resources:
+#         mem_mb = config["slurm"]["plot_metrna_coupling"]["memory"]
+#     shell:
+#         "Rscript {input.script} --metadata {input.metadata} --file {input.file} --outdir {params.outdir} > {log}"
+
+rule calculate_accrna_coupling:
+    input:
+        script = config["scripts"]["accrna_coupling"],
+        metadata = rules.parse_metadata_after_qc.output,
+        sce = config["directories"]["rna_SingleCellExperiment"],
+        tss_file = config["directories"]["tss_file"]
+    output:
+        config["directories"]["results"]+"/accrna/coupling/precomputed_accrna_coupling.txt.gz"
+    params:
+        up = config["params"]["accrna_coupling"]["up"],
+        down = config["params"]["accrna_coupling"]["down"],
+        window = config["params"]["accrna_coupling"]["window"],
+        tile = config["params"]["accrna_coupling"]["tile"]
+    log: 
+        "logs/calculate_accrna_coupling.log"
+    threads: 
+        config["slurm"]["accrna_coupling"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["accrna_coupling"]["memory"]
+    shell:
+        "Rscript {input.script} --sce {input.sce} --metadata {input.metadata} --tss {input.tss_file} \
+        --up {params.up} --down {params.down} --window {params.window} --tile {params.tile} \
+        --outfile {output} > {log}"
+
+####################
+## Motif analysis ##
+####################
+
+##############################
+## Plot individual features ##
+##############################
+
+####################
+## Sex assignment ##
+####################
+
+##############################
+## Dimensionality reduction ##
+##############################

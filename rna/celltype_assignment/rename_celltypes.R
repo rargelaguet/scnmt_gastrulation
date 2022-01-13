@@ -38,31 +38,36 @@ sample_metadata <- fread(args$metadata)
 ## Load mapping results ##
 ##########################
 
-# MNN
-mapping_mnn.dt <- args$mapping_mnn %>% map(~ fread(.)) %>% rbindlist %>% setnames("cell","id_rna")
-stopifnot(mapping_mnn.dt$id_rna%in%sample_metadata$id_rna)
+###############################################
+## Rename cell types from class 1 to class 2 ##
+###############################################
 
-# Seurat
-# mapping_seurat.dt <- args$mapping_seurat %>% map(~ fread(.)) %>% rbindlist %>% setnames("cell","id_rna")
-# stopifnot(mapping_seurat.dt$id_rna%in%sample_metadata$id_rna)
+opts$rename.celltypes <- c(
+  "Erythroid1" = "Erythroid",
+  "Erythroid2" = "Erythroid",
+  "Erythroid3" = "Erythroid",
+  "Blood_progenitors_1" = "Blood_progenitors",
+  "Blood_progenitors_2" = "Blood_progenitors",
+  "Rostral_neurectoderm" = "Neurectoderm",
+  "Caudal_neurectoderm" = "Neurectoderm",
+  "Anterior_Primitive_Streak" = "Primitive_Streak",
+  "Mixed_mesoderm" = "Nascent_mesoderm",
+  "Allantois" = "ExE_mesoderm"
+)
 
-###########
-## Merge ##
-###########
+sample_metadata %>% 
+	.[,celltype2:=stringr::str_replace_all(celltype,opts$rename.celltypes)]
 
-# mapping.dt <- merge(mapping_mnn.dt, mapping_seurat.dt, by="id_rna", suffixes=c("_mnn","_seurat"))
-# to.save <- sample_metadata %>% merge(mapping.dt, by="id_rna", all.x=TRUE)
+###############################################
+## Rename cell types from class 2 to class 3 ##
+###############################################
 
-to.save <- sample_metadata %>% merge(mapping_mnn.dt, by="id_rna", all.x=TRUE)
-
-#######################
-## Rename cell types ##
-#######################
+# Germ layer: ectoderm, mesoderm, endoderm
 
 # opts$rename.celltypes <- c(
-#   "Erythroid1" = "early_Erythroid",
-#   "Erythroid2" = "early_Erythroid",
-#   "Erythroid3" = "late_Erythroid",
+#   "Erythroid1" = "Erythroid",
+#   "Erythroid2" = "Erythroid",
+#   "Erythroid3" = "Erythroid",
 #   "Blood_progenitors_1" = "Blood_progenitors",
 #   "Blood_progenitors_2" = "Blood_progenitors",
 #   "Rostral_neurectoderm" = "Neurectoderm",
@@ -72,23 +77,11 @@ to.save <- sample_metadata %>% merge(mapping_mnn.dt, by="id_rna", all.x=TRUE)
 #   "Allantois" = "ExE_mesoderm"
 # )
 
-# to.save %>% 
-	# .[,celltype.mapped:=stringr::str_replace_all(celltype.mapped,opts$rename.celltypes)]
-
-# to.save %>% .[,celltype_class:=sprintf("%s_%s",celltype.mapped,class)]
+# sample_metadata %>% 
+# 	.[,celltype3:=stringr::str_replace_all(celltype2,opts$rename.celltypes)]
 
 #################
 ## Save output ##
 #################
 
 fwrite(to.save, args$outfile, sep="\t", na="NA", quote=F)
-
-######################
-## Compare mappings ##
-######################
-
-# foo <- merge(
-#   mapping_mnn.dt[,c("id_rna","celltype.mapped")] %>% setnames("celltype.mapped","celltype_mnn"),
-#   mapping_seurat.dt[,c("id_rna","predicted.id")] %>% setnames("predicted.id","celltype_seurat"),
-#   by = c("id_rna")
-# )

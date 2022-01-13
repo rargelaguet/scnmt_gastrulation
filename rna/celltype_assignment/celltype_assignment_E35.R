@@ -17,9 +17,9 @@ args <- p$parse_args(commandArgs(TRUE))
 #####################
 
 ## START TEST ##
-args$sce <- paste0(io$basedir,"/processed/rna/SingleCellExperiment.rds")
-args$metadata <- file.path(io$basedir,"results/rna/qc/sample_metadata_after_qc.txt.gz")# io$metadata
-args$outdir <- paste0(io$basedir,"/results/rna/celltype_assignment/E3.5")
+# args$sce <- paste0(io$basedir,"/processed/rna/SingleCellExperiment.rds")
+# args$metadata <- file.path(io$basedir,"results/rna/qc/sample_metadata_after_qc.txt.gz")# io$metadata
+# args$outdir <- paste0(io$basedir,"/results/rna/celltype_assignment/E3.5")
 ## END TEST ##
 
 # I/O
@@ -27,7 +27,7 @@ dir.create(args$outdir, showWarnings=F, recursive=T)
 
 # Options
 opts$marker_genes <- list(
-  "ICM" = c("Eno1b","Col18a1","Stmn2","Lef1","Calcoco2"),
+  "ICM" = c("Eno1b", "Col18a1", "Stmn2", "Lef1", "Calcoco2")
 )
 
 ##########################
