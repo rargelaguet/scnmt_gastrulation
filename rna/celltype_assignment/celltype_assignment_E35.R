@@ -143,7 +143,7 @@ sample_metadata <- fread(args$metadata) %>%
 ##########
 
 to_save <- data.table(
-  id_rna = colnames(sce_filt),
+  id_rna = sample_metadata$id_rna,
   celltype = "ICM"
 )
 

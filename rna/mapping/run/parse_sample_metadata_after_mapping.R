@@ -18,10 +18,10 @@ args <- p$parse_args(commandArgs(TRUE))
 ###################
 
 ## START TEST ##
-args$metadata <- file.path(io$basedir,"results/rna/qc/sample_metadata_after_qc.txt.gz")
-# args$mapping_mnn <- file.path(io$basedir,sprintf("results/rna/mapping/mapping_mnn_%s.txt.gz",args$query_samples))
-args$mapping_mnn <- file.path(io$basedir,"results/rna/mapping/mapping_mnn_all_samples.txt.gz")
-args$outfile <- file.path(io$basedir,"results/rna/mapping/sample_metadata_after_mapping.txt.gz")
+# args$metadata <- file.path(io$basedir,"results/rna/qc/sample_metadata_after_qc.txt.gz")
+# # args$mapping_mnn <- file.path(io$basedir,sprintf("results/rna/mapping/mapping_mnn_%s.txt.gz",args$query_samples))
+# args$mapping_mnn <- file.path(io$basedir,"results/rna/mapping/mapping_mnn_all_samples.txt.gz")
+# args$outfile <- file.path(io$basedir,"results/rna/mapping/sample_metadata_after_mapping.txt.gz")
 ## END TEST ##
 
 ###################

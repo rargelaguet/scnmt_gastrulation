@@ -200,6 +200,25 @@ rule mapping_mnn_all_samples:
 #     shell:
 #         "Rscript {input.script} --metadata {input.query_metadata} --mapping_mnn {input.mapping_mnn} --outfile {output} > {log}"
 
+rule parse_mapping_results_all_samples:
+    input:
+        query_metadata = rules.qc.output,
+        # mapping_seurat = rules.mapping_seurat_all_samples.output,
+        mapping_mnn = rules.mapping_mnn_all_samples.output,
+        script = config["scripts"]["parse_mapping"]
+    output:
+        config["directories"]["results"]+"/rna/mapping/sample_metadata_after_mapping_all_samples.txt.gz"
+    conda:
+        "environment.yaml"
+    log: 
+        "logs/parse_mapping_results.log"
+    threads: 
+        config["slurm"]["parse_mapping_results"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["parse_mapping_results"]["memory"]
+    shell:
+        "Rscript {input.script} --metadata {input.query_metadata} --mapping_mnn {input.mapping_mnn} --outfile {output} > {log}"
+
 
 ##########################
 ## Celltype assignments ##
@@ -209,7 +228,7 @@ rule celltype_assignments_E45:
     input:
         metadata = rules.qc.output,
         sce = rules.seurat_to_sce.output,
-        script = config["scripts"]["parse_mapping"]
+        script = config["scripts"]["celltype_assignments_E45"]
     output:
         config["directories"]["results"]+"/rna/celltype_assignments/celltype_assignment_E45.txt.gz"
     conda:
@@ -221,25 +240,25 @@ rule celltype_assignments_E45:
     resources:
         mem_mb = config["slurm"]["celltype_assignments_E45"]["memory"]
     shell:
-        "Rscript {input.script} --metadata {input.query_metadata} --outfile {output} > {log}" 
+        "Rscript {input.script} --metadata {input.metadata} --outfile {output} > {log}" 
 
 
-rule parse_celltype_assignments:
-    input:
-        metadata = rules.parse_mapping_results.output,
-        script = config["scripts"]["parse_mapping"]
-    output:
-        config["directories"]["results"]+"/rna/celltype_assignments/sample_metadata_after_celltype_assignment.txt.gz"
-    conda:
-        "environment.yaml"
-    log: 
-        "logs/parse_celltype_assignments.log"
-    threads: 
-        config["slurm"]["parse_celltype_assignments"]["threads"]
-    resources:
-        mem_mb = config["slurm"]["parse_celltype_assignments"]["memory"]
-    shell:
-        "Rscript {input.script} --metadata {input.query_metadata} --outfile {output} > {log}" 
+# rule parse_celltype_assignments:
+#     input:
+#         metadata = rules.parse_mapping_results.output,
+#         script = config["scripts"]["parse_mapping"]
+#     output:
+#         config["directories"]["results"]+"/rna/celltype_assignments/sample_metadata_after_celltype_assignment.txt.gz"
+#     conda:
+#         "environment.yaml"
+#     log: 
+#         "logs/parse_celltype_assignments.log"
+#     threads: 
+#         config["slurm"]["parse_celltype_assignments"]["threads"]
+#     resources:
+#         mem_mb = config["slurm"]["parse_celltype_assignments"]["memory"]
+#     shell:
+#         "Rscript {input.script} --metadata {input.query_metadata} --outfile {output} > {log}" 
 
 ##############################
 ## Dimensionality reduction ##
