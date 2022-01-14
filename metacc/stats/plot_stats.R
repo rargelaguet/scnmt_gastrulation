@@ -23,8 +23,8 @@ args <- p$parse_args(commandArgs(TRUE))
 
 ## START TEST ##
 # args <- list()
-# args$metadata <- file.path(io$basedir,"results_new/met/stats/sample_metadata_after_met_stats.txt.gz")
-# args$outdir <- file.path(io$basedir,"results_new/met/stats/pdf")
+# args$metadata <- file.path(io$basedir,"results/met/stats/sample_metadata_after_met_stats.txt.gz")
+# args$outdir <- file.path(io$basedir,"results/met/stats/pdf")
 # args$context <- "CG"
 # args$celltype_label <- "celltype"
 ## END TEST ##
@@ -47,23 +47,25 @@ stopifnot(args$celltype_label%in%colnames(sample_metadata))
 if (args$context=="CG") {
   to.plot <- sample_metadata %>%
     .[!is.na(id_met)] %>%
-    .[,c("cell","plate","sample","celltype","nCG","met_rate")] %>% 
+    .[,c("cell","plate","sample","stage","celltype","nCG","met_rate")] %>% 
     setnames(c("nCG","met_rate"),c("N","rate"))
 } else if (args$context=="GC") {
   to.plot <- sample_metadata %>%
     .[!is.na(id_acc)] %>%
-    .[,c("cell","plate","sample","celltype","nGC","acc_rate")] %>% 
+    .[,c("cell","plate","sample","stage","celltype","nGC","acc_rate")] %>% 
     setnames(c("nGC","acc_rate"),c("N","rate"))
 }
 
-#######################################
-## Boxplots with coverage per sample ##
-#######################################
+color <- ifelse(args$context=="CG","#F8766D","#00BFC4")
+######################################
+## Boxplots with coverage per stage ##
+######################################
 
-p <- ggboxplot(to.plot, x = "sample", y = "N", outlier.shape=NA, fill="#F8766D", alpha=0.5) +
-  geom_jitter(alpha=0.75, fill="#F8766D", size=0.90, shape=21) +
+p <- ggboxplot(to.plot, x = "stage", y = "N", outlier.shape=NA, fill=color, alpha=0.75) +
+  geom_jitter(alpha=0.5, fill=color, size=0.75, shape=21, width=0.1) +
   yscale("log10", .format = TRUE) +
   labs(x="", y="Number of observations") +
+  guides(x = guide_axis(angle = 90)) +
   theme(
     axis.text.y = element_text(size=rel(0.80)),
     axis.text.x = element_text(size=rel(0.50))
@@ -77,9 +79,10 @@ dev.off()
 ## Boxplots with rate per sample ##
 ###################################
 
-p <- ggboxplot(to.plot, x = "sample", y = "rate", outlier.shape=NA, fill="#F8766D", alpha=0.5) +
-  geom_jitter(alpha=0.75, fill="#F8766D", size=0.90, shape=21) +
+p <- ggboxplot(to.plot, x = "sample", y = "rate", outlier.shape=NA, fill=color, alpha=0.75) +
+  geom_jitter(alpha=0.5, fill=color, size=0.75, shape=21, width=0.1) +
   labs(x="", y="Rate") +
+  guides(x = guide_axis(angle = 90)) +
   theme(
     axis.text.y = element_text(size=rel(0.80)),
     axis.text.x = element_text(size=rel(0.50))
@@ -95,20 +98,18 @@ dev.off()
 ######################################
 
 to.plot2 <- to.plot %>% 
-  .[,ko:=ifelse(grepl("KO",sample),"TET TKO","WT")] %>%
   .[!is.na(celltype)] %>% .[,N:=.N,by="celltype"] %>% .[N>=5] %>% 
   .[,celltype:=factor(celltype, levels=opts$celltypes[opts$celltypes%in%unique(celltype)])]
 
-p <- ggboxplot(to.plot2, x = "celltype", y = "rate", outlier.shape=NA, fill="celltype", alpha=0.5) +
-  geom_jitter(aes(fill=celltype), alpha=0.75, size=0.90, shape=21) +
-  facet_wrap(~ko, nrow=2, scales="fixed") + 
+p <- ggboxplot(to.plot2, x = "celltype", y = "rate", outlier.shape=NA, fill="celltype", alpha=0.75) +
+  geom_jitter(aes(fill=celltype), alpha=0.50, size=0.75, shape=21, width=0.1) +
   scale_fill_manual(values=opts$celltype.colors) +
   labs(x="", y="Rate") +
   guides(x = guide_axis(angle = 90)) +
   theme(
     legend.position = "none",
     axis.text.y = element_text(size=rel(0.80)),
-    axis.text.x = element_text(size=rel(0.65))
+    axis.text.x = element_text(size=rel(0.60))
   )
 
 pdf(file.path(args$outdir,sprintf("%s_rate_per_sample.pdf",args$context)), width=9, height=4.5)
@@ -121,14 +122,14 @@ dev.off()
 
 # to.plot[,m:=log2(((rate/100)+0.01)/(1-(rate/100)+0.01))]
 
-p <- ggscatter(to.plot, x="rate", y="N", size=1, color="plate") +
+p <- ggscatter(to.plot, x="rate", y="N", size=1) +
   yscale("log10", .format = TRUE) +
   # xscale("log10", .format = TRUE) +
   geom_smooth(method="lm", color="black") +
   labs(x="Rate", y="Number of observations") +
   theme_classic() +
   theme(
-    legend.position = "top",
+    legend.position = "none",
     legend.title = element_blank()
   )
 

@@ -95,7 +95,7 @@ scripts:
 params:
     qc_met:
         minimum_number_sites: 5000
-        min_rate: 50
+        min_rate: 0
         max_rate: 100
     qc_acc:
         minimum_number_sites: 10000

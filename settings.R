@@ -101,6 +101,7 @@ io$multiome.atac.pseudobulk.peakMatrix.se <- paste0(io$multiome.basedir,"/pseudo
 
 opts <- list()
 
+# TO-DO: ADD E8.5 CELL TYPES
 opts$stage_lineage <- c(
   "E3.5_ICM",
   "E4.5_Epiblast",
@@ -117,6 +118,7 @@ opts$stage_lineage <- c(
   "E7.5_Mesoderm"
 )
 
+# TO-DO: ADD E8.5 CELL TYPES
 opts$celltype_aggregated.colors <- c(
   "ICM" = "#C6E2FF",
   "Epiblast"="grey70",
@@ -129,6 +131,7 @@ opts$celltype_aggregated.colors <- c(
   "Primitive_endoderm"="#BC8F8F"
 )
 
+# TO-DO: ADD E8.5 CELL TYPES
 opts$stagelineage.colors <- c(
   "E3.5_ICM" = "#b63fba",
   "E4.5_Epiblast" = "#C1CDCD",
@@ -147,6 +150,8 @@ opts$stagelineage.colors <- c(
 )
 
 opts$celltypes = c(
+  "ICM",
+  "Primitive_endoderm",
   "Epiblast",
   "Primitive_Streak",
   "Caudal_epiblast",
@@ -187,6 +192,8 @@ opts$celltypes = c(
 )
 
 opts$celltype.colors = c(
+  "ICM" = "#C6E2FF",
+  "Primitive_endoderm" = "darkgreen",
   "Epiblast" = "#635547",
   "Primitive_Streak" = "#DABE99",
   "Caudal_epiblast" = "#9e6762",

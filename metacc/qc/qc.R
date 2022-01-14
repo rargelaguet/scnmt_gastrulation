@@ -27,9 +27,9 @@ args <- p$parse_args(commandArgs(TRUE))
 # args <- list()
 # args$metadata <- file.path(io$basedir,"results/met/stats/sample_metadata_after_met_stats.txt.gz")
 # args$context <- "CG"
-# args$minimum_number_sites <- 5e3; args$min_rate <- 50; args$max_rate <- 100 # CG
+# args$minimum_number_sites <- 5e3; args$min_rate <- 0; args$max_rate <- 100 # CG
 # # args$minimum_number_sites <- 1e4; args$min_rate <- 10; args$max_rate <- 40 # GC
-# args$outdir <- file.path(io$basedir,"results/acc/qc")
+# args$outdir <- file.path(io$basedir,"results/met/qc")
 ## END TEST ##
 
 # Sanity checks
@@ -88,19 +88,20 @@ if (args$context=="CG") {
 #########################################################
 
 if (args$context=="CG") {
-  to.plot <- sample_metadata %>% .[,mean(pass_metQC,na.rm=T), by=c("plate","sample")]
+  to.plot <- sample_metadata %>% .[!is.na(id_met)] %>% .[,mean(pass_metQC,na.rm=T), by=c("plate","sample")]
 } else if (args$context=="GC") {
-  to.plot <- sample_metadata %>% .[,mean(pass_accQC,na.rm=T), by=c("plate","sample")]
+  to.plot <- sample_metadata %>% .[!is.na(id_acc)]  %>% .[,mean(pass_accQC,na.rm=T), by=c("plate","sample")]
 }
 
 p <- ggbarplot(to.plot, x="plate", y="V1", fill="gray70") +
   # scale_fill_manual(values=opts$stage.colors) +
   labs(x="", y="Fraction of cells that pass QC") +
   # facet_wrap(~stage)
+  guides(x = guide_axis(angle = 90)) +
   theme(
     legend.position = "none",
     axis.text.y = element_text(colour="black",size=rel(0.8)),
-    axis.text.x = element_text(colour="black",size=rel(0.65), angle=20, hjust=1, vjust=1),
+    axis.text.x = element_text(colour="black",size=rel(0.65)),
   )
 
 pdf(file.path(args$outdir,sprintf("%s_passQC_barplot.pdf",args$context)), width=7, height=4.5)
@@ -121,16 +122,23 @@ to.plot.melted <- to.plot %>%
   .[,log10_N:=log10(N)] %>%
   melt(id.vars=c("plate","cell","sample"), measure.vars=c("log10_N","rate")) 
 
+# tmp <- data.table(
+#   variable = c("log10_N", "rate","rate"),
+#   value = c(log10(args$minimum_number_sites), args$min_rate, args$max_rate)
+# )
+
 p <- ggplot(to.plot.melted, aes_string(x="plate", y="value")) +
-    geom_jitter(size=1, alpha=0.5) +
+    geom_jitter(size=0.5, alpha=0.5, width=0.1) +
     geom_boxplot(outlier.shape=NA, coef=1, fill="gray70", alpha=0.8) +
     facet_wrap(~variable, scales="free_y", nrow=1, labeller = as_labeller(c("log10_N"="Num. of observations", "rate"="Rate"))) +
+    # geom_hline(aes(yintercept=value), linetype="dashed", data=tmp) + 
+    guides(x = guide_axis(angle = 90)) +
     # scale_fill_manual(values=opts$stage.colors) +
     labs(x="", y="") +
     theme_classic() +
     theme(
         axis.text.y = element_text(colour="black",size=rel(1)),
-        axis.text.x = element_text(colour="black",size=rel(0.65), angle=20, hjust=1, vjust=1),
+        axis.text.x = element_text(colour="black",size=rel(0.50)),
         axis.title.x = element_blank()
     )
 

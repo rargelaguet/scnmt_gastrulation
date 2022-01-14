@@ -27,13 +27,13 @@ rule all:
     input: 
         config["directories"]["results"]+"/met/stats/sample_metadata_after_met_stats.txt.gz",
         config["directories"]["results"]+"/acc/stats/sample_metadata_after_acc_stats.txt.gz",
+        config["directories"]["results"]+"/met/stats/met_stats_per_chr.txt.gz",
+        config["directories"]["results"]+"/acc/stats/acc_stats_per_chr.txt.gz",
         config["directories"]["results"]+"/met/stats/pdf/CG_coverage_per_sample.pdf",
         config["directories"]["results"]+"/acc/stats/pdf/GC_coverage_per_sample.pdf",
         config["directories"]["results"]+"/met/qc/sample_metadata_after_met_qc.txt.gz",
         config["directories"]["results"]+"/acc/qc/sample_metadata_after_acc_qc.txt.gz",
-        config["directories"]["results"]+"/metacc/qc/sample_metadata_after_metacc_qc.txt.gz",
-        config["directories"]["results"]+"/met/stats/met_stats_per_chr.txt.gz",
-        config["directories"]["results"]+"/acc/stats/acc_stats_per_chr.txt.gz"
+        config["directories"]["results"]+"/metacc/qc/sample_metadata_after_metacc_qc.txt.gz"
         # expand(config["directories"]["processed_data"]+"/met/feature_level/{genomic_context}.tsv.gz", genomic_context=config["genomic_contexts"]),
         # expand(config["directories"]["processed_data"]+"/acc/feature_level/{genomic_context}.tsv.gz", genomic_context=config["genomic_contexts"]),
         # expand(config["directories"]["results"]+"/metacc/boxplots_feature_level/boxplots_metacc_{genomic_context}.pdf", genomic_context=config["genomic_contexts"]),
@@ -69,7 +69,7 @@ rule calculate_global_stats_per_cell_met:
     resources:
         mem_mb = config["slurm"]["calculate_global_stats_per_cell"]["memory"]
     shell:
-        "Rscript {input.script} --metadata {input.metadata}  --indir {input.indir} --context CG --outfile {output} --test > {log}"
+        "Rscript {input.script} --metadata {input.metadata}  --indir {input.indir} --context CG --outfile {output}  > {log}"
 
 rule calculate_global_stats_per_cell_acc:
     input:
@@ -85,7 +85,7 @@ rule calculate_global_stats_per_cell_acc:
     resources:
         mem_mb = config["slurm"]["calculate_global_stats_per_cell"]["memory"]
     shell:
-        "Rscript {input.script} --metadata {input.metadata}  --indir {input.indir} --context GC --outfile {output} --test > {log}"
+        "Rscript {input.script} --metadata {input.metadata}  --indir {input.indir} --context GC --outfile {output}  > {log}"
 
 #########################################
 ## Calculate per chromosome statistics ##
@@ -104,7 +104,7 @@ rule calculate_chr_stats_per_cell_met:
     resources:
         mem_mb = config["slurm"]["calculate_chr_stats_per_cell"]["memory"]
     shell:
-        "Rscript {input.script}  --indir {input.indir} --context CG --outfile {output} --test  > {log}"
+        "Rscript {input.script}  --indir {input.indir} --context CG --outfile {output}   > {log}"
 
 rule calculate_chr_stats_per_cell_acc:
     input:
@@ -119,7 +119,7 @@ rule calculate_chr_stats_per_cell_acc:
     resources:
         mem_mb = config["slurm"]["calculate_chr_stats_per_cell"]["memory"]
     shell:
-        "Rscript {input.script}  --indir {input.indir} --context GC --outfile {output} --test  > {log}"
+        "Rscript {input.script}  --indir {input.indir} --context GC --outfile {output}   > {log}"
 
 #####################################
 ## Plot global statistics per cell ##
