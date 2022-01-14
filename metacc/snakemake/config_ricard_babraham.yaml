@@ -143,7 +143,7 @@ slurm:  # memory in MB
         memory: 15000
         threads: 1
     calculate_chr_stats_per_cell: 
-        memory: 15000
+        memory: 35000
         threads: 1
     plot_global_stats_per_cell: 
         memory: 3000

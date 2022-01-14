@@ -69,7 +69,7 @@ rule calculate_global_stats_per_cell_met:
     resources:
         mem_mb = config["slurm"]["calculate_global_stats_per_cell"]["memory"]
     shell:
-        "Rscript {input.script} --metadata {input.metadata}  --indir {input.indir} --context CG --outfile {output} > {log}"
+        "Rscript {input.script} --metadata {input.metadata}  --indir {input.indir} --context CG --outfile {output} --test > {log}"
 
 rule calculate_global_stats_per_cell_acc:
     input:
@@ -85,7 +85,7 @@ rule calculate_global_stats_per_cell_acc:
     resources:
         mem_mb = config["slurm"]["calculate_global_stats_per_cell"]["memory"]
     shell:
-        "Rscript {input.script} --metadata {input.metadata}  --indir {input.indir} --context GC --outfile {output} > {log}"
+        "Rscript {input.script} --metadata {input.metadata}  --indir {input.indir} --context GC --outfile {output} --test > {log}"
 
 #########################################
 ## Calculate per chromosome statistics ##
@@ -104,7 +104,7 @@ rule calculate_chr_stats_per_cell_met:
     resources:
         mem_mb = config["slurm"]["calculate_chr_stats_per_cell"]["memory"]
     shell:
-        "Rscript {input.script}  --indir {input.indir} --context CG --outfile {output}  > {log}"
+        "Rscript {input.script}  --indir {input.indir} --context CG --outfile {output} --test  > {log}"
 
 rule calculate_chr_stats_per_cell_acc:
     input:
@@ -119,7 +119,7 @@ rule calculate_chr_stats_per_cell_acc:
     resources:
         mem_mb = config["slurm"]["calculate_chr_stats_per_cell"]["memory"]
     shell:
-        "Rscript {input.script}  --indir {input.indir} --context GC --outfile {output}  > {log}"
+        "Rscript {input.script}  --indir {input.indir} --context GC --outfile {output} --test  > {log}"
 
 #####################################
 ## Plot global statistics per cell ##

@@ -24,12 +24,12 @@ args <- p$parse_args(commandArgs(TRUE))
 #####################
 
 ## START TEST ##
-args <- list()
-args$metadata <- file.path(io$basedir,"results/met/stats/sample_metadata_after_met_stats.txt.gz")
-args$context <- "CG"
-args$minimum_number_sites <- 5e3; args$min_rate <- 50; args$max_rate <- 100 # CG
-# args$minimum_number_sites <- 1e4; args$min_rate <- 10; args$max_rate <- 40 # GC
-args$outdir <- file.path(io$basedir,"results/acc/qc")
+# args <- list()
+# args$metadata <- file.path(io$basedir,"results/met/stats/sample_metadata_after_met_stats.txt.gz")
+# args$context <- "CG"
+# args$minimum_number_sites <- 5e3; args$min_rate <- 50; args$max_rate <- 100 # CG
+# # args$minimum_number_sites <- 1e4; args$min_rate <- 10; args$max_rate <- 40 # GC
+# args$outdir <- file.path(io$basedir,"results/acc/qc")
 ## END TEST ##
 
 # Sanity checks

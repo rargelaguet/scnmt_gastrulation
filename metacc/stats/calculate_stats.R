@@ -32,12 +32,14 @@ args <- p$parse_args(commandArgs(TRUE))
 # args$test <- TRUE
 ## END TEST ##
 
+# I/O
+dir.create(dirname(args$outfile), showWarnings=F)
+
 # Sanity checks
 stopifnot(args$context %in% c("CG","GC"))
 
 # Define cells
 opts$cells <- list.files(args$indir, pattern = "*.tsv.gz") %>% gsub(".tsv.gz","",.)
-
 if (args$test) opts$cells <- head(opts$cells,n=5)
 
 ###################
