@@ -128,7 +128,8 @@ scripts:
     celltype_assignment_E35: ../celltype_assignment/celltype_assignment_E35.R
     celltype_assignment_E45: ../celltype_assignment/celltype_assignment_E45.R
     celltype_assignment_E55: ../celltype_assignment/celltype_assignment_E55.R
-
+    parse_celltype_assignments: ../celltype_assignment/parse_celltype_assignments.R
+    rename_celltypes: ../celltype_assignment/rename_celltypes.R
 
 
 ################
@@ -160,7 +161,7 @@ params:
         
     dimensionality_reduction_sce:
         npcs: 30
-        features: 1000
+        features: 2500
         n_neighbors: 25
         min_dist: 0.3
         vars_to_regress: ["nFeature_RNA","mit_percent_RNA"]
@@ -169,7 +170,7 @@ params:
 
     dimensionality_reduction_seurat:
         npcs: 30
-        features: 1000
+        features: 2500
         n_neighbors: 25
         min_dist: 0.3
         seed: 42
@@ -254,5 +255,11 @@ slurm:  # memory in MB
         memory: 5000
         threads: 1
     celltype_assignment_E55:
+        memory: 5000
+        threads: 1
+    parse_celltype_assignments:
+        memory: 5000
+        threads: 1
+    rename_celltypes:
         memory: 5000
         threads: 1

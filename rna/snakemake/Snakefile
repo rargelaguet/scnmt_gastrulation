@@ -35,9 +35,10 @@ rule all:
         config["directories"]["results"]+"/rna/mapping/sample_metadata_after_mapping_all_samples.txt.gz",
         config["directories"]["results"]+"/rna/celltype_assignment/E3.5/celltype_assignment_E35.txt.gz",
         config["directories"]["results"]+"/rna/celltype_assignment/E4.5/celltype_assignment_E45.txt.gz",
-        config["directories"]["results"]+"/rna/celltype_assignment/E5.5/celltype_assignment_E55.txt.gz"
-        # config["directories"]["results"]+"/rna/celltype_assignment/sample_metadata_after_celltype_rename.txt.gz"
-        # expand("%s/rna/mapping/pdf/umap_mapped_allcells.pdf" % config["directories"]["results"]),
+        config["directories"]["results"]+"/rna/celltype_assignment/E5.5/celltype_assignment_E55.txt.gz",
+        config["directories"]["results"]+"/rna/celltype_assignment/sample_metadata_after_celltype_assignment.txt.gz",
+        config["directories"]["results"]+"/rna/celltype_assignment/sample_metadata_after_celltype_rename.txt.gz",
+        config["directories"]["results"]+"/rna/mapping/pdf/completed.txt",
         # expand("%s/rna/celltype_proportions/per_sample/celltype_proportions_{sample}.pdf" % config["directories"]["results"], sample=config["samples"]),
         # expand("%s/rna/pseudobulk/SingleCellExperiment_pseudobulk_{group_by}.rds" % config["directories"]["results"], group_by=config["params"]["pseudobulk_rna"]["group_by"]),
         # expand("%s/rna/pseudobulk/Seurat_pseudobulk_{group_by}.rds" % config["directories"]["results"], group_by=config["params"]["pseudobulk_rna"]["group_by"])
@@ -289,32 +290,30 @@ rule celltype_assignment_E55:
         "Rscript {input.script} --metadata {input.metadata} --sce {input.sce} --outdir {params.outdir} > {log}" 
 
 
-# rule parse_celltype_assignment:
-#     input:
-#         metadata = rules.parse_mapping_results.output,
-#         script = config["scripts"]["parse_mapping"]
-#     output:
-#         config["directories"]["results"]+"/rna/celltype_assignment/sample_metadata_after_celltype_assignment.txt.gz"
-#     conda:
-#         "environment.yaml"
-#     log: 
-#         "logs/parse_celltype_assignment.log"
-#     threads: 
-#         config["slurm"]["parse_celltype_assignment"]["threads"]
-#     resources:
-#         mem_mb = config["slurm"]["parse_celltype_assignment"]["memory"]
-#     shell:
-#         "Rscript {input.script} --metadata {input.query_metadata} --outfile {output} > {log}" 
+rule parse_celltype_assignments:
+    input:
+        metadata = rules.parse_mapping_results_all_samples.output,
+        celltype_assignments = [rules.celltype_assignment_E35.output, rules.celltype_assignment_E45.output, rules.celltype_assignment_E55.output],
+        script = config["scripts"]["parse_celltype_assignments"]
+    output:
+        config["directories"]["results"]+"/rna/celltype_assignment/sample_metadata_after_celltype_assignment.txt.gz"
+    conda:
+        "environment.yaml"
+    log: 
+        "logs/parse_celltype_assignments.log"
+    threads: 
+        config["slurm"]["parse_celltype_assignments"]["threads"]
+    resources:
+        mem_mb = config["slurm"]["parse_celltype_assignments"]["memory"]
+    shell:
+        "Rscript {input.script} --metadata {input.metadata} --celltype_assignments {input.celltype_assignments} --outfile {output} > {log}" 
 
 rule rename_celltypes:
     input:
-        metadata = rules.qc.output,
-        sce = rules.seurat_to_sce.output,
+        metadata = rules.parse_celltype_assignments.output,
         script = config["scripts"]["rename_celltypes"]
     output:
-    config["directories"]["results"]+"/rna/celltype_assignment/sample_metadata_after_celltype_rename.txt.gz"
-    params:
-        outdir = config["directories"]["results"]+"/rna/celltype_assignment/E5.5"
+        config["directories"]["results"]+"/rna/celltype_assignment/sample_metadata_after_celltype_rename.txt.gz"
     conda:
         "environment.yaml"
     log: 
@@ -324,7 +323,7 @@ rule rename_celltypes:
     resources:
         mem_mb = config["slurm"]["rename_celltypes"]["memory"]
     shell:
-        "Rscript {input.script} --metadata {input.metadata} --sce {input.sce} --outdir {params.outdir} > {log}" 
+        "Rscript {input.script} --metadata {input.metadata} --outfile {output} > {log}" 
 
 
 ##############################
@@ -430,9 +429,9 @@ rule plot_mapping_results:
         query_metadata=rules.parse_mapping_results_all_samples.output,
         atlas_metadata = config["directories"]["atlas"]+"/sample_metadata.txt.gz"
     output:
-        config["directories"]["results"]+"/rna/mapping/pdf/umap_mapped_allcells.pdf"
+        config["directories"]["results"]+"/rna/mapping/pdf/completed.txt"
     params:
-        plates = expand("{plate}", plate=config["plates"]),
+        stages = expand("{stage}", plate=config["stages"]),
         outdir = config["directories"]["results"]+"/rna/mapping/pdf"
     conda:
         "environment.yaml"
@@ -444,7 +443,7 @@ rule plot_mapping_results:
         mem_mb = config["slurm"]["plot_mapping_results"]["memory"]        
     shell:
         "Rscript {input.script} --query_metadata {input.query_metadata} --atlas_metadata {input.atlas_metadata} \
-        --samples {params.plates} --outdir {params.outdir} > {log}"
+        --stages {params.stages} --outdir {params.outdir} > {log}"
 
 ################################
 ## Plot cell type proportions ##

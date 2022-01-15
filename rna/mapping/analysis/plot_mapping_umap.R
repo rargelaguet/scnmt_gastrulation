@@ -1,4 +1,4 @@
-here::i_am("mapping/analysis/plot_mapping_umap.R")
+here::i_am("rna/mapping/analysis/plot_mapping_umap.R")
 
 source(here::here("settings.R"))
 
@@ -15,14 +15,14 @@ p$add_argument('--outdir',          type="character",                           
 args <- p$parse_args(commandArgs(TRUE))
 
 ## START TEST ##
-args$query_metadata <- file.path(io$basedir,"results_new/rna/mapping/sample_metadata_after_mapping.txt.gz")
-args$atlas_metadata <- file.path(io$atlas.basedir,"sample_metadata.txt.gz")
-args$outdir <- file.path(io$basedir,"results_new/rna/mapping/pdf")
+# args$query_metadata <- file.path(io$basedir,"results_new/rna/mapping/sample_metadata_after_mapping.txt.gz")
+# args$atlas_metadata <- file.path(io$atlas.basedir,"sample_metadata.txt.gz")
+# args$outdir <- file.path(io$basedir,"results_new/rna/mapping/pdf")
 ## END TEST ##
 
 dir.create(args$outdir, showWarnings = F)
-dir.create(file.path(args$outdir,"per_sample"), showWarnings = F)
-dir.create(file.path(args$outdir,"per_class"), showWarnings = F)
+# dir.create(file.path(args$outdir,"per_sample"), showWarnings = F)
+dir.create(file.path(args$outdir,"per_stage"), showWarnings = F)
 
 #####################
 ## Define settings ##
@@ -49,11 +49,9 @@ sample_metadata <- fread(args$query_metadata) %>%
   # .[pass_rnaQC==TRUE & doublet_call==FALSE & !is.na(closest.cell)]
   .[pass_rnaQC==TRUE & !is.na(closest.cell)]
 
-stopifnot("closest.cell"%in%colnames(sample_metadata))
-
 if (opts$remove_ExE_cells) {
   sample_metadata <- sample_metadata %>%
-    .[!celltype.mapped%in%c("Visceral_endoderm","ExE_endoderm","ExE_ectoderm","Parietal_endoderm")]
+    .[!celltype%in%c("Visceral_endoderm","ExE_endoderm","ExE_ectoderm","Parietal_endoderm")]
 }
 
 ################
@@ -138,40 +136,40 @@ plot.dimred <- function(plot_df, query.label, atlas.label = "Atlas") {
 ## Plot one sample at a time ##
 ###############################
 
-samples.to.plot <- unique(sample_metadata$sample)
+# samples.to.plot <- unique(sample_metadata$sample)
 
-for (i in samples.to.plot) {
+# for (i in samples.to.plot) {
   
-  to.plot <- umap.dt %>% copy %>%
-    .[,index:=match(cell, sample_metadata[sample==i,closest.cell] )] %>% 
-    .[,mapped:=as.factor(!is.na(index))] %>% 
-    .[,mapped:=plyr::mapvalues(mapped, from = c("FALSE","TRUE"), to = c("Atlas",i))] %>%
-    setorder(mapped) 
+#   to.plot <- umap.dt %>% copy %>%
+#     .[,index:=match(cell, sample_metadata[sample==i,closest.cell] )] %>% 
+#     .[,mapped:=as.factor(!is.na(index))] %>% 
+#     .[,mapped:=plyr::mapvalues(mapped, from = c("FALSE","TRUE"), to = c("Atlas",i))] %>%
+#     setorder(mapped) 
   
-  p <- plot.dimred(to.plot, query.label = i, atlas.label = "Atlas")
+#   p <- plot.dimred(to.plot, query.label = i, atlas.label = "Atlas")
   
-  pdf(sprintf("%s/per_sample/umap_mapped_%s.pdf",args$outdir,i), width=8, height=6.5)
-  print(p)
-  dev.off()
-}
+#   pdf(sprintf("%s/per_sample/umap_mapped_%s.pdf",args$outdir,i), width=8, height=6.5)
+#   print(p)
+#   dev.off()
+# }
 
 ###############################
-## Plot one class at a time ##
+## Plot one stage at a time ##
 ###############################
 
-classes.to.plot <- unique(sample_metadata$class)
+classes.to.plot <- unique(sample_metadata$stage)
 
 for (i in classes.to.plot) {
   
   to.plot <- umap.dt %>% copy %>%
-    .[,index:=match(cell, sample_metadata[class==i,closest.cell] )] %>% 
+    .[,index:=match(cell, sample_metadata[stage==i,closest.cell] )] %>% 
     .[,mapped:=as.factor(!is.na(index))] %>% 
     .[,mapped:=plyr::mapvalues(mapped, from = c("FALSE","TRUE"), to = c("Atlas",i))] %>%
     setorder(mapped) 
   
   p <- plot.dimred(to.plot, query.label = i, atlas.label = "Atlas") + theme(legend.position = "none")
   
-  pdf(sprintf("%s/per_class/umap_mapped_%s.pdf",args$outdir,i), width=8, height=6.5)
+  pdf(sprintf("%s/per_stage/umap_mapped_%s.pdf",args$outdir,i), width=8, height=6.5)
   print(p)
   dev.off()
 }
@@ -179,40 +177,3 @@ for (i in classes.to.plot) {
 # Completion token
 file.create(file.path(args$outdir,"completed.txt"))
 
-
-
-##########
-## TEST ##
-##########
-
-samples.to.plot <- c(
-  "E7.5_WT",
-  "E7.5_TET_TKO",
-  # "E7.5_TET_TKO_crispr",
-  "E8.5_WT",
-  "E8.5_WT_CD41+",
-  "E8.5_WT_KDR+",
-  "E8.5_WT_KDR+_CD41+",
-  "E8.5_TET_TKO",
-  "E8.5_TET_TKO_KDR+",
-  "E8.5_TET_TKO_CD41+",
-  "E8.5_TET_TKO_KDR+_CD41+"
-)
-# samples.to.plot <- unique(sample_metadata$sample)
-
-to.plot <- samples.to.plot %>% map(function(i) {
-  umap.dt %>% copy %>%
-    .[,index:=match(cell, sample_metadata[sample==i,closest.cell] )] %>% 
-    .[,mapped:=as.factor(!is.na(index))] %>% 
-    .[,mapped:=plyr::mapvalues(mapped, from = c("FALSE","TRUE"), to = c("Atlas","Query"))] %>%
-    .[,sample:=i] %>%
-    setorder(mapped)
-}) %>% rbindlist %>% .[,sample:=factor(sample,levels=samples.to.plot)]
-
-p <- plot.dimred(to.plot, query.label = "Query", atlas.label = "Atlas") + 
-  facet_wrap(~sample, ncol=2) +
-  theme(legend.position = "none") 
-
-pdf(file.path(args$outdir,"per_class/umap_mapped_all_classes.pdf"), width=6, height=12)
-print(p)
-dev.off()

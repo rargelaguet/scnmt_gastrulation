@@ -65,13 +65,13 @@ p <- ggboxplot(to.plot, x = "stage", y = "N", outlier.shape=NA, fill=color, alph
   geom_jitter(alpha=0.5, fill=color, size=0.75, shape=21, width=0.1) +
   yscale("log10", .format = TRUE) +
   labs(x="", y="Number of observations") +
-  guides(x = guide_axis(angle = 90)) +
+  # guides(x = guide_axis(angle = 90)) +
   theme(
     axis.text.y = element_text(size=rel(0.80)),
     axis.text.x = element_text(size=rel(0.50))
   )
 
-pdf(file.path(args$outdir,sprintf("%s_coverage_per_sample.pdf",args$context)), width=9, height=4.5)
+pdf(file.path(args$outdir,sprintf("%s_coverage_per_stage",args$context)), width=9, height=4.5)
 print(p)
 dev.off()
 
@@ -112,7 +112,7 @@ p <- ggboxplot(to.plot2, x = "celltype", y = "rate", outlier.shape=NA, fill="cel
     axis.text.x = element_text(size=rel(0.60))
   )
 
-pdf(file.path(args$outdir,sprintf("%s_rate_per_sample.pdf",args$context)), width=9, height=4.5)
+pdf(file.path(args$outdir,sprintf("%s_rate_per_celltype.pdf",args$context)), width=9, height=4.5)
 print(p)
 dev.off()
 

@@ -17,12 +17,13 @@ args <- p$parse_args(commandArgs(TRUE))
 ###################
 
 ## START TEST ##
-args$celltype_assignments <- c(
-	file.path(io$basedir,"results/rna/celltype_assignment/E.5/celltype_assignment_E35.txt.gz"),
-	file.path(io$basedir,"results/rna/celltype_assignment/E4.5/celltype_assignment_E45.txt.gz"),
-	file.path(io$basedir,"results/rna/celltype_assignment/E5.5/celltype_assignment_E55.txt.gz")
-)
-args$outfile <- file.path(io$basedir,"results/rna/celltype_assignment/sample_metadata_after_celltype_assignment.txt.gz")
+# args$metadata <- file.path(io$basedir,"results/rna/mapping/sample_metadata_after_mapping_all_samples.txt.gz")
+# args$celltype_assignments <- c(
+# 	file.path(io$basedir,"results/rna/celltype_assignment/E3.5/celltype_assignment_E35.txt.gz"),
+# 	file.path(io$basedir,"results/rna/celltype_assignment/E4.5/celltype_assignment_E45.txt.gz"),
+# 	file.path(io$basedir,"results/rna/celltype_assignment/E5.5/celltype_assignment_E55.txt.gz")
+# )
+# args$outfile <- file.path(io$basedir,"results/rna/celltype_assignment/sample_metadata_after_celltype_assignment.txt.gz")
 ## END TEST ##
 
 ###################
@@ -32,19 +33,25 @@ args$outfile <- file.path(io$basedir,"results/rna/celltype_assignment/sample_met
 sample_metadata <- fread(args$metadata)
 
 ###############
-## Load data ##s
+## Load data ##
 ###############
 
 celltype_assignments.dt <- args$celltype_assignments %>% map(~ fread(.)) %>% rbindlist
-stopifnot(mapping_mnn.dt$id_rna%in%sample_metadata$id_rna)
-
-# .[,c("celltype.mapped","celltype.score","closest.cell"):=as.character(NA)] 
+stopifnot(celltype_assignments.dt$id_rna%in%sample_metadata$id_rna)
 
 ###########
 ## Merge ##
 ###########
 
-to.save <- sample_metadata %>% merge(mapping_mnn.dt, by="id_rna")
+sample_metadata.A <- sample_metadata[id_rna%in%celltype_assignments.dt$id_rna] %>%
+  .[,celltype:=NULL] %>% merge(celltype_assignments.dt, by="id_rna")
+sample_metadata.B <- sample_metadata[!id_rna%in%celltype_assignments.dt$id_rna]
+
+to.save <- rbind(sample_metadata.A[,colnames(sample_metadata.B),with=F],sample_metadata.B) %>% setorder(stage)
+
+# Sanity checks
+stopifnot(!is.na(to.save[pass_rnaQC==TRUE,celltype]))
+stopifnot(sort(sample_metadata$id_rna)==sort(to.save$id_rna))
 
 #################
 ## Save output ##
