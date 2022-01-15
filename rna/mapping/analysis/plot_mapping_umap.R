@@ -8,7 +8,7 @@ source(here::here("settings.R"))
 
 p <- ArgumentParser(description='')
 p$add_argument('--query_metadata',        type="character",                               help='Cell metadata (after mapping)')
-# p$add_argument('--samples',         type="character",       nargs="+",   help='Samples')
+p$add_argument('--stages',         type="character",       nargs="+",   help='Samples')
 p$add_argument('--atlas_metadata',        type="character",                               help='Cell metadata (after mapping)')
 p$add_argument('--outdir',          type="character",                               help='Output file')
 
@@ -47,7 +47,7 @@ opts$subset_atlas_cells <- TRUE
 
 sample_metadata <- fread(args$query_metadata) %>%
   # .[pass_rnaQC==TRUE & doublet_call==FALSE & !is.na(closest.cell)]
-  .[pass_rnaQC==TRUE & !is.na(closest.cell)]
+  .[pass_rnaQC==TRUE & stage%in%args$stages & !is.na(closest.cell)]
 
 if (opts$remove_ExE_cells) {
   sample_metadata <- sample_metadata %>%

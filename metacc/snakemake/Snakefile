@@ -33,22 +33,21 @@ rule all:
         config["directories"]["results"]+"/acc/stats/pdf/GC_coverage_per_sample.pdf",
         config["directories"]["results"]+"/met/qc/sample_metadata_after_met_qc.txt.gz",
         config["directories"]["results"]+"/acc/qc/sample_metadata_after_acc_qc.txt.gz",
-        config["directories"]["results"]+"/metacc/qc/sample_metadata_after_metacc_qc.txt.gz"
-        # expand(config["directories"]["processed_data"]+"/met/feature_level/{genomic_context}.tsv.gz", genomic_context=config["genomic_contexts"]),
-        # expand(config["directories"]["processed_data"]+"/acc/feature_level/{genomic_context}.tsv.gz", genomic_context=config["genomic_contexts"]),
+        config["directories"]["results"]+"/metacc/qc/sample_metadata_after_metacc_qc.txt.gz",
+        expand(config["directories"]["processed_data"]+"/met/feature_level/{genomic_context}.tsv.gz", genomic_context=config["genomic_contexts"]),
+        expand(config["directories"]["processed_data"]+"/acc/feature_level/{genomic_context}.tsv.gz", genomic_context=config["genomic_contexts"]),
         # expand(config["directories"]["results"]+"/metacc/boxplots_feature_level/boxplots_metacc_{genomic_context}.pdf", genomic_context=config["genomic_contexts"]),
-        # # expand(config["directories"]["processed_data"]+"/met/cpg_level/pseudobulk/{pseudobulk_group_by}/completed.txt", pseudobulk_group_by=config["params"]["pseudobulk"]["group_by"]),
-        # # expand(config["directories"]["processed_data"]+"/acc/gpc_level/pseudobulk/{pseudobulk_group_by}/completed.txt", pseudobulk_group_by=config["params"]["pseudobulk"]["group_by"]),
-        # expand(config["directories"]["processed_data"]+"/met/cpg_level/pseudobulk/{pseudobulk_group_by}", pseudobulk_group_by=config["params"]["pseudobulk"]["group_by"]),
-        # expand(config["directories"]["processed_data"]+"/acc/gpc_level/pseudobulk/{pseudobulk_group_by}", pseudobulk_group_by=config["params"]["pseudobulk"]["group_by"]),
-        # config["directories"]["results"]+"/metacc/profiles/tss/precomputed_metacc_prom_200_200.txt.gz",
-        # # config["directories"]["results"]+"/metacc/profiles/multiome_peaks/precomputed_metacc_multiome_peaks.txt.gz",
-        # # config["directories"]["results"]+"/metacc/tss_profiles/pdf/CG_ratio_vs_GC_ratio_coloured_by_nCG.pdf",
+        # expand(config["directories"]["processed_data"]+"/met/cpg_level/pseudobulk/{pseudobulk_group_by}/completed.txt", pseudobulk_group_by=config["params"]["pseudobulk"]["group_by"]),
+        # expand(config["directories"]["processed_data"]+"/acc/gpc_level/pseudobulk/{pseudobulk_group_by}/completed.txt", pseudobulk_group_by=config["params"]["pseudobulk"]["group_by"]),
+        expand(config["directories"]["processed_data"]+"/met/cpg_level/pseudobulk/{pseudobulk_group_by}", pseudobulk_group_by=config["params"]["pseudobulk"]["group_by"]),
+        expand(config["directories"]["processed_data"]+"/acc/gpc_level/pseudobulk/{pseudobulk_group_by}", pseudobulk_group_by=config["params"]["pseudobulk"]["group_by"]),
+        config["directories"]["results"]+"/metacc/profiles/tss/precomputed_metacc_prom_200_200.txt.gz",
+        # config["directories"]["results"]+"/metacc/profiles/multiome_peaks/precomputed_metacc_multiome_peaks.txt.gz",
         # expand(config["directories"]["processed_data"]+"/met/bigwig/{pseudobulk_group_by}/completed.txt", pseudobulk_group_by=config["params"]["pseudobulk"]["group_by"]),
         # expand(config["directories"]["processed_data"]+"/acc/bigwig/{pseudobulk_group_by}/completed.txt", pseudobulk_group_by=config["params"]["pseudobulk"]["group_by"]),
-        # config["directories"]["results"]+"/metrna/coupling/precomputed_metrna_coupling.txt.gz",
-        # config["directories"]["results"]+"/metacc/coupling/precomputed_metacc_coupling.txt.gz",
-        # config["directories"]["results"]+"/accrna/coupling/precomputed_accrna_coupling.txt.gz"
+        config["directories"]["results"]+"/metrna/coupling/precomputed_metrna_coupling.txt.gz",
+        config["directories"]["results"]+"/metacc/coupling/precomputed_metacc_coupling.txt.gz",
+        config["directories"]["results"]+"/accrna/coupling/precomputed_accrna_coupling.txt.gz"
     
 
 #################################
@@ -313,7 +312,7 @@ rule calculate_tss_profiles:
         mem_mb = config["slurm"]["quantify_feature_level"]["memory"]
     shell:
         "Rscript {input.script} --met_tile {params.met_tile} --acc_tile {params.acc_tile} --window_size {params.window_size} --metadata {input.metadata} \
-        --anno prom_200_200 --outfile {output} > {log}"
+        --anno prom_200_200 --outfile {output} --test > {log}"
 
 
 rule calculate_profiles_multiome_peaks:
@@ -496,7 +495,7 @@ rule calculate_metacc_coupling:
     shell:
         "Rscript {input.script} --metadata {input.metadata} --tss {input.tss_file} \
         --up {params.up} --down {params.down} --window {params.window} --tile {params.tile} \
-        --outfile {output} > {log}"
+        --outfile {output} --test > {log}"
 
 rule calculate_metrna_coupling:
     input:
@@ -519,7 +518,7 @@ rule calculate_metrna_coupling:
         mem_mb = config["slurm"]["metrna_coupling"]["memory"]
     shell:
         "Rscript {input.script} --sce {input.sce} --metadata {input.metadata} --tss {input.tss_file} \
-        --up {params.up} --down {params.down} --window {params.window} --tile {params.tile} \
+        --up {params.up} --down {params.down} --window {params.window} --tile {params.tile} --test \
         --outfile {output} > {log}"
 
 # rule plot_metrna_coupling:
@@ -561,7 +560,7 @@ rule calculate_accrna_coupling:
         mem_mb = config["slurm"]["accrna_coupling"]["memory"]
     shell:
         "Rscript {input.script} --sce {input.sce} --metadata {input.metadata} --tss {input.tss_file} \
-        --up {params.up} --down {params.down} --window {params.window} --tile {params.tile} \
+        --up {params.up} --down {params.down} --window {params.window} --tile {params.tile} --test \
         --outfile {output} > {log}"
 
 ####################

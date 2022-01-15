@@ -19,9 +19,9 @@ p$add_argument('--colour_by',       type="character",  default="celltype",  narg
 p$add_argument('--remove_ExE_cells', action="store_true",                                 help='Remove ExE cells?')
 p$add_argument('--seed',            type="integer",    default=42,                  help='Random seed')
 p$add_argument('--outdir',          type="character",                               help='Output file')
-# p$add_argument('--samples',         type="character",                nargs='+',     help='Samples')
 p$add_argument('--vars_to_regress', type="character",                nargs='+',     help='Metadata columns to regress out')
 p$add_argument('--batch_correction',type="character",                               help='Metadata column to apply batch correction on')
+# p$add_argument('--samples',         type="character",                nargs='+',     help='Samples')
 # p$add_argument('--test',      action = "store_true",                       help='Testing mode')
 
 
@@ -32,22 +32,23 @@ args <- p$parse_args(commandArgs(TRUE))
 #####################
 
 ## START TEST ##
-# args$sce <- io$rna.sce
-# args$metadata <- io$metadata
-# args$stages <- "all"
-# # args$metadata <- paste0(io$basedir,"/results/rna/doublets/sample_metadata_after_doublets.txt.gz")
+# args$sce <- file.path(io$basedir,"processed/rna/SingleCellExperiment.rds") #io$rna.sce
+# args$metadata <- 
+# args$stages <- "E8.5"
+# args$metadata <- file.path(io$basedir,"results/rna/celltype_assignment/sample_metadata_after_celltype_rename.txt.gz") # io$metadata
 # args$features <- 2500
-# args$npcs <- 50
-# args$colour_by <- c("celltype","stage","nFrags_atac","nFeature_RNA","ribosomal_percent_RNA","mitochondrial_percent_RNA")
-# args$vars_to_regress <- c("nFeature_RNA","mitochondrial_percent_RNA")
-# args$batch_correction <- c("stage")
+# args$npcs <- 30
+# args$colour_by <- c("plate", "celltype", "celltype2", "celltype3", "stage", "nFeature_RNA")
+# args$vars_to_regress <- c("nFeature_RNA")
+# args$batch_correction <- NULL
 # args$remove_ExE_cells <- FALSE
 # args$n_neighbors <- 25
 # args$min_dist <- 0.5
-# args$outdir <- paste0(io$basedir,"/results_new/rna/dimensionality_reduction/test")
+# args$outdir <- paste0(io$basedir,"/results/rna/dimensionality_reduction/test")
 ## END TEST ##
 
 # if (isTRUE(args$test)) print("Test mode activated...")
+dir.create(args$outdir, showWarnings = F)
 
 # Options
 if (args$stages[1]=="all") {
@@ -176,8 +177,6 @@ fwrite(umap.dt, sprintf("%s/umap_features%d_pcs%d_neigh%d_dist%s.txt.gz",args$ou
 ## Plot ##
 ##########
 
-pt.size <- ifelse(ncol(sce)>=1e4,0.8,1.2)
-
 for (i in args$colour_by) {
 
   to.plot <- reducedDim(sce_filt,"UMAP") %>% as.data.table %>% 
@@ -192,32 +191,31 @@ for (i in args$colour_by) {
   }
   
   p <- ggplot(to.plot, aes_string(x="V1", y="V2", fill=i)) +
-    geom_point(size=pt.size, shape=21, stroke=0.05) +
+    geom_point(size=2, shape=21, stroke=0.15) +
     theme_classic() +
-    ggplot_theme_NoAxes()
+    ggplot_theme_NoAxes() + theme(
+      legend.position  ="right",
+      legend.title=element_blank()
+      )
   
   # Define colormap
   if (is.numeric(to.plot[[i]])) {
     p <- p + scale_fill_gradientn(colours = terrain.colors(10))
-  }
-  if (grepl("celltype",i)) {
-    p <- p + scale_fill_manual(values=opts$celltype.colors) +
-      theme(
-        legend.position="none",
-        legend.title=element_blank()
-      )
-  }
-  if (grepl("stage",i)) {
-    p <- p + scale_fill_manual(values=opts$stage.colors) +
-      theme(
-        legend.position="none",
-        legend.title=element_blank()
-      )
+  } else {
+    if (i=="celltype") {
+      p <- p + scale_fill_manual(values=opts$celltype.colors[unique(to.plot[[i]])])
+    } else if (i=="celltype2") {
+      p <- p + scale_fill_manual(values=opts$celltype2.colors[unique(to.plot[[i]])])
+    } else if (i=="celltype3") {
+      p <- p + scale_fill_manual(values=opts$celltype3.colors[unique(to.plot[[i]])])
+    } else if (i=="stage") {
+      p <- p + scale_fill_manual(values=opts$stage.colors)
+    }
   }
 
   # Save UMAP plot
   outfile <- file.path(args$outdir,sprintf("umap_features%d_pcs%d_neigh%d_dist%s_%s.pdf",args$features, args$npcs, args$n_neighbors, args$min_dist, i))
-  pdf(outfile, width=7, height=5)
+  pdf(outfile, width=9, height=5)
   print(p)
   dev.off()
 }

@@ -102,52 +102,39 @@ io$multiome.atac.pseudobulk.peakMatrix.se <- paste0(io$multiome.basedir,"/pseudo
 opts <- list()
 
 # TO-DO: ADD E8.5 CELL TYPES
-opts$stage_lineage <- c(
-  "E3.5_ICM",
-  "E4.5_Epiblast",
-  "E4.5_Primitive_endoderm",
-  "E5.5_Epiblast",
-  "E5.5_Visceral_endoderm",
-  "E6.5_Epiblast",
-  "E6.5_Primitive_Streak",
-  "E6.5_Visceral_endoderm",
-  "E7.5_Epiblast",
-  "E7.5_Ectoderm",
-  "E7.5_Primitive_Streak",
-  "E7.5_Endoderm",
-  "E7.5_Mesoderm"
-)
+# opts$stage_lineage <- c(
+#   "E3.5_ICM",
+#   "E4.5_Epiblast",
+#   "E4.5_Primitive_endoderm",
+#   "E5.5_Epiblast",
+#   "E5.5_Visceral_endoderm",
+#   "E6.5_Epiblast",
+#   "E6.5_Primitive_Streak",
+#   "E6.5_Visceral_endoderm",
+#   "E7.5_Epiblast",
+#   "E7.5_Ectoderm",
+#   "E7.5_Primitive_Streak",
+#   "E7.5_Endoderm",
+#   "E7.5_Mesoderm"
+# )
 
 # TO-DO: ADD E8.5 CELL TYPES
-opts$celltype_aggregated.colors <- c(
-  "ICM" = "#C6E2FF",
-  "Epiblast"="grey70",
-  "Mesoderm"="#CD3278",
-  "Primitive_Streak"="sandybrown",
-  "Endoderm"="#43CD80",
-  "Ectoderm"="steelblue",
-  "Epiblast/Ectoderm"="steelblue",
-  "Visceral_endoderm"="#BC8F8F",
-  "Primitive_endoderm"="#BC8F8F"
-)
-
-# TO-DO: ADD E8.5 CELL TYPES
-opts$stagelineage.colors <- c(
-  "E3.5_ICM" = "#b63fba",
-  "E4.5_Epiblast" = "#C1CDCD",
-  "E4.5_Primitive_endoderm" = "darkgreen",
-  "E5.5_Epiblast" = "#C1CDCD",
-  "E5.5_Visceral_endoderm" = "darkgreen",
-  "E6.5_Epiblast" = "#C1CDCD",
-  "E6.5_Visceral_endoderm" = "darkgreen",
-  "E6.5_Primitive_Streak"="sandybrown",
-  "E6.5_ExE_ectoderm"="black",
-  "E7.5_Epiblast" = "#C1CDCD",
-  "E7.5_Primitive_Streak"="sandybrown",
-  "E7.5_Ectoderm" = "steelblue",
-  "E7.5_Endoderm" = "#43CD80",
-  "E7.5_Mesoderm" = "#CD3278"
-)
+# opts$stagelineage.colors <- c(
+#   "E3.5_ICM" = "#b63fba",
+#   "E4.5_Epiblast" = "#C1CDCD",
+#   "E4.5_Primitive_endoderm" = "darkgreen",
+#   "E5.5_Epiblast" = "#C1CDCD",
+#   "E5.5_Visceral_endoderm" = "darkgreen",
+#   "E6.5_Epiblast" = "#C1CDCD",
+#   "E6.5_Visceral_endoderm" = "darkgreen",
+#   "E6.5_Primitive_Streak"="sandybrown",
+#   "E6.5_ExE_ectoderm"="black",
+#   "E7.5_Epiblast" = "#C1CDCD",
+#   "E7.5_Primitive_Streak"="sandybrown",
+#   "E7.5_Ectoderm" = "steelblue",
+#   "E7.5_Endoderm" = "#43CD80",
+#   "E7.5_Mesoderm" = "#CD3278"
+# )
 
 opts$celltypes = c(
   "ICM",
@@ -233,8 +220,60 @@ opts$celltype.colors = c(
   "Parietal_endoderm" = "#1A1A1A"
 )
 
+opts$celltype2.colors = c(
+  "ICM" = "#989898",
+  "Primitive_endoderm" = "darkgreen",
+  "Epiblast" = "#635547",
+  "Primitive_Streak" = "#DABE99",
+  "Caudal_epiblast" = "#9e6762",
+  "PGC" = "#FACB12",
+  "Notochord" = "#0F4A9C",
+  "Def._endoderm" = "#F397C0",
+  "Gut" = "#EF5A9D",
+  "Nascent_mesoderm" = "#C594BF",
+  "Intermediate_mesoderm" = "#139992",
+  "Caudal_Mesoderm" = "#3F84AA",
+  "Paraxial_mesoderm" = "#8DB5CE",
+  "Somitic_mesoderm" = "#005579",
+  "Pharyngeal_mesoderm" = "#C9EBFB",
+  "Cardiomyocytes" = "#B51D8D",
+  "ExE_mesoderm" = "#8870ad",
+  "Mesenchyme" = "#cc7818",
+  "Haematoendothelial_progenitors" = "#FBBE92",
+  "Endothelium" = "#ff891c",
+  "Blood_progenitors" = "#c9a997",
+  "Erythroid" = "#EF4E22",
+  "NMP" = "#8EC792",
+  "Neurectoderm" = "#65A83E",
+  "Neural_crest" = "#C3C388",
+  "Forebrain_Midbrain_Hindbrain" = "#647a4f",
+  "Spinal_cord" = "#CDE088",
+  "Surface_ectoderm" = "#f7f79e",
+  "ExE_endoderm" = "#7F6874",
+  "ExE_ectoderm" = "#1A1A1A"
+)
+
+
+opts$celltype3.colors = c(
+  "ICM" = "#b63fba",
+  "Primitive_endoderm" = "#BC8F8F",
+  "Epiblast" = "grey70",
+  "Primitive_Streak" = "sandybrown",
+  "PGC" = "#FACB12",
+  "Endoderm" = "#43CD80",
+  "Mesoderm" = "#CD3278",
+  "Ectoderm" = "steelblue",
+  "Erythroid" = "#EF4E22",
+  "NMP" = "#8EC792",
+  "ExE_endoderm" = "#7F6874",
+  "ExE_ectoderm" = "#1A1A1A"
+)
+
 opts$chr <- paste0("chr",c(1:19,"X","Y"))
-opts$stages <- c("E3.5", "E4.5", "E5.5", "E6.5", "E7.5")
+opts$stages <- c("E3.5", "E4.5", "E5.5", "E6.5", "E7.5", "E8.5")
+
+opts$stage.colors <- viridis::viridis(n=length(opts$stages))
+names(opts$stage.colors) <- rev(opts$stages)
 
 ##########################
 ## Load sample metadata ##

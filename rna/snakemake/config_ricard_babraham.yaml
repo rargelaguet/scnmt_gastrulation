@@ -85,6 +85,8 @@ plates:
     - tet_chimera_march20_plate6_wt
 
     
+stages: ["E3.5","E4.5","E5.5","E6.5","E7.5","E8.5"]
+
 #################
 ## Directories ##
 #################
@@ -104,7 +106,6 @@ resources:
     marker_genes: /bi/group/reik/ricard/data/pijuansala2019_gastrulation10x/results/marker_genes/all_stages/marker_genes.txt.gz
     umap: "/bi/group/reik/ricard/data/scnmt_gastrulation_argelaguet2019/results/rna/dimensionality_reduction/umap_features1000_pcs30_neigh25_dist0.3.txt.gz"
     # celltypes: ["Epiblast", "Primitive_Streak", "Caudal_epiblast", "PGC", "Anterior_Primitive_Streak", "Notochord", "Def._endoderm", "Gut", "Nascent_mesoderm", "Mixed_mesoderm", "Intermediate_mesoderm", "Caudal_Mesoderm", "Paraxial_mesoderm", "Somitic_mesoderm", "Pharyngeal_mesoderm", "Cardiomyocytes", "Allantois", "ExE_mesoderm", "Mesenchyme", "Haematoendothelial_progenitors", "Endothelium", "Blood_progenitors_1", "Blood_progenitors_2", "Erythroid1", "Erythroid2", "Erythroid3", "NMP", "Rostral_neurectoderm", "Caudal_neurectoderm", "Neural_crest", "Forebrain_Midbrain_Hindbrain", "Spinal_cord", "Surface_ectoderm", "Visceral_endoderm", "ExE_endoderm", "ExE_ectoderm", "Parietal_endoderm"]
-    stages: ["E3.5","E4.5","E5.5","E6.5","E7.5","E8.5"]
     gene_metadata: /bi/group/reik/ricard/data/ensembl/mouse/v87/BioMart/all_genes/Mmusculus_genes_BioMart.87.txt
     bedGraphToBigWig: "/bi/apps/ucsc_tools/5/bedGraphToBigWig"
 
@@ -138,18 +139,12 @@ scripts:
 
 params:
     pseudobulk_rna:
-        # group_by: ["celltype.mapped_mnn", "celltype.mapped_seurat"]
-        group_by: ["celltype.mapped"]
+        group_by: ["celltype"]
         normalisation_method: "cpm"
         
     mapping_mnn:
         atlas_stages: ["E6.5","E6.75","E7.0","E7.25","E7.5","E7.75","E8.0","E8.25","E8.5"]
         query_stages: ["E6.5","E7.5","E8.5"]
-        npcs: 50
-        n_neighbours: 25
-
-    mapping_seurat:
-        atlas_stages: ["E6.5","E6.75","E7.0","E7.25","E7.5","E7.75","E8.0","E8.25","E8.5"]
         npcs: 50
         n_neighbours: 25
 
@@ -160,35 +155,44 @@ params:
         percent_rib: 20
         
     dimensionality_reduction_sce:
-        npcs: 30
-        features: 2500
-        n_neighbors: 25
+        npcs: 15
+        features: 1500
+        n_neighbors: 15
         min_dist: 0.3
-        vars_to_regress: ["nFeature_RNA","mit_percent_RNA"]
-        # colour_by: ["plate", "celltype.mapped_mnn", "celltype.mapped_seurat"]
-        colour_by: ["plate", "celltype.mapped"]
+        vars_to_regress: ["nFeature_RNA"]
+        # colour_by: ["plate", "celltype", "celltype_seurat"]
+        colour_by: ["plate", "celltype", "celltype2", "celltype3", "nFeature_RNA"]
 
-    dimensionality_reduction_seurat:
-        npcs: 30
+    dimensionality_reduction_sce_all_cells:
+        npcs: 25
         features: 2500
         n_neighbors: 25
         min_dist: 0.3
-        seed: 42
-        vars_to_regress: ["nFeature_RNA","mit_percent_RNA"]
-        # colour_by: ["plate", "celltype.mapped_mnn", "celltype.mapped_seurat"]
-        colour_by: ["plate", "celltype.mapped"]
+        vars_to_regress: ["nFeature_RNA"]
+        # colour_by: ["plate", "celltype", "celltype_seurat"]
+        colour_by: ["plate", "celltype", "celltype2", "celltype3", "stage", "nFeature_RNA"]
+
+    # dimensionality_reduction_seurat:
+    #     npcs: 30
+    #     features: 2500
+    #     n_neighbors: 25
+    #     min_dist: 0.3
+    #     seed: 42
+    #     vars_to_regress: ["nFeature_RNA","mit_percent_RNA"]
+    #     # colour_by: ["plate", "celltype", "celltype_seurat"]
+    #     colour_by: ["plate", "celltype", "celltype2", "celltype3"]
 
     # celltype_validation_single_cells:
     #     umap: "..."
-    #     celltype_label: "celltype.mapped_seurat"
+    #     celltype_label: "celltype_seurat"
 
     # celltype_validation_pseudobulk:
     #     umap: "..."
-    #     celltype_label: "celltype.mapped_seurat"
+    #     celltype_label: "celltype_seurat"
 
     plot_celltype_proportions:
-        celltype_label: "celltype.mapped"
-        # celltype_label: ["celltype.mapped_seurat","celltype.mapped_mnn"]
+        celltype_label: "celltype"
+        # celltype_label: ["celltype_seurat","celltype"]
 
     # plot_mapping_results
 
