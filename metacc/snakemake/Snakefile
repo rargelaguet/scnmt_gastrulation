@@ -45,9 +45,9 @@ rule all:
         # config["directories"]["results"]+"/metacc/profiles/multiome_peaks/precomputed_metacc_multiome_peaks.txt.gz",
         # expand(config["directories"]["processed_data"]+"/met/bigwig/{pseudobulk_group_by}/completed.txt", pseudobulk_group_by=config["params"]["pseudobulk"]["group_by"]),
         # expand(config["directories"]["processed_data"]+"/acc/bigwig/{pseudobulk_group_by}/completed.txt", pseudobulk_group_by=config["params"]["pseudobulk"]["group_by"]),
-        config["directories"]["results"]+"/metrna/coupling/precomputed_metrna_coupling.txt.gz",
-        config["directories"]["results"]+"/metacc/coupling/precomputed_metacc_coupling.txt.gz",
-        config["directories"]["results"]+"/accrna/coupling/precomputed_accrna_coupling.txt.gz"
+        config["directories"]["results"]+"/metrna/coupling/precomputed_metrna_coupling.txt.gz"
+        # config["directories"]["results"]+"/metacc/coupling/precomputed_metacc_coupling.txt.gz",
+        # config["directories"]["results"]+"/accrna/coupling/precomputed_accrna_coupling.txt.gz"
     
 
 #################################
