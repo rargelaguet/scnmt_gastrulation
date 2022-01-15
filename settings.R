@@ -12,17 +12,19 @@ suppressPackageStartupMessages(library(argparse))
 
 io <- list()
 if (grepl("ricard",Sys.info()['nodename'])) {
-  io$basedir <- "/Users/ricard/data/gastrulation"
-  io$atlas.basedir <- "/Users/ricard/data/gastrulation10x"
-  io$multiome.basedir <- "/Users/ricard/data/gastrulation_multiome_10x"
-  io$gene.metadata <- io$gene_metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/all_genes/Mmusculus_genes_BioMart.87.txt"
-  io$mm10.genome <- "/Users/ricard/data/mm10_sequence/mm10.genome"
+  stop()
+  # io$basedir <- "/Users/ricard/data/gastrulation"
+  # io$atlas.basedir <- "/Users/ricard/data/gastrulation10x"
+  # io$multiome.basedir <- "/Users/ricard/data/gastrulation_multiome_10x"
+  # io$gene.metadata <- io$gene_metadata <- "/Users/ricard/data/ensembl/mouse/v87/BioMart/all_genes/Mmusculus_genes_BioMart.87.txt"
+  # io$mm10.genome <- "/Users/ricard/data/mm10_sequence/mm10.genome"
 } else if (grepl("ebi",Sys.info()['nodename'])) {
-  io$basedir <- "/hps/nobackup2/research/stegle/users/ricard/scnmt_gastrulation"
-  io$atlas.basedir <- "/hps/nobackup2/research/stegle/users/ricard/gastrulation10x"
-  io$multiome.basedir <- "/hps/nobackup2/research/stegle/users/ricard/gastrulation_multiome_10x"
-  io$gene.metadata <- io$gene_metadata <- "/hps/nobackup2/research/stegle/users/ricard/ensembl/mouse/v87/BioMart/all_genes/Mmusculus_genes_BioMart.87.txt"
-  io$mm10.genome <- "/hps/nobackup2/research/stegle/users/ricard/mm10_sequence/mm10.genome"
+  stop()
+  # io$basedir <- "/hps/nobackup2/research/stegle/users/ricard/scnmt_gastrulation"
+  # io$atlas.basedir <- "/hps/nobackup2/research/stegle/users/ricard/gastrulation10x"
+  # io$multiome.basedir <- "/hps/nobackup2/research/stegle/users/ricard/gastrulation_multiome_10x"
+  # io$gene.metadata <- io$gene_metadata <- "/hps/nobackup2/research/stegle/users/ricard/ensembl/mouse/v87/BioMart/all_genes/Mmusculus_genes_BioMart.87.txt"
+  # io$mm10.genome <- "/hps/nobackup2/research/stegle/users/ricard/mm10_sequence/mm10.genome"
 } else if (Sys.info()[['nodename']]=="BI2404M") {
   # io$basedir <- "/Users/argelagr/data/scnmt_gastrulation"
   io$basedir <- "/Users/argelagr/data/scnmt_gastrulation_argelaguet2019"
@@ -48,33 +50,32 @@ io$metadata <- paste0(io$basedir,"/sample_metadata.txt")
 io$plate_metadata <- paste0(io$basedir,"/plate_metadata.txt")
 
 # Methylation
-io$met_data_raw <- paste0(io$basedir,"/met/cpg_level")
-io$met_data_pseudobulk_raw <- paste0(io$basedir,"/met/cpg_level/pseudobulk")
-io$met_data_parsed <- paste0(io$basedir,"/met/feature_level")
-io$met_data_motifs <- paste0(io$basedir,"/met/feature_level/motifs")
-io$met.stats <- paste0(io$basedir,"/met/results/stats/sample_stats.txt")
-io$met.stats_per_chr <- paste0(io$basedir,"/met/results/stats/sample_stats_per_chr.txt.gz")
+io$met_data_raw <- paste0(io$basedir,"/processed/met/cpg_level")
+io$met_data_pseudobulk_raw <- paste0(io$basedir,"/processed/met/cpg_level/pseudobulk")
+io$met_data_parsed <- paste0(io$basedir,"/processed/met/feature_level")
+# io$met_data_motifs <- paste0(io$basedir,"/met/feature_level/motifs")
+# io$met.stats <- paste0(io$basedir,"/met/results/stats/sample_stats.txt")
+# io$met.stats_per_chr <- paste0(io$basedir,"/met/results/stats/sample_stats_per_chr.txt.gz")
 
 # Accessibility
 io$acc_data_raw <- paste0(io$basedir,"/acc/gpc_level")
 io$acc_data_pseudobulk_raw <- paste0(io$basedir,"/acc/gpc_level/pseudobulk")
 io$acc_data_parsed <- paste0(io$basedir,"/acc/feature_level")
-io$acc_data_motifs <- paste0(io$basedir,"/acc/feature_level/motifs")
-io$acc.stats <- paste0(io$basedir,"/acc/results/stats/sample_stats.txt")
-io$acc.stats_per_chr <- paste0(io$basedir,"/acc/results/stats/sample_stats_per_chr.txt.gz")
+# io$acc_data_motifs <- paste0(io$basedir,"/acc/feature_level/motifs")
+# io$acc.stats <- paste0(io$basedir,"/acc/results/stats/sample_stats.txt")
+# io$acc.stats_per_chr <- paste0(io$basedir,"/acc/results/stats/sample_stats_per_chr.txt.gz")
 
 # RNA
-io$rna.sce <- paste0(io$basedir,"/rna/SingleCellExperiment.rds")
-io$rna.stats <- paste0(io$basedir,"/rna/results/stats/rna_stats.txt")
-io$cell.cycle <- paste0(io$basedir,"/rna/results/cell_cycle/cell_cycle_scran.txt.gz")
+io$rna.sce <- paste0(io$basedir,"/processed/rna/SingleCellExperiment.rds")
+# io$rna.stats <- paste0(io$basedir,"/rna/results/stats/rna_stats.txt")
+# io$cell.cycle <- paste0(io$basedir,"/rna/results/cell_cycle/cell_cycle_scran.txt.gz")
 
 # Other
 io$features.dir <- paste0(io$basedir,"/features/genomic_contexts")
 io$motifs.dir <- paste0(io$basedir,"/features/motifs")
 # io$cpg.density <- paste0(io$basedir,"/met/stats/features/cpg_density_perfeature.txt.gz")
-io$scmet <- paste0(io$basedir,"/met/results/variability")
-io$mae <- paste0(io$basedir,"/metaccrna/MultiAssayExperiment/scnmtseq_gastrulation_mae.rds")
-io$umap <- paste0(io$basedir,"/metaccrna/mofa/all_stages/umap_coordinates.txt")
+# io$mae <- paste0(io$basedir,"/metaccrna/MultiAssayExperiment/scnmtseq_gastrulation_mae.rds")
+# io$umap <- paste0(io$basedir,"/metaccrna/mofa/all_stages/umap_coordinates.txt")
 
 # RNA atlas (PijuanSala2019)
 io$atlas.metadata <- paste0(io$atlas.basedir,"/sample_metadata.txt.gz")
@@ -84,16 +85,16 @@ io$atlas.average_expression_per_celltype <- paste0(io$atlas.basedir,"/results/ma
 io$atlas.sce <- paste0(io$atlas.basedir,"/processed/SingleCellExperiment.rds")
 
 # Multiome
-io$multiome.metadata <- paste0(io$multiome.basedir,"/sample_metadata.txt.gz")
-io$multiome.rna.sce <- paste0(io$multiome.basedir,"/processed/rna/SingleCellExperiment.rds")
-io$multiome.rna.pseudobulk.sce <- paste0(io$multiome.basedir,"/results/rna/pseudobulk/SingleCellExperiment.rds")
-io$multiome.rna.differential <- paste0(io$multiome.basedir,"/results/rna/differential")
-io$multiome.atac.peaks.bed <- paste0(io$multiome.basedir,"/PeakCalls/bed/peaks_archR_macs2.bed.gz")
-io$multiome.atac.differential.dir <- paste0(io$basedir,"/results/atac/archR/differential/PeakMatrix")
-io$multiome.atac.marker_peaks <- paste0(io$multiome.basedir,"/results/atac/archR/differential/PeakMatrix/markers/marker_peaks.txt.gz")
-io$multiome.atac.peak_metadata <- paste0(io$multiome.basedir,"/PeakCalls/peak_metadata.tsv.gz")
-io$multiome.atac.peak_stats <- paste0(io$basedir,"/results/atac/archR/peak_calling/peak_stats.txt.gz")
-io$multiome.atac.pseudobulk.peakMatrix.se <- paste0(io$multiome.basedir,"/pseudobulk/pseudobulk_PeakMatrix_summarized_experiment.rds")
+# io$multiome.metadata <- paste0(io$multiome.basedir,"/sample_metadata.txt.gz")
+# io$multiome.rna.sce <- paste0(io$multiome.basedir,"/processed/rna/SingleCellExperiment.rds")
+# io$multiome.rna.pseudobulk.sce <- paste0(io$multiome.basedir,"/results/rna/pseudobulk/SingleCellExperiment.rds")
+# io$multiome.rna.differential <- paste0(io$multiome.basedir,"/results/rna/differential")
+# io$multiome.atac.peaks.bed <- paste0(io$multiome.basedir,"/PeakCalls/bed/peaks_archR_macs2.bed.gz")
+# io$multiome.atac.differential.dir <- paste0(io$basedir,"/results/atac/archR/differential/PeakMatrix")
+# io$multiome.atac.marker_peaks <- paste0(io$multiome.basedir,"/results/atac/archR/differential/PeakMatrix/markers/marker_peaks.txt.gz")
+# io$multiome.atac.peak_metadata <- paste0(io$multiome.basedir,"/PeakCalls/peak_metadata.tsv.gz")
+# io$multiome.atac.peak_stats <- paste0(io$basedir,"/results/atac/archR/peak_calling/peak_stats.txt.gz")
+# io$multiome.atac.pseudobulk.peakMatrix.se <- paste0(io$multiome.basedir,"/pseudobulk/pseudobulk_PeakMatrix_summarized_experiment.rds")
 
 #############
 ## Options ##

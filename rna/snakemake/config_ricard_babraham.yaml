@@ -139,7 +139,7 @@ scripts:
 
 params:
     pseudobulk_rna:
-        group_by: ["celltype"]
+        group_by: ["stage"]
         normalisation_method: "cpm"
         
     mapping_mnn:

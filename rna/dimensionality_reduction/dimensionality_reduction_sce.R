@@ -178,6 +178,7 @@ fwrite(umap.dt, sprintf("%s/umap_features%d_pcs%d_neigh%d_dist%s.txt.gz",args$ou
 ##########
 
 for (i in args$colour_by) {
+  print(i)
 
   to.plot <- reducedDim(sce_filt,"UMAP") %>% as.data.table %>% 
     .[,id_rna:=colnames(sce_filt)] %>%
@@ -191,7 +192,7 @@ for (i in args$colour_by) {
   }
   
   p <- ggplot(to.plot, aes_string(x="V1", y="V2", fill=i)) +
-    geom_point(size=2, shape=21, stroke=0.15) +
+    geom_point(size=1.5, shape=21, stroke=0.15) +
     theme_classic() +
     ggplot_theme_NoAxes() + theme(
       legend.position  ="right",

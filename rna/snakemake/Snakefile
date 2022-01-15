@@ -46,8 +46,8 @@ rule all:
         expand("%s/rna/dimensionality_reduction/sce/all_cells/pca_features{all_cells_dimred_sce_features}_pcs{all_cells_dimred_sce_npcs}.txt.gz" % (config["directories"]["results"]), 
             all_cells_dimred_sce_features = config["params"]["dimensionality_reduction_sce_all_cells"]["features"], 
             all_cells_dimred_sce_npcs = config["params"]["dimensionality_reduction_sce_all_cells"]["npcs"]
-            )
-        # expand("%s/rna/pseudobulk/SingleCellExperiment_pseudobulk_{group_by}.rds" % config["directories"]["results"], group_by=config["params"]["pseudobulk_rna"]["group_by"]),
+            ),
+        expand("%s/rna/pseudobulk/SingleCellExperiment_pseudobulk_{group_by}.rds" % config["directories"]["results"], group_by=config["params"]["pseudobulk_rna"]["group_by"])
         # expand("%s/rna/pseudobulk/Seurat_pseudobulk_{group_by}.rds" % config["directories"]["results"], group_by=config["params"]["pseudobulk_rna"]["group_by"])
         # config["directories"]["results"]+"/sex_assignment/sample_metadata_after_sex_assignment.txt.gz",
         # config["directories"]["results"]+"/sex_assignment/sex_assignment.txt.gz",
