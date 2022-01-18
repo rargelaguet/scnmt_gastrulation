@@ -57,6 +57,7 @@ if (args$context=="CG") {
 }
 
 color <- ifelse(args$context=="CG","#F8766D","#00BFC4")
+
 ######################################
 ## Boxplots with coverage per stage ##
 ######################################
@@ -71,7 +72,7 @@ p <- ggboxplot(to.plot, x = "stage", y = "N", outlier.shape=NA, fill=color, alph
     axis.text.x = element_text(size=rel(0.50))
   )
 
-pdf(file.path(args$outdir,sprintf("%s_coverage_per_stage",args$context)), width=9, height=4.5)
+pdf(file.path(args$outdir,sprintf("%s_coverage_per_stage.pdf",args$context)), width=9, height=4.5)
 print(p)
 dev.off()
 

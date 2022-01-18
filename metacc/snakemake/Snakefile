@@ -29,8 +29,8 @@ rule all:
         config["directories"]["results"]+"/acc/stats/sample_metadata_after_acc_stats.txt.gz",
         config["directories"]["results"]+"/met/stats/met_stats_per_chr.txt.gz",
         config["directories"]["results"]+"/acc/stats/acc_stats_per_chr.txt.gz",
-        config["directories"]["results"]+"/met/stats/pdf/CG_coverage_per_sample.pdf",
-        config["directories"]["results"]+"/acc/stats/pdf/GC_coverage_per_sample.pdf",
+        config["directories"]["results"]+"/met/stats/pdf/CG_coverage_per_stage.pdf",
+        config["directories"]["results"]+"/acc/stats/pdf/GC_coverage_per_stage.pdf",
         config["directories"]["results"]+"/met/qc/sample_metadata_after_met_qc.txt.gz",
         config["directories"]["results"]+"/acc/qc/sample_metadata_after_acc_qc.txt.gz",
         config["directories"]["results"]+"/metacc/qc/sample_metadata_after_metacc_qc.txt.gz",
@@ -45,9 +45,9 @@ rule all:
         # config["directories"]["results"]+"/metacc/profiles/multiome_peaks/precomputed_metacc_multiome_peaks.txt.gz",
         # expand(config["directories"]["processed_data"]+"/met/bigwig/{pseudobulk_group_by}/completed.txt", pseudobulk_group_by=config["params"]["pseudobulk"]["group_by"]),
         # expand(config["directories"]["processed_data"]+"/acc/bigwig/{pseudobulk_group_by}/completed.txt", pseudobulk_group_by=config["params"]["pseudobulk"]["group_by"]),
-        config["directories"]["results"]+"/metrna/coupling/precomputed_metrna_coupling.txt.gz"
-        # config["directories"]["results"]+"/metacc/coupling/precomputed_metacc_coupling.txt.gz",
-        # config["directories"]["results"]+"/accrna/coupling/precomputed_accrna_coupling.txt.gz"
+        config["directories"]["results"]+"/metrna/coupling/precomputed_metrna_coupling.txt.gz",
+        config["directories"]["results"]+"/metacc/coupling/precomputed_metacc_coupling.txt.gz",
+        config["directories"]["results"]+"/accrna/coupling/precomputed_accrna_coupling.txt.gz"
     
 
 #################################
@@ -130,7 +130,7 @@ rule plot_global_stats_per_cell_met:
         # metadata = config["directories"]["results"]+"/rna/mapping/sample_metadata_after_mapping.txt.gz",
         metadata = rules.calculate_global_stats_per_cell_met.output,
     output:
-        config["directories"]["results"]+"/met/stats/pdf/CG_coverage_per_sample.pdf"
+        config["directories"]["results"]+"/met/stats/pdf/CG_coverage_per_stage.pdf"
     params:
         outdir = config["directories"]["results"]+"/met/stats/pdf"
     log: 
@@ -148,7 +148,7 @@ rule plot_global_stats_per_cell_acc:
         # metadata = config["directories"]["results"]+"/rna/mapping/sample_metadata_after_mapping.txt.gz",
         metadata = rules.calculate_global_stats_per_cell_acc.output,
     output:
-        config["directories"]["results"]+"/acc/stats/pdf/GC_coverage_per_sample.pdf"
+        config["directories"]["results"]+"/acc/stats/pdf/GC_coverage_per_stage.pdf"
     params:
         outdir = config["directories"]["results"]+"/acc/stats/pdf"
     log: 
@@ -240,11 +240,11 @@ rule quantify_met_feature_level:
     log: 
         "logs/quantify_met_feature_level_{genomic_context}.log"
     threads: 
-        config["slurm"]["quantify_feature_level"]["threads"]
+        config["slurm"]["quantify_met_feature_level"]["threads"]
     resources:
-        mem_mb = config["slurm"]["quantify_feature_level"]["memory"]
+        mem_mb = config["slurm"]["quantify_met_feature_level"]["memory"]
     shell:
-        "Rscript {input.script} --indir {input.indir} --featuresdir {input.featuresdir} --metadata {input.metadata} --context CG --annos {wildcards.genomic_context} --outdir {params.outdir} > {log}"
+        "Rscript {input.script} --indir {input.indir} --featuresdir {input.featuresdir} --metadata {input.metadata} --context CG --annos {wildcards.genomic_context} --outdir {params.outdir}  > {log}"
 
 rule quantify_acc_feature_level:
     input:
@@ -259,11 +259,11 @@ rule quantify_acc_feature_level:
     log: 
         "logs/quantify_acc_feature_level_{genomic_context}.log"
     threads: 
-        config["slurm"]["quantify_feature_level"]["threads"]
+        config["slurm"]["quantify_acc_feature_level"]["threads"]
     resources:
-        mem_mb = config["slurm"]["quantify_feature_level"]["memory"]
+        mem_mb = config["slurm"]["quantify_acc_feature_level"]["memory"]
     shell:
-        "Rscript {input.script} --indir {input.indir} --featuresdir {input.featuresdir} --metadata {input.metadata} --context GC --annos {wildcards.genomic_context} --outdir {params.outdir} > {log}"
+        "Rscript {input.script} --indir {input.indir} --featuresdir {input.featuresdir} --metadata {input.metadata} --context GC --annos {wildcards.genomic_context} --outdir {params.outdir}  > {log}"
 
 ##############################################
 ## Boxplots of met/acc at the feature level ##
@@ -283,9 +283,9 @@ rule boxplots_metacc_feature_level:
     log: 
         "logs/quantify_acc_feature_level_{genomic_context}.log"
     threads: 
-        config["slurm"]["quantify_feature_level"]["threads"]
+        config["slurm"]["boxplots_metacc_feature_level"]["threads"]
     resources:
-        mem_mb = config["slurm"]["quantify_feature_level"]["memory"]
+        mem_mb = config["slurm"]["boxplots_metacc_feature_level"]["memory"]
     shell:
         "Rscript {input.script} --met_file {input.met_file} --acc_file {input.acc_file} --metadata {input.metadata} \
         --anno {wildcards.genomic_context} --outdir {params.outdir} > {log}"
@@ -309,10 +309,10 @@ rule calculate_tss_profiles:
     threads: 
         config["slurm"]["calculate_tss_profiles"]["threads"]
     resources:
-        mem_mb = config["slurm"]["quantify_feature_level"]["memory"]
+        mem_mb = config["slurm"]["calculate_tss_profiles"]["memory"]
     shell:
         "Rscript {input.script} --met_tile {params.met_tile} --acc_tile {params.acc_tile} --window_size {params.window_size} --metadata {input.metadata} \
-        --anno prom_200_200 --outfile {output} --test > {log}"
+        --anno prom_200_200 --outfile {output}  > {log}"
 
 
 rule calculate_profiles_multiome_peaks:
@@ -330,7 +330,7 @@ rule calculate_profiles_multiome_peaks:
     threads: 
         config["slurm"]["calculate_tss_profiles"]["threads"]
     resources:
-        mem_mb = config["slurm"]["quantify_feature_level"]["memory"]
+        mem_mb = config["slurm"]["calculate_profiles_multiome_peaks"]["memory"]
     shell:
         "Rscript {input.script} --met_tile {params.met_tile} --acc_tile {params.acc_tile} --window_size {params.window_size} --metadata {input.metadata} \
         --anno multiome_peaks --outfile {output} > {log}"
@@ -350,7 +350,7 @@ rule plot_tss_profiles:
     threads: 
         config["slurm"]["plot_tss_profiles"]["threads"]
     resources:
-        mem_mb = config["slurm"]["quantify_feature_level"]["memory"]
+        mem_mb = config["slurm"]["plot_tss_profiles"]["memory"]
     shell:
         "Rscript {input.script} --file {input.file} --metadata {input.metadata} --outdir {params.outdir} > {log}"
 
@@ -495,7 +495,7 @@ rule calculate_metacc_coupling:
     shell:
         "Rscript {input.script} --metadata {input.metadata} --tss {input.tss_file} \
         --up {params.up} --down {params.down} --window {params.window} --tile {params.tile} \
-        --outfile {output} --test > {log}"
+        --outfile {output}  > {log}"
 
 rule calculate_metrna_coupling:
     input:
@@ -518,7 +518,7 @@ rule calculate_metrna_coupling:
         mem_mb = config["slurm"]["metrna_coupling"]["memory"]
     shell:
         "Rscript {input.script} --sce {input.sce} --metadata {input.metadata} --tss {input.tss_file} \
-        --up {params.up} --down {params.down} --window {params.window} --tile {params.tile} --test \
+        --up {params.up} --down {params.down} --window {params.window} --tile {params.tile}  \
         --outfile {output} > {log}"
 
 # rule plot_metrna_coupling:
@@ -560,7 +560,7 @@ rule calculate_accrna_coupling:
         mem_mb = config["slurm"]["accrna_coupling"]["memory"]
     shell:
         "Rscript {input.script} --sce {input.sce} --metadata {input.metadata} --tss {input.tss_file} \
-        --up {params.up} --down {params.down} --window {params.window} --tile {params.tile} --test \
+        --up {params.up} --down {params.down} --window {params.window} --tile {params.tile}  \
         --outfile {output} > {log}"
 
 ####################

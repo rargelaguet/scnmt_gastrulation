@@ -6,7 +6,7 @@
 anno_list <- list()
 for (i in args$anno) {
   tmp <- fread(sprintf("%s/%s.bed.gz",io$features.dir,i), 
-               colClasses=c("V1"="character", "V2"="numeric", "V3"="numeric", "V4"="factor", "V5"="character")) %>%
+               select=1:5, colClasses=c("V1"="character", "V2"="integer", "V3"="integer", "V4"="factor", "V5"="character")) %>%
     setnames(c("chr","start","end","strand","id")) %>%
     .[,anno:=factor(i)] %>%
     .[,chr:=ifelse(grepl("chr",chr),chr,paste0("chr",chr))] %>%

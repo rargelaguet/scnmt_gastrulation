@@ -32,7 +32,8 @@ args <- p$parse_args(commandArgs(TRUE))
 # args$featuresdir  <- file.path(io$basedir,"features/genomic_contexts")
 # args$metadata <- file.path(io$basedir,"results/met/qc/sample_metadata_after_met_qc.txt.gz")
 # args$context <- "CG"
-# args$annos <- c("prom_2000_2000")
+# args$annos <- c("multiome_peaks")
+# args$test <- FALSE
 ## END TEST ##
 
 # Sanity checks
@@ -74,7 +75,6 @@ anno_list <- args$annos %>% map(function(x) {
 })
 names(anno_list) <- args$annos
 
-
 #########################################
 ## Preprocess and annotate the samples ##
 #########################################
@@ -87,10 +87,11 @@ for (i in 1:length(samples_keep)) {
   if (all(sprintf("%s_%s.gz",samples_keep[i],args$annos) %in% files_processed)) {
     cat(sprintf("Sample %s already processed for all required annotations...\n",samples_keep[i])) 
   } else {
-    # cat(sprintf("Sample %s has not been processed, annotating...\n",samples_keep[i]))  
+    cat(sprintf("Sample %s has not been processed, annotating...\n",samples_keep[i]))  
     
-    # Read and parse raw methylation data
+    # Read and parse methylation data
     dat_sample <- fread(sprintf("%s/%s.tsv.gz",args$indir,samples_keep[i]), sep="\t", verbose=F, showProgress=F) %>%
+      .[,chr:=ifelse(grepl("chr",chr),chr,paste0("chr",chr))] %>%
       # .[,c("chr","pos","rate")] %>%
       .[,c("start","end") := list(pos,pos)] %>% # Add 'start' and 'end' columns to do the overlap
       .[,pos:=NULL] %>% .[chr%in%opts$chr] %>% .[,chr:=factor(chr,levels=opts$chr)] %>%
@@ -116,6 +117,11 @@ for (i in 1:length(samples_keep)) {
           # Reorder columns
           .[,c("sample","id","anno","Nmet","N","rate")]
         
+        # Sanity check
+        if(nrow(ov)==0) {
+          warning(sprintf("No overlaps found between %s CpG methylation and %s annotation...",samples_keep[i],j))
+        }
+        
         # Store and save results
         fwrite(ov, fname.out, quote=FALSE, sep="\t", col.names=FALSE)
       }
@@ -132,7 +138,16 @@ for (i in args$annos) {
   if(file.exists(outfile)) {
     cat(sprintf("File %s already exists, ignoring...\n", outfile))
   } else {
-    # system(sprintf("cat %s/tmp/*_%s.gz | zgrep -E -v 'sample|id_met|id_acc' | pigz > %s", args$outdir, i, outfile))
     system(sprintf("cat %s/tmp/*_%s.gz > %s", args$outdir, i, outfile))
   }
+}
+
+
+###################
+## Sanity checks ##
+###################
+
+for (i in args$annos) {
+  cells <- unique(fread(sprintf("%s/%s.tsv.gz", args$outdir, i))[[1]])
+  stopifnot(cells%in%samples_keep)
 }

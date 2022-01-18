@@ -28,19 +28,19 @@ samples:
 
 genomic_contexts:
     - multiome_peaks
-    # - CGI
-    # - H3K27ac_distal_E7.5_Ect_intersect12
-    # - H3K27ac_distal_E7.5_End_intersect12
-    # - H3K27ac_distal_E7.5_Mes_intersect12
-    # - LINE
-    # - LTR
-    # - genebody
-    # - prom_2000_2000
-    # - prom_2000_2000_cgi
-    # - prom_2000_2000_noncgi
-    # - prom_200_200
-    # - prom_200_200_cgi
-    # - prom_200_200_noncgi
+    - CGI
+    - H3K27ac_distal_E7.5_Ect_intersect12
+    - H3K27ac_distal_E7.5_End_intersect12
+    - H3K27ac_distal_E7.5_Mes_intersect12
+    - LINE
+    - LTR
+    - genebody
+    - prom_2000_2000
+    - prom_2000_2000_cgi
+    - prom_2000_2000_noncgi
+    - prom_200_200
+    - prom_200_200_cgi
+    - prom_200_200_noncgi
 
 stages: ["E3.5","E4.5","E5.5","E6.5","E7.5","E8.5"]
 # celltypes: ["Epiblast", "Primitive_Streak", "Caudal_epiblast", "PGC", "Anterior_Primitive_Streak", "Notochord", "Def._endoderm", "Gut", "Nascent_mesoderm", "Mixed_mesoderm", "Intermediate_mesoderm", "Caudal_Mesoderm", "Paraxial_mesoderm", "Somitic_mesoderm", "Pharyngeal_mesoderm", "Cardiomyocytes", "Allantois", "ExE_mesoderm", "Mesenchyme", "Haematoendothelial_progenitors", "Endothelium", "Blood_progenitors_1", "Blood_progenitors_2", "Erythroid1", "Erythroid2", "Erythroid3", "NMP", "Rostral_neurectoderm", "Caudal_neurectoderm", "Neural_crest", "Forebrain_Midbrain_Hindbrain", "Spinal_cord", "Surface_ectoderm", "Visceral_endoderm", "ExE_endoderm", "ExE_ectoderm", "Parietal_endoderm"]
@@ -147,8 +147,11 @@ slurm:  # memory in MB
     qc: 
         memory: 5000
         threads: 1
-    quantify_feature_level: 
-        memory: 15000
+    quantify_met_feature_level: 
+        memory: 20000
+        threads: 1
+    quantify_acc_feature_level: 
+        memory: 40000
         threads: 1
     pseudobulk: 
         memory: 25000
@@ -157,26 +160,26 @@ slurm:  # memory in MB
         memory: 5000
         threads: 1
     calculate_tss_profiles: 
-        memory: 80000
+        memory: 90000
         threads: 1
     calculate_profiles_multiome_peaks: 
-        memory: 120000
+        memory: 130000
         threads: 1
     plot_tss_profiles: 
         memory: 10000
         threads: 1    
     bigwig_met:
-        memory: 20000
+        memory: 25000
         threads: 1    
     bigwig_acc:
-        memory: 50000
+        memory: 60000
         threads: 1    
     metrna_coupling:
-        memory: 3000
+        memory: 10000
         threads: 1   
     accrna_coupling:
-        memory: 6000
+        memory: 15000
         threads: 1   
     metacc_coupling:
-        memory: 8000
+        memory: 15000
         threads: 1   

@@ -81,9 +81,10 @@ metacc_coupling.dt <- sample_metadata$cell %>% map(function(i) {
 
   print(i)
   
-  # Define chromatin accessibility data.table
+  # Chromatin accessibility
   acc_dt <- fread(sprintf("%s/%s.tsv.gz",io$acc_data_raw,sample_metadata[cell==i,id_acc]), showProgress = F, header = T,
-                  select = c("chr"="factor", "pos"="integer", "rate"="integer")) %>%
+                  select = c("chr"="character", "pos"="integer", "rate"="integer")) %>%
+    .[,chr:=ifelse(grepl("chr",chr),chr,paste0("chr",chr))] %>%
     setnames("pos","bp") %>% .[,c("start","end"):=list(bp,bp)] %>%
     setkey("chr","start","end") %>%
     
@@ -99,9 +100,14 @@ metacc_coupling.dt <- sample_metadata$cell %>% map(function(i) {
     .[,.(acc_rate=mean(rate)), by=c("id","window_center")] %>%
     .[,cell:=i]
   
-  # Define DNA methylation data.table
+  if (nrow(acc_dt)==0) {
+    warning(sprintf("No overlaps found between %s CpG methylation and TSS annotation...",i))
+  }
+  
+  # DNA methylation
   met_dt <- fread(sprintf("%s/%s.tsv.gz",io$met_data_raw,sample_metadata[cell==i,id_met]), showProgress = F, header = T,
-        select = c("chr"="factor", "pos"="integer", "rate"="integer")) %>%
+        select = c("chr"="character", "pos"="integer", "rate"="integer")) %>%
+    .[,chr:=ifelse(grepl("chr",chr),chr,paste0("chr",chr))] %>%
     setnames("pos","bp") %>% .[,c("start","end"):=list(bp,bp)] %>%
     setkey("chr","start","end") %>%
     
@@ -117,6 +123,9 @@ metacc_coupling.dt <- sample_metadata$cell %>% map(function(i) {
     .[,.(met_rate=mean(rate)), by=c("id","window_center")] %>%
     .[,cell:=i]
     
+  if (nrow(met_dt)==0) {
+    warning(sprintf("No overlaps found between %s CpG methylation and TSS annotation...",i))
+  }
     
     # Calculate Met vs Acc correlation coefficient per window
    merge(met_dt, acc_dt, by = c("window_center","id","cell")) %>%

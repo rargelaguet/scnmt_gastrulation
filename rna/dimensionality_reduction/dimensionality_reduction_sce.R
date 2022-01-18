@@ -47,7 +47,7 @@ args <- p$parse_args(commandArgs(TRUE))
 # args$outdir <- paste0(io$basedir,"/results/rna/dimensionality_reduction/test")
 ## END TEST ##
 
-# if (isTRUE(args$test)) print("Test mode activated...")
+# I/O
 dir.create(args$outdir, showWarnings = F)
 
 # Options

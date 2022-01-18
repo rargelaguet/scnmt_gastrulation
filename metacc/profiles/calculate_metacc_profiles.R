@@ -26,14 +26,14 @@ args <- p$parse_args(commandArgs(TRUE))
 ###################
 
 ## START TEST ##
-args <- list()
-args$metadata <- file.path(io$basedir,"results_new/metacc/qc/sample_metadata_after_metacc_qc.txt.gz")
-args$anno <- "multiome_peaks"
-args$window_size <- 2000
-args$met_tile <- 100
-args$acc_tile <- 50
-args$outfile  <- file.path(io$basedir,sprintf("results_new/metacc/profiles/%s/precomputed_metacc_%s.txt.gz",args$anno,args$anno))
-args$test <- FALSE
+# args <- list()
+# args$metadata <- file.path(io$basedir,"results/metacc/qc/sample_metadata_after_metacc_qc.txt.gz")
+# args$anno <- "prom_200_200"
+# args$window_size <- 2000
+# args$met_tile <- 100
+# args$acc_tile <- 50
+# args$outfile  <- file.path(io$basedir,sprintf("results/metacc/profiles/%s/precomputed_metacc_%s.txt.gz",args$anno,args$anno))
+# args$test <- TRUE
 ## END TEST ##
 
 # I/O

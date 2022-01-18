@@ -60,9 +60,9 @@ if (args$test) {
 ## Load gene metadata  ##
 #########################
 
-tss <- fread(args$tss, colClasses=c("factor","integer","integer","factor","factor","factor")) %>%
+tss <- fread(args$tss, colClasses=c("character","integer","integer","factor","factor","factor")) %>%
   setnames(c("chr","start","end","id","score","strand")) %>%
-  # .[,chr:=as.factor(sub("chr","",chr))] %>%
+  .[,chr:=ifelse(grepl("chr",chr),chr,paste0("chr",chr))] %>%
   .[,score:=NULL] %>%
   .[,tss:=start] %>%
   .[,c("start","end"):=.(start-args$up,end+args$down)] %>%
@@ -116,7 +116,8 @@ accrna_coupling.dt <- cells.to.plot %>% map(function(i) {
 
   # Define DNA methylation data
   acc_dt <- fread(sprintf("%s/%s.tsv.gz",io$acc_data_raw,sample_metadata[cell==i,id_acc]), showProgress = F, header = T,
-        select = c("chr"="factor", "pos"="integer", "rate"="integer")) %>%
+        select = c("chr"="character", "pos"="integer", "rate"="integer")) %>%
+    .[,chr:=ifelse(grepl("chr",chr),chr,paste0("chr",chr))] %>%
     setnames("pos","bp") %>% .[,c("start","end"):=list(bp,bp)] %>%
     setkey("chr","start","end") %>%
     

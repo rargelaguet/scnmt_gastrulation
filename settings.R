@@ -46,7 +46,7 @@ if (grepl("ricard",Sys.info()['nodename'])) {
   stop("Computer not recognised")
 }
 
-io$metadata <- paste0(io$basedir,"/sample_metadata.txt")
+io$metadata <- paste0(io$basedir,"/sample_metadata.txt.gz")
 io$plate_metadata <- paste0(io$basedir,"/plate_metadata.txt")
 
 # Methylation
@@ -58,9 +58,9 @@ io$met_data_parsed <- paste0(io$basedir,"/processed/met/feature_level")
 # io$met.stats_per_chr <- paste0(io$basedir,"/met/results/stats/sample_stats_per_chr.txt.gz")
 
 # Accessibility
-io$acc_data_raw <- paste0(io$basedir,"/acc/gpc_level")
-io$acc_data_pseudobulk_raw <- paste0(io$basedir,"/acc/gpc_level/pseudobulk")
-io$acc_data_parsed <- paste0(io$basedir,"/acc/feature_level")
+io$acc_data_raw <- paste0(io$basedir,"/processed/acc/gpc_level")
+io$acc_data_pseudobulk_raw <- paste0(io$basedir,"/processed/acc/gpc_level/pseudobulk")
+io$acc_data_parsed <- paste0(io$basedir,"/processed/acc/feature_level")
 # io$acc_data_motifs <- paste0(io$basedir,"/acc/feature_level/motifs")
 # io$acc.stats <- paste0(io$basedir,"/acc/results/stats/sample_stats.txt")
 # io$acc.stats_per_chr <- paste0(io$basedir,"/acc/results/stats/sample_stats_per_chr.txt.gz")

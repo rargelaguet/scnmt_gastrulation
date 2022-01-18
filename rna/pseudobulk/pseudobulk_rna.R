@@ -1,9 +1,7 @@
-# suppressPackageStartupMessages(library(Seurat))
+here::i_am("rna/pseudobulk/pseudobulk_rna.R")
 
 source(here::here("settings.R"))
 source(here::here("utils.R"))
-
-here::i_am("rna/pseudobulk/pseudobulk_rna.R")
 
 ######################
 ## Define arguments ##
@@ -30,12 +28,18 @@ args <- p$parse_args(commandArgs(TRUE))
 # args$outdir <- file.path(io$basedir,"results_new/rna/pseudobulk")
 ## END TEST ##
 
+# I/O
+dir.create(args$outdir, showWarnings = F)
+
 ###############
 ## Load data ##
 ###############
 
 # Load cell metadata
 sample_metadata <- fread(args$metadata) %>%
+  .[,stage_celltype:=sprintf("%s-%s",stage,celltype)] %>%
+  .[,stage_celltype2:=sprintf("%s-%s",stage,celltype2)] %>%
+  .[,stage_celltype3:=sprintf("%s-%s",stage,celltype3)] %>%
   .[pass_rnaQC==TRUE & !is.na(eval(as.name(args$group_by)))]
 
 table(sample_metadata[[args$group_by]])

@@ -139,7 +139,7 @@ scripts:
 
 params:
     pseudobulk_rna:
-        group_by: ["stage"]
+        group_by: ["stage", "celltype", "celltype2", "celltype3", "stage_celltype", "stage_celltype2", "stage_celltype3"]
         normalisation_method: "cpm"
         
     mapping_mnn:
@@ -182,19 +182,8 @@ params:
     #     # colour_by: ["plate", "celltype", "celltype_seurat"]
     #     colour_by: ["plate", "celltype", "celltype2", "celltype3"]
 
-    # celltype_validation_single_cells:
-    #     umap: "..."
-    #     celltype_label: "celltype_seurat"
-
-    # celltype_validation_pseudobulk:
-    #     umap: "..."
-    #     celltype_label: "celltype_seurat"
-
     plot_celltype_proportions:
-        celltype_label: "celltype"
-        # celltype_label: ["celltype_seurat","celltype"]
-
-    # plot_mapping_results
+        celltype_label: ["celltype", "celltype2", "celltype3"]
 
     sex_assignment:
         chrY_ratio_threshold: 0.001
