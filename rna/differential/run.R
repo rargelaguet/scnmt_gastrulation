@@ -1,22 +1,13 @@
-#################################################################
-## Script to compute (in parallel) differential RNA expression ##
-#################################################################
+here::i_am("rna/differential/differential_expr.R")
 
-## I/O ##
-io <- list()
-if (grepl("ricard",Sys.info()['nodename'])) {
-  io$script <- "/Users/ricard/gastrulation/rna/differential/differential_expr.R"
-  io$outdir <- "/Users/ricard/data/gastrulation/rna/differential"; dir.create(io$outdir)
-} else {
-  io$script <- "/homes/ricard/gastrulation/rna/differential/differential_expr.R"
-  io$outdir <- "/hps/nobackup/stegle/users/ricard/gastrulation/rna/differential"; dir.create(io$outdir, showWarnings=F)
-  io$tmpdir <- "/hps/nobackup/stegle/users/ricard/gastrulation/rna/differential/tmp"; dir.create(io$tmpdir, showWarnings=F)
-}
+source(here::here("settings.R"))
 
+#####################
+## Define settings ##
+#####################
 
-
-## Options ##
-opts <- list()
+io$script <- here::here("rna/differential/differential_expr.R")
+io$outdir <- file.path(io$basedir,"results/rna/differential"); dir.create(io$outdir, showWarnings = F)
 
 opts$groups <- list(
   
@@ -65,16 +56,23 @@ opts$groups <- list(
 )
 
 opts$groups <- list(
-  "E5.5E6.5Epiblast_vs_E7.5Ectoderm" = list(c("E6.5_Epiblast","E5.5_Epiblast"), c("E7.5_Ectoderm"))
+  "E3.5_vs_E4.5" = list(c("E3.5_ICM"), c("E4.5_Epiblast","E4.5_Primitive_endoderm")),
+  "E4.5Epiblast_vs_E4.5Primitive_endoderm" = list(c("E4.5_Epiblast"), c("E4.5_Primitive_endoderm")),
+  "E5.5Epiblast_vs_E5.5Visceral_endoderm" = list(c("E5.5_Epiblast"), c("E5.5_Visceral_endoderm"))
 )
 
-for (group in names(opts$groups)) {
-  stage_lineage1 <- opts$groups[[group]][[1]]
-  stage_lineage2 <- opts$groups[[group]][[2]]
-  outfile <- sprintf("%s/%s.txt", io$outdir, group)
-  # lsf <- sprintf("bsub -M 8192 -n 1 -q standard -o %s/%s.txt", io$tmpdir, group)
-  lsf <- ""
-  cmd <- sprintf("%s Rscript %s --stage_lineage1 %s --stage_lineage2 %s --outfile %s", 
-                 lsf, io$script, paste(stage_lineage1, collapse=" "), paste(stage_lineage2, collapse=" "), outfile)
+for (i in names(opts$groups)) {
+  groupA <- opts$groups[[i]][[1]]
+  groupB <- opts$groups[[i]][[2]]
+  outfile <- sprintf("%s/%s.txt", io$outdir, i)
+  
+  if (grepl("BI",Sys.info()['nodename'])) {
+    lsf <- ""
+  } else if (grepl("pebble|headstone", Sys.info()['nodename'])) {
+    lsf <- sprintf("sbatch -n 1 --mem 8G --wrap")
+  }
+  
+  cmd <- sprintf("%s 'Rscript %s --groupA %s --groupB %s --group_label stage_lineage3 --outfile %s'", lsf, io$script, paste(groupA, collapse=" "), paste(groupB, collapse=" "), outfile)
+  print(cmd)
   system(cmd)
 }

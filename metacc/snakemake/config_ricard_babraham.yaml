@@ -106,8 +106,8 @@ params:
         acc_tile: 50
     calculate_profiles_multiome_peaks:
         window_size: 2000
-        met_tile: 100
-        acc_tile: 50
+        met_tile: 200
+        acc_tile: 100
     bigwig_met:
         step_size: 500
         min_rate_bigwig: 10

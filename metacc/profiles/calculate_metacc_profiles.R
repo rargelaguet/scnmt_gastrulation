@@ -59,7 +59,7 @@ opts$acc.cells <- sample_metadata[!is.na(id_acc),id_acc]
 if (args$test) opts$met.cells <- opts$met.cells %>% head(n=5)
 if (args$test) opts$acc.cells <- opts$acc.cells %>% head(n=5)
 
-sample_metadata <- sample_metadata[id_met%in%opts$met_cells | id_acc%in%opts$acc.cells]
+sample_metadata <- sample_metadata[id_met%in%opts$met.cells | id_acc%in%opts$acc.cells]
 
 ##############
 ## Load data #

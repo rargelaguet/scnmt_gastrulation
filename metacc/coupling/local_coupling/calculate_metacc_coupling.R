@@ -55,6 +55,8 @@ if (args$test) {
   sample_metadata <- sample_metadata %>% .[,head(.SD,n=3),by="sample"]
 }
 
+print(table(sample_metadata$stage))
+
 #########################
 ## Load gene metadata  ##
 #########################

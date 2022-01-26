@@ -13,37 +13,16 @@ io$outdir <- paste0(io$basedir,"/results/rna/individual_genes"); dir.create(io$o
 
 ## Define options ##
 
-# Define which cells to use
-opts$stage_lineage <- c(
-  "E3.5_ICM",
-  "E4.5_Epiblast",
-  "E4.5_Primitive_endoderm",
-  "E5.5_Epiblast",
-  "E5.5_ExE_endoderm",
-  "E6.5_Epiblast",
-  "E6.5_Primitive_Streak",
-  "E6.5_ExE_endoderm",
-  "E6.5_Mesoderm",
-  "E7.5_Epiblast",
-  "E7.5_Primitive_Streak",
-  "E7.5_Ectoderm",
-  "E7.5_Endoderm",
-  "E7.5_Mesoderm",
-  "E7.5_ExE_endoderm"
-)
+# Define which stages to use
+opts$stages <- c("E3.5", "E4.5", "E5.5", "E6.5", "E7.5", "E8.5")
 
 ##########################
 ## Load sample metadata ##
 ##########################
 
 sample_metadata <- fread(io$metadata) %>% 
-  .[,stage_lineage:=paste(stage,celltype,sep="_")] %>%
-  .[,stage_lineage2:=paste(stage,celltype2,sep="_")] %>%
-  .[,stage_lineage3:=paste(stage,celltype3,sep="_")] %>%
-  .[pass_rnaQC==T & stage_lineage3%in%opts$stage_lineage] %>%
-  .[,stage_lineage3:=factor(stage_lineage3, levels=opts$stage_lineage)] 
-
-stopifnot(unique(sample_metadata$stage_lineage3) %in% opts$stage_lineage)
+  .[pass_rnaQC==T & stage%in%opts$stages] %>%
+  .[,stage:=factor(stage,levels=opts$stages)]
 
 ###############
 ## Load data ##
@@ -59,12 +38,12 @@ sce <- load_SingleCellExperiment(
 # Add sample metadata as colData
 colData(sce) <- sample_metadata %>% tibble::column_to_rownames("id_rna") %>% DataFrame
 
-##########
-## Plot ##
-##########
+#############################
+## Plot one gene at a time ##
+#############################
 
-genes.to.plot <- c("Aire","Nupr1","Dppa4","Dppa3","Dppa5a","Zfp640","Dnmt3l","Rex2","Morc1","Zfp980")
-# genes.to.plot <- grep("Tet", rownames(sce),value=T)
+# genes.to.plot <- c("Eomes","Lefty1","Lefty2","Nodal")
+genes.to.plot <- grep("Tet", rownames(sce),value=T)
 
 for (i in 1:length(genes.to.plot)) {
   
@@ -83,22 +62,20 @@ for (i in 1:length(genes.to.plot)) {
       
       # to.plot <- to.plot[stage_lineage%in%celltypes.tmp]
       
-      p <- ggplot(to.plot, aes(x=celltype3, y=expr, fill=celltype3)) +
+      p <- ggplot(to.plot, aes(x=stage, y=expr, fill=stage)) +
         geom_violin(scale = "width", alpha=0.8) +
         geom_boxplot(width=0.25, outlier.shape=NA, alpha=0.8) +
         geom_jitter(shape=21, size=1, alpha=0.5, width=0.05) +
-        scale_fill_manual(values=opts$celltype3.colors, drop=F) +
+        scale_fill_manual(values=opts$stage.colors, drop=F) +
         stat_summary(fun.data = give.n, geom = "text", size=2.5) +
         # facet_wrap(~stage, nrow=1, scales="free_x") +
-        facet_grid(~stage, scales = "free_x", space='free') +
         theme_classic() +
         labs(title=gene, x="",y=sprintf("%s expression",gene)) +
-        guides(x = guide_axis(angle = 90)) +
         theme(
           strip.text = element_text(size=rel(0.85)),
           # plot.title = element_text(hjust = 0.5, size=rel(1.1), color="black"),
           plot.title = element_blank(),
-          axis.text.x = element_text(colour="black",size=rel(0.95)),
+          axis.text.x = element_text(colour="black",size=rel(1.25)),
           # axis.text.x = element_blank(),
           axis.ticks.x = element_blank(),
           axis.text.y = element_text(colour="black",size=rel(1.0)),
@@ -122,4 +99,45 @@ for (i in 1:length(genes.to.plot)) {
     print(sprintf("%s not found",gene))
   }
 }
+
+
+
+##########################################
+## Plot multiple genes at the same time ##
+##########################################
+
+# genes.to.plot <- c("Eomes","Lefty1","Lefty2","Nodal")
+# genes.to.plot <- grep("Tet", rownames(sce),value=T)
+genes.to.plot <- c("Dnmt1","Dnmt3a","Dnmt3b")
+
+to.plot <- logcounts(sce[genes.to.plot]) %>% as.data.table(keep.rownames = T) %>%
+  setnames("rn","gene") %>%
+  melt(id.vars=("gene"), variable.name="id_rna", value.name = "expr") %>% 
+  merge(sample_metadata, by="id_rna")
+  
+p <- ggplot(to.plot, aes(x=stage, y=expr, fill=stage)) +
+  geom_violin(alpha=0.30) +
+  geom_boxplot(width=0.25, outlier.shape=NA, alpha=0.8) +
+  # geom_jitter(shape=21, size=0.5, alpha=0.4, width=0.03, stroke=0.05) +
+  ggrastr::geom_jitter_rast(shape=21, size=0.5, alpha=0.4, width=0.03, stroke=0.05) +
+  scale_fill_manual(values=opts$stage.colors, drop=F) +
+  facet_wrap(~gene, nrow=1, scales="free_x") +
+  theme_classic() +
+  labs(x="", y="Gene expression") +
+  theme(
+    strip.text = element_text(size=rel(1.25)),
+    strip.background = element_blank(),
+    axis.text.x = element_text(colour="black",size=rel(1)),
+    axis.ticks.x = element_blank(),
+    axis.text.y = element_text(colour="black",size=rel(1.0)),
+    axis.title.y = element_text(colour="black",size=rel(1.0)),
+    legend.position = "none",
+    legend.title = element_blank(),
+    legend.text = element_text(size=rel(0.85))
+  )
+  
+# pdf(sprintf("%s/tet_genes.pdf",io$outdir), width=7.5, height=4)
+pdf(sprintf("%s/dnmt_genes.pdf",io$outdir), width=7.5, height=4)
+print(p)
+dev.off()
 
