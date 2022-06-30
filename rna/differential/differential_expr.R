@@ -11,6 +11,8 @@ source(here::here("rna/differential/utils.R"))
 ################################
 
 p <- ArgumentParser(description='')
+p$add_argument('--name_groupA', type="character",  help='name for group A')
+p$add_argument('--name_groupB', type="character",  help='name for group B')
 p$add_argument('--groupA', type="character",  nargs='+',  help='group A')
 p$add_argument('--groupB', type="character",  nargs='+',  help='group B')
 p$add_argument('--group_label',    type="character",    help='Group label')
@@ -18,8 +20,10 @@ p$add_argument('--outfile',        type="character",              help='Output f
 args <- p$parse_args(commandArgs(TRUE))
 
 ## START TEST ##
-args$groupA <- ("E3.5_ICM")
-args$groupB <- ("E4.5_Epiblast")
+args$groupA <- c("E4.5_Epiblast","E5.5_Epiblast")
+args$groupB <- c("E6.5_Epiblast","E7.5_Epiblast")
+args$name_groupA <- "E4.5_E5.5_Epiblast"
+args$name_groupB <- "E6.5_E7.5_Epiblast"
 args$group_label <- "stage_lineage3"
 ## END TEST ##
 
@@ -28,9 +32,6 @@ args$group_label <- "stage_lineage3"
 #####################
 
 io$metadata <- file.path(io$basedir,"results/rna/celltype_assignment/sample_metadata_after_celltype_rename.txt.gz")
-
-# Define groups
-opts$groups <- c(args$groupA, args$groupB)
 
 # Define FDR threshold
 opts$threshold_fdr <- 0.01
@@ -54,11 +55,13 @@ sample_metadata <- fread(io$metadata) %>%
 stopifnot(args$group_label%in%colnames(sample_metadata))
 
 sample_metadata <- sample_metadata %>%
-  setnames(args$group_label,"group") %>%
-  # .[,group:=eval(as.name(args$group_label))] %>%
-  .[group%in%c(args$groupA,args$groupB)] %>%
-  .[,group:=factor(group,levels=opts$groups)] %>% setorder(group) # Sort cells so that groupA comes before groupB
+  setnames(args$group_label,"group")  %>%
+  .[group%in%c(args$groupA,args$groupB)]
+table(sample_metadata$group)
 
+sample_metadata <- sample_metadata %>%
+  .[,group:=ifelse(group%in%args$groupA,args$name_groupA,args$name_groupB)] %>%
+  .[,group:=factor(group,levels=c(args$name_groupA,args$name_groupB))]
 table(sample_metadata$group)
 
 ###############
@@ -86,10 +89,10 @@ gene_metadata <- fread(io$gene_metadata) %>%
 # calculate detection rate per gene
 cdr.dt <- data.table(
   rownames(sce),
-  rowMeans(logcounts(sce[,sce$group==opts$groups[1]])>0) %>% round(2),
-  rowMeans(logcounts(sce[,sce$group==opts$groups[2]])>0) %>% round(2)
-) %>% setnames(c("gene",sprintf("detection_rate_%s",opts$groups[1]),sprintf("detection_rate_%s",opts$groups[2])))
-# .[,cdr_diff:=abs(out[,(sprintf("detection_rate_%s",opts$groups[1])),with=F][[1]] - out[,(sprintf("detection_rate_%s",opts$groups[2])),with=F][[1]])] %>%
+  rowMeans(logcounts(sce[,sce$group==args$name_groupA])>0) %>% round(2),
+  rowMeans(logcounts(sce[,sce$group==args$name_groupB])>0) %>% round(2)
+# ) %>% setnames(c("gene",sprintf("detection_rate_%s",args$name_groupA),sprintf("detection_rate_%s",args$name_groupB)))
+) %>% setnames(c("gene","detection_rate_groupA","detection_rate_groupB"))
 
 # Filter genes
 sce <- sce[rownames(sce)%in%gene_metadata$gene,]
@@ -98,10 +101,9 @@ sce <- sce[rownames(sce)%in%gene_metadata$gene,]
 ## Differential expression testing with edgeR ##
 ################################################
 
-out <- doDiffExpr(sce, opts$groups, opts$min_detection_rate_per_group) %>%
+out <- doDiffExpr(sce, groups = c(args$name_groupA,args$name_groupB), min_detection_rate_per_group = opts$min_detection_rate_per_group) %>%
   # Add sample statistics
   .[,c("groupA_N","groupB_N"):=list(table(sample_metadata$group)[1],table(sample_metadata$group)[2])]%>% 
-  # setnames(c("groupA_N","groupB_N"),c(sprintf("N_%s",opts$groups[1]),sprintf("N_%s",opts$groups[2]))) %>%
   # Add gene statistics
   merge(cdr.dt, all.y=T, by="gene") %>%
   merge(gene_metadata, all.y=T, by="gene") %>%

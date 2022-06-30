@@ -72,7 +72,7 @@ clusters <- c("cluster1","cluster2")[as.numeric(pc1>0)+1]
 cluster1_epi_expr <- mean(logcounts(sce_filt[opts$marker_genes[["Epiblast"]],clusters=="cluster1"]))
 cluster2_epi_expr <- mean(logcounts(sce_filt[opts$marker_genes[["Epiblast"]],clusters=="cluster2"]))
 
-if (mean(cluster1_epi_expr)>mean(cluster2_epi_expr)) {
+if (cluster1_epi_expr>cluster2_epi_expr) {
   cluster2celltype <- c("cluster1"="Epiblast", "cluster2"="Primitive_endoderm")  
 } else {
   cluster2celltype <- c("cluster2"="Epiblast", "cluster1"="Primitive_endoderm")  

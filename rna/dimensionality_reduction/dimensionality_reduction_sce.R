@@ -32,19 +32,20 @@ args <- p$parse_args(commandArgs(TRUE))
 #####################
 
 ## START TEST ##
-# args$sce <- file.path(io$basedir,"processed/rna/SingleCellExperiment.rds") #io$rna.sce
-# args$metadata <- 
-# args$stages <- "E8.5"
-# args$metadata <- file.path(io$basedir,"results/rna/celltype_assignment/sample_metadata_after_celltype_rename.txt.gz") # io$metadata
-# args$features <- 2500
-# args$npcs <- 30
-# args$colour_by <- c("plate", "celltype", "celltype2", "celltype3", "stage", "nFeature_RNA")
-# args$vars_to_regress <- c("nFeature_RNA")
-# args$batch_correction <- NULL
-# args$remove_ExE_cells <- FALSE
-# args$n_neighbors <- 25
-# args$min_dist <- 0.5
-# args$outdir <- paste0(io$basedir,"/results/rna/dimensionality_reduction/test")
+args$sce <- file.path(io$basedir,"processed/rna/SingleCellExperiment.rds") #io$rna.sce
+args$metadata <-
+args$stages <- "E4.5"
+args$metadata <- file.path(io$basedir,"results/rna/celltype_assignment/sample_metadata_after_celltype_rename.txt.gz") # io$metadata
+args$features <- 2500
+args$npcs <- 30
+args$colour_by <- c("plate", "celltype", "celltype2", "celltype3", "stage", "nFeature_RNA")
+args$colour_by <- c("celltype")
+args$vars_to_regress <- NULL # c("nFeature_RNA")
+args$batch_correction <- NULL
+args$remove_ExE_cells <- FALSE
+args$n_neighbors <- 25
+args$min_dist <- 0.5
+args$outdir <- paste0(io$basedir,"/results/rna/dimensionality_reduction/test")
 ## END TEST ##
 
 # I/O
