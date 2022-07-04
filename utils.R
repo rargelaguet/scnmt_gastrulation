@@ -341,9 +341,14 @@ GRangesToString <- function(grange, sep = c("-", "-")) {
 }
 
 
-give.n <- function(x){
+give.n <- give_n_mean <- function(x){
   return(c(y = mean(x), label = length(x)))
 }
+
+give_n_max <- function(x){
+  return(c(y = max(x), label = length(x)))
+}
+
 
 sort.abs <- function(dt, sort.field) dt[order(-abs(dt[[sort.field]]))]
 
