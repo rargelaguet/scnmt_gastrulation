@@ -32,16 +32,19 @@ args <- p$parse_args(commandArgs(TRUE))
 source(here::here("rna/mapping/trajectories/mapping_functions.R"))
 
 ## START TEST ##
-# args$query_samples <- opts$samples
-# args$query_sce <- paste0(io$basedir,"/processed/rna_new/SingleCellExperiment.rds")
-# args$query_metadata <- paste0(io$basedir,"/results_new/rna/mapping/sample_metadata_after_mapping.txt.gz")
-# args$atlas_sce <- file.path(io$atlas.basedir,"results/trajectories/blood/blood_SingleCellExperiment.rds")
-# args$atlas_metadata <- file.path(io$atlas.basedir,"results/trajectories/blood/blood_sample_metadata.txt.gz")
-# args$npcs <- 10
-# args$n_neighbours <- 15
-# args$trajectory_name <- "blood"
-# args$outfile <- paste0(io$basedir,"/results_new/rna/mapping/trajectories/blood/mapping_mnn.txt.gz")
+args$query_samples <- opts$samples
+args$query_sce <- paste0(io$basedir,"/processed/rna/SingleCellExperiment.rds")
+args$query_metadata <- paste0(io$basedir,"/results/rna/mapping/sample_metadata_after_mapping.txt.gz")
+args$atlas_sce <- file.path(io$atlas.basedir,"results/trajectories/blood_scanpy/blood_SingleCellExperiment.rds")
+args$atlas_metadata <- file.path(io$atlas.basedir,"results/trajectories/blood_scanpy/blood_sample_metadata.txt.gz")
+args$npcs <- 10
+args$n_neighbours <- 15
+args$trajectory_name <- "blood"
+args$outfile <- paste0(io$basedir,"/results/rna/mapping/trajectories/blood/mapping_mnn.txt.gz")
 ## END TEST ##
+
+# parse arguments
+dir.create(dirname(args$outfile), showWarnings = F) 
 
 # Options
 opts$celltype_trajectory_dic <- list(
