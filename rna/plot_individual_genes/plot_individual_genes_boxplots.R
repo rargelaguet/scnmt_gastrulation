@@ -17,19 +17,19 @@ io$outdir <- paste0(io$basedir,"/results/rna/individual_genes"); dir.create(io$o
 opts$stage_lineage <- c(
   "E3.5_ICM",
   "E4.5_Epiblast",
-  # "E4.5_Primitive_endoderm",
+  "E4.5_Primitive_endoderm",
   "E5.5_Epiblast",
-  # "E5.5_ExE_endoderm",
+  "E5.5_ExE_endoderm",
   "E6.5_Epiblast",
   "E6.5_Primitive_Streak",
-  # "E6.5_ExE_endoderm",
+  "E6.5_ExE_endoderm",
   "E6.5_Mesoderm",
   "E7.5_Epiblast",
   "E7.5_Primitive_Streak",
   "E7.5_Ectoderm",
   "E7.5_Endoderm",
-  "E7.5_Mesoderm"
-  # "E7.5_ExE_endoderm"
+  "E7.5_Mesoderm",
+  "E7.5_ExE_endoderm"
 )
 
 ##########################
@@ -68,7 +68,7 @@ colData(sce) <- sample_metadata %>% tibble::column_to_rownames("id_rna") %>% Dat
 genes.to.plot <-  c("Pou5f1", "Zfp42", "Utf1", "Pim2", "Slc7a3", "Dppa5a", "Fgf5", "Dppa3", "Dppa4", "Tfap2c", "Nanog")
 genes.to.plot <-  c("L1td1", "Dnmt3b", "Snrpn", "Gng3", "Pdzd4")
 # genes.to.plot <- grep("Tet", rownames(sce),value=T)
-genes.to.plot <-  c("Smarca2","Smarca4")
+genes.to.plot <-  c("Nanog","Pou5f1")
 
 stopifnot(genes.to.plot %in% rownames(sce))
 
@@ -87,9 +87,9 @@ for (i in 1:length(genes.to.plot)) {
   p <- ggplot(to.plot, aes(x=celltype3, y=expr, fill=celltype3)) +
     geom_violin(scale = "width", alpha=0.8) +
     geom_boxplot(width=0.25, outlier.shape=NA, alpha=0.8) +
-    geom_jitter(shape=21, size=1, alpha=0.5, width=0.05) +
+    geom_jitter(shape=21, size=0.75, alpha=0.35, width=0.05, stroke=0.15) +
     scale_fill_manual(values=opts$celltype3.colors, drop=F) +
-    stat_summary(fun.data = give.n, geom = "text", size=2.5) +
+    # stat_summary(fun.data = give.n, geom = "text", size=2.5) +
     # facet_wrap(~stage, nrow=1, scales="free_x") +
     facet_grid(~stage, scales = "free_x", space='free') +
     theme_classic() +
